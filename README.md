@@ -12,6 +12,11 @@ A Next.js-based budget tracking application that allows users to import, categor
 - Budget tracking with expected spending indicators
   - Visual markers on progress bars showing expected spending based on time through the month
   - Helps identify if you're spending too fast or staying on track
+- **Progressive Web App (PWA) Support**
+  - Install as a mobile app on iOS and Android
+  - Offline functionality with service worker
+  - App-like experience with standalone display mode
+  - Home screen icon and splash screen
 
 ## Tech Stack
 
@@ -77,6 +82,20 @@ A Next.js-based budget tracking application that allows users to import, categor
 - File modified:
   - `components/budget-list.tsx`
 
+**2025-12-12: Added Progressive Web App (PWA) support**
+- App can now be installed as a mobile app on iOS and Android
+- Created web app manifest with app metadata and icons
+- Added service worker for offline functionality and caching
+- Configured PWA meta tags for proper mobile display
+- Added icon requirements and setup guide
+- Files created:
+  - `public/manifest.json`
+  - `public/sw.js`
+  - `app/register-sw.tsx`
+  - `PWA_ICONS_SETUP.md`
+- Files modified:
+  - `app/layout.tsx`
+
 **2025-12-12: Rounded numbers in spending by category chart**
 - Pie chart labels now show rounded dollar amounts (no decimals)
 - Labels hidden for slices < 5% to reduce clutter
@@ -123,6 +142,36 @@ A Next.js-based budget tracking application that allows users to import, categor
    ```
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## PWA Setup (Optional - for Mobile App Installation)
+
+To enable "Add to Home Screen" functionality and install the app as a mobile app:
+
+1. **Generate PWA Icons** (required)
+   - See detailed instructions in `PWA_ICONS_SETUP.md`
+   - Quick option: Use [PWA Builder Image Generator](https://www.pwabuilder.com/imageGenerator)
+   - Place generated icons in `/public` directory:
+     - `icon-192.png` (192x192)
+     - `icon-512.png` (512x512)
+     - `apple-icon.png` (180x180)
+     - `icon-light-32x32.png` and `icon-dark-32x32.png` (32x32)
+
+2. **Deploy to Vercel** (PWA requires HTTPS)
+   ```bash
+   vercel deploy
+   ```
+
+3. **Install on Mobile**
+   - **iOS**: Safari → Share → Add to Home Screen
+   - **Android**: Chrome → Menu → Install App
+   - **Desktop**: Chrome → Address bar → Install icon
+
+### PWA Features
+- ✅ Offline support with service worker caching
+- ✅ App-like experience (no browser UI)
+- ✅ Home screen icon
+- ✅ Faster loading with cached resources
+- ✅ Works on iOS, Android, and desktop
 
 ## Project Structure
 
