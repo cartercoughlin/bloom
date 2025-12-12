@@ -32,6 +32,11 @@ A Next.js-based budget tracking application that allows users to import, categor
   - `app/api/transactions/[id]/category/route.ts`
   - `components/transactions-table.tsx`
 
+**2025-12-12: Fixed vercel.json schema validation error**
+- Removed invalid `projectSettings` property
+- Removed deprecated `alias` property
+- Added valid build configuration properties
+
 ## Setup
 
 1. Install dependencies:
