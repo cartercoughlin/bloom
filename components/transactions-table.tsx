@@ -40,8 +40,9 @@ interface TransactionsTableProps {
   categories: Category[]
 }
 
-export function TransactionsTable({ transactions: initialTransactions, categories }: TransactionsTableProps) {
+export function TransactionsTable({ transactions: initialTransactions, categories: initialCategories }: TransactionsTableProps) {
   const [transactions, setTransactions] = useState(initialTransactions)
+  const [categories, setCategories] = useState(initialCategories)
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
@@ -52,6 +53,12 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
+      // Filter out transactions without valid IDs
+      if (!tx.id || tx.id === 'undefined' || tx.id === 'null') {
+        console.warn('Transaction without valid ID found:', tx)
+        return false
+      }
+
       // Search filter
       if (searchTerm && !tx.description.toLowerCase().includes(searchTerm.toLowerCase()) && 
           !tx.bank.toLowerCase().includes(searchTerm.toLowerCase())) {
@@ -80,14 +87,19 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
     })
   }, [transactions, searchTerm, categoryFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax])
 
-  const handleCategoryChange = (transactionId: string, categoryId: string) => {
+  const handleCategoryChange = (transactionId: string, categoryId: string, newCategory?: Category) => {
+    // Add new category to list if provided
+    if (newCategory) {
+      setCategories(prev => [...prev, newCategory])
+    }
+    
     setTransactions(prev => 
       prev.map(tx => 
         tx.id === transactionId 
           ? { 
               ...tx, 
               category_id: categoryId || undefined,
-              categories: categoryId ? categories.find(c => c.id === categoryId) : undefined
+              categories: categoryId ? (newCategory || categories.find(c => c.id === categoryId)) : undefined
             }
           : tx
       )
@@ -249,8 +261,16 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
               </tr>
             </thead>
             <tbody className="divide-y">
-              {filteredTransactions.map((tx) => (
-                <tr key={tx.id} className="hover:bg-muted/50">
+              {filteredTransactions.map((tx, index) => {
+                console.log('Full transaction object:', tx)
+                console.log('Transaction keys:', Object.keys(tx))
+                
+                // Capture the ID in a variable to avoid closure issues
+                const txId = tx.id
+                console.log('Captured transaction ID:', txId)
+                
+                return (
+                <tr key={txId} className="hover:bg-muted/50">
                   <td className="p-3 text-sm">
                     {new Date(tx.date).toLocaleDateString()}
                   </td>
@@ -258,14 +278,24 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                     {tx.description}
                   </td>
                   <td className="p-3 text-sm min-w-48">
-                    <TransactionCategorizer
-                      transactionId={tx.id}
-                      description={tx.description}
-                      amount={tx.amount}
-                      currentCategoryId={tx.category_id}
-                      categories={categories}
-                      onCategoryChange={(categoryId) => handleCategoryChange(tx.id, categoryId)}
-                    />
+                    {txId ? (
+                      <TransactionCategorizer
+                        transactionId={txId}
+                        description={tx.description}
+                        amount={tx.amount}
+                        currentCategoryId={tx.category_id}
+                        categories={categories}
+                        onCategoryChange={(categoryId, newCategory) => {
+                          console.log('Callback - Transaction ID:', txId)
+                          console.log('Callback - Category ID:', categoryId)
+                          handleCategoryChange(txId, categoryId, newCategory)
+                        }}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">
+                        No ID found
+                      </span>
+                    )}
                   </td>
                   <td className="p-3 text-sm capitalize">{tx.bank}</td>
                   <td
@@ -276,7 +306,8 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                     {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
                   </td>
                 </tr>
-              ))}
+              )
+              })}
             </tbody>
           </table>
         </div>

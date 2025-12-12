@@ -20,7 +20,14 @@ export default async function TransactionsPage() {
   const { data: transactions } = await supabase
     .from("transactions")
     .select(`
-      *,
+      id,
+      date,
+      description,
+      amount,
+      transaction_type,
+      bank,
+      category_id,
+      user_id,
       categories (
         name,
         color,
@@ -35,6 +42,9 @@ export default async function TransactionsPage() {
     .select("*")
     .eq("user_id", user.id)
     .order("name")
+
+  console.log('Fetched transactions:', transactions)
+  console.log('First transaction:', transactions?.[0])
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">

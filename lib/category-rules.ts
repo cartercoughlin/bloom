@@ -35,21 +35,9 @@ export async function createCategoryRule(rule: Omit<CategoryRule, 'id'>): Promis
 }
 
 export async function getCategoryRules(userId: string): Promise<CategoryRule[]> {
-  const supabase = await createClient()
-  
-  const { data, error } = await supabase
-    .from('category_rules')
-    .select('*')
-    .eq('user_id', userId)
-    .eq('is_active', true)
-    .order('priority', { ascending: false })
-  
-  if (error) {
-    console.error('Error fetching rules:', error)
-    return []
-  }
-  
-  return data || []
+  // TODO: Create category_rules table in database
+  console.log('Category rules table not yet created')
+  return []
 }
 
 export async function assignCategoryByRules(description: string, userId: string): Promise<string | null> {
@@ -107,58 +95,8 @@ export async function learnFromAssignment(transactionId: string, categoryId: str
 }
 
 export async function suggestCategories(description: string, amount: number, userId: string): Promise<SmartAssignment[]> {
-  const supabase = await createClient()
-  const suggestions: SmartAssignment[] = []
-  
-  // Rule-based assignment
-  const ruleCategory = await assignCategoryByRules(description, userId)
-  if (ruleCategory) {
-    suggestions.push({
-      transactionId: '',
-      categoryId: ruleCategory,
-      confidence: 0.9,
-      reason: 'Rule match'
-    })
-  }
-  
-  // Pattern learning from similar transactions
-  const words = description.toLowerCase().split(' ')
-  const { data: similarTransactions } = await supabase
-    .from('transactions')
-    .select('category_id, categories(name)')
-    .eq('user_id', userId)
-    .not('category_id', 'is', null)
-  
-  if (similarTransactions) {
-    const categoryScores: { [key: string]: number } = {}
-    
-    for (const tx of similarTransactions) {
-      if (!tx.category_id) continue
-      
-      const similarity = calculateSimilarity(description, tx.description || '')
-      if (similarity > 0.3) {
-        categoryScores[tx.category_id] = (categoryScores[tx.category_id] || 0) + similarity
-      }
-    }
-    
-    // Sort by score and add top suggestions
-    const sortedCategories = Object.entries(categoryScores)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 3)
-    
-    for (const [categoryId, score] of sortedCategories) {
-      if (!suggestions.find(s => s.categoryId === categoryId)) {
-        suggestions.push({
-          transactionId: '',
-          categoryId,
-          confidence: Math.min(score, 0.8),
-          reason: 'Similar transactions'
-        })
-      }
-    }
-  }
-  
-  return suggestions
+  // Simple suggestions without database rules for now
+  return []
 }
 
 function calculateSimilarity(str1: string, str2: string): number {
