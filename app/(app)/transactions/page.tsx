@@ -48,7 +48,7 @@ export default async function TransactionsPage() {
   console.log('First transaction:', transactions?.[0])
 
   return (
-    <div className="container mx-auto px-3 sm:px-6 max-w-7xl pb-20 sm:pb-6">
+    <div className="container mx-auto px-3 sm:px-6 max-w-7xl pb-24 sm:pb-6">
       <div className="flex items-center justify-between mb-4 md:mb-8">
         <div>
           <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">Transactions</h1>
