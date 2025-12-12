@@ -41,6 +41,11 @@ interface TransactionsTableProps {
 }
 
 export function TransactionsTable({ transactions: initialTransactions, categories: initialCategories }: TransactionsTableProps) {
+  // Debug: Log initial transactions on mount
+  console.log('TransactionsTable - Initial transactions:', initialTransactions)
+  console.log('TransactionsTable - First transaction ID:', initialTransactions?.[0]?.id)
+  console.log('TransactionsTable - First transaction ID type:', typeof initialTransactions?.[0]?.id)
+
   const [transactions, setTransactions] = useState(initialTransactions)
   const [categories, setCategories] = useState(initialCategories)
   const [searchTerm, setSearchTerm] = useState("")
@@ -53,10 +58,9 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      // Filter out transactions without valid IDs
-      if (!tx.id || tx.id === 'undefined' || tx.id === 'null') {
-        console.warn('Transaction without valid ID found:', tx)
-        return false
+      // Debug: Log transaction ID
+      if (!tx.id) {
+        console.error('Transaction missing ID:', tx)
       }
 
       // Search filter

@@ -37,6 +37,15 @@ A Next.js-based budget tracking application that allows users to import, categor
 - Removed deprecated `alias` property
 - Added valid build configuration properties
 
+**2025-12-12: Added debugging for transaction ID issues**
+- Added console logging to track transaction IDs through the component lifecycle
+- Improved error messages for missing transaction IDs
+
+**2025-12-12: Fixed async params handling in Next.js 14+ API routes**
+- Updated API route to properly await `params` Promise (Next.js 14+ breaking change)
+- This was causing transaction IDs to be undefined when updating categories
+- File modified: `app/api/transactions/[id]/category/route.ts`
+
 ## Setup
 
 1. Install dependencies:

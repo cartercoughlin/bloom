@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
@@ -18,7 +18,7 @@ export async function PUT(
     }
 
     const { categoryId } = await request.json()
-    const transactionId = params.id
+    const { id: transactionId } = await params
 
     // Validate transactionId is not undefined/null string
     if (!transactionId || transactionId === 'undefined' || transactionId === 'null') {
