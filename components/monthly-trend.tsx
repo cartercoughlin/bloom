@@ -69,7 +69,7 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
         <CardTitle className="text-base md:text-lg">Monthly Trend</CardTitle>
         <CardDescription className="text-xs md:text-sm">Income vs expenses over the last 6 months</CardDescription>
       </CardHeader>
-      <CardContent className="pb-4 md:pb-6">
+      <CardContent className="px-3 sm:px-6 pb-4 md:pb-6">
         <ChartContainer
           config={{
             income: {
@@ -81,7 +81,7 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
               color: "#EF4444",
             },
           }}
-          className="h-64 md:h-96 lg:h-80"
+          className="h-48 sm:h-64 lg:h-80"
         >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>

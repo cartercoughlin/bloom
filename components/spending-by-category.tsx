@@ -66,7 +66,7 @@ export function SpendingByCategory({ transactions }: SpendingByCategoryProps) {
         <CardTitle className="text-base md:text-lg">Spending by Category</CardTitle>
         <CardDescription className="text-xs md:text-sm">Top categories this month</CardDescription>
       </CardHeader>
-      <CardContent className="pb-4 md:pb-6">
+      <CardContent className="px-3 sm:px-6 pb-4 md:pb-6">
         <ChartContainer
           config={chartData.reduce(
             (acc, item) => ({
@@ -78,7 +78,7 @@ export function SpendingByCategory({ transactions }: SpendingByCategoryProps) {
             }),
             {},
           )}
-          className="h-48 md:h-64"
+          className="h-40 sm:h-48 lg:h-64"
         >
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
