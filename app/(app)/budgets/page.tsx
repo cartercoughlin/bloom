@@ -57,17 +57,17 @@ export default async function BudgetsPage() {
   })
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Budget</h1>
-        <p className="text-muted-foreground">
+    <div className="container mx-auto p-3 md:p-6 max-w-6xl">
+      <div className="mb-4 md:mb-8">
+        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">Budget</h1>
+        <p className="text-muted-foreground text-xs md:text-sm">
           Manage your monthly budget for {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
         </p>
       </div>
 
       <BudgetOverview budgets={budgets || []} spending={spendingByCategory} month={currentMonth} year={currentYear} />
 
-      <div className="mt-8">
+      <div className="mt-6 md:mt-8">
         <BudgetList
           budgets={budgets || []}
           categories={categories || []}

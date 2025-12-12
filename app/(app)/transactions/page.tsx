@@ -28,6 +28,7 @@ export default async function TransactionsPage() {
       bank,
       category_id,
       user_id,
+      hidden,
       categories (
         name,
         color,
@@ -47,22 +48,23 @@ export default async function TransactionsPage() {
   console.log('First transaction:', transactions?.[0])
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      <div className="flex items-center justify-between mb-8">
+    <div className="container mx-auto p-3 md:p-6 max-w-7xl">
+      <div className="flex items-center justify-between mb-4 md:mb-8">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Transactions</h1>
-          <p className="text-muted-foreground">View and manage your transactions</p>
+          <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">Transactions</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">View and manage your transactions</p>
         </div>
         <Link href="/transactions/import">
-          <Button>
-            <Upload className="mr-2 h-4 w-4" />
-            Import Transactions
+          <Button className="text-xs md:text-sm h-8 md:h-10 px-3 md:px-4">
+            <Upload className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden sm:inline">Import Transactions</span>
+            <span className="sm:hidden">Import</span>
           </Button>
         </Link>
       </div>
 
-      <TransactionsTable 
-        transactions={transactions || []} 
+      <TransactionsTable
+        transactions={transactions || []}
         categories={categories || []}
       />
     </div>

@@ -29,6 +29,25 @@ A Next.js-based budget tracking application that allows users to import, categor
 
 ## Recent Changes
 
+### New Features
+
+**2025-12-12: Mobile layout optimization**
+- Optimized all components for mobile viewing
+- Dashboard spending overview cards now display in 2-column grid on mobile
+- Spending chart height and sizing adjusted for smaller screens
+- Transactions table with smaller text, reduced padding, and hidden bank column on mobile
+- Budget components with responsive text sizes and compact spacing
+- All page headers and buttons optimized for mobile
+- Files modified:
+  - `components/spending-overview.tsx`
+  - `components/spending-by-category.tsx`
+  - `components/transactions-table.tsx`
+  - `components/budget-overview.tsx`
+  - `components/budget-list.tsx`
+  - `app/(app)/dashboard/page.tsx`
+  - `app/(app)/transactions/page.tsx`
+  - `app/(app)/budgets/page.tsx`
+
 ### Bug Fixes
 
 **2025-12-12: Fixed UUID validation error in category updates**
@@ -81,6 +100,19 @@ A Next.js-based budget tracking application that allows users to import, categor
 - No need to refresh the page to see new categories
 - File modified:
   - `components/budget-list.tsx`
+
+**2025-12-12: Added ability to hide transactions**
+- Transactions can now be hidden from the main view
+- Hidden transactions don't affect budgets or spending calculations
+- Toggle button to show/hide hidden transactions
+- Eye icon button on each transaction to hide/unhide
+- Useful for transfers, reimbursements, or test transactions
+- Files created:
+  - `scripts/005_add_hidden_to_transactions.sql`
+  - `app/api/transactions/[id]/hidden/route.ts`
+- Files modified:
+  - `components/transactions-table.tsx`
+  - `app/(app)/transactions/page.tsx`
 
 **2025-12-12: Added Progressive Web App (PWA) support**
 - App can now be installed as a mobile app on iOS and Android
@@ -135,6 +167,7 @@ A Next.js-based budget tracking application that allows users to import, categor
    - `scripts/002_seed_default_categories.sql` - Add default categories
    - `scripts/003_add_sync_columns.sql` - Add sync columns
    - `scripts/004_create_category_rules.sql` - Create category rules table
+   - `scripts/005_add_hidden_to_transactions.sql` - Add hidden column to transactions
 
 4. Run the development server:
    ```bash

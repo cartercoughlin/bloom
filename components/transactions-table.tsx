@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Filter, X, Upload } from "lucide-react"
+import { CalendarIcon, Filter, X, Upload, EyeOff, Eye } from "lucide-react"
 import { format } from "date-fns"
 import { TransactionCategorizer } from "./transaction-categorizer"
 import Link from "next/link"
@@ -21,6 +21,7 @@ interface Transaction {
   transaction_type: "credit" | "debit"
   bank: string
   category_id?: string
+  hidden?: boolean
   categories?: {
     name: string
     color: string
@@ -55,12 +56,18 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
   const [dateTo, setDateTo] = useState<Date>()
   const [amountMin, setAmountMin] = useState("")
   const [amountMax, setAmountMax] = useState("")
+  const [showHidden, setShowHidden] = useState(false)
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
       // Debug: Log transaction ID
       if (!tx.id) {
         console.error('Transaction missing ID:', tx)
+      }
+
+      // Hidden filter - skip hidden transactions unless showHidden is true
+      if (tx.hidden && !showHidden) {
+        return false
       }
 
       // Search filter
@@ -89,7 +96,31 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
       return true
     })
-  }, [transactions, searchTerm, categoryFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax])
+  }, [transactions, searchTerm, categoryFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax, showHidden])
+
+  const handleToggleHidden = async (transactionId: string, currentHidden: boolean) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}/hidden`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hidden: !currentHidden }),
+      })
+
+      if (response.ok) {
+        setTransactions(prev =>
+          prev.map(tx =>
+            tx.id === transactionId ? { ...tx, hidden: !currentHidden } : tx
+          )
+        )
+      } else {
+        console.error("Failed to toggle hidden status")
+        alert("Failed to update transaction visibility")
+      }
+    } catch (error) {
+      console.error("Error toggling hidden status:", error)
+      alert("Error updating transaction visibility")
+    }
+  }
 
   const handleCategoryChange = (transactionId: string, categoryId: string, newCategory?: Category) => {
     // Add new category to list if provided
@@ -118,21 +149,22 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
     setDateTo(undefined)
     setAmountMin("")
     setAmountMax("")
+    setShowHidden(false)
   }
 
-  const hasActiveFilters = searchTerm || categoryFilter !== "all" || typeFilter !== "all" || 
-                          dateFrom || dateTo || amountMin || amountMax
+  const hasActiveFilters = searchTerm || categoryFilter !== "all" || typeFilter !== "all" ||
+                          dateFrom || dateTo || amountMin || amountMax || showHidden
 
   if (transactions.length === 0) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-center justify-center py-16">
-          <Upload className="h-12 w-12 text-muted-foreground mb-4" />
-          <h3 className="text-lg font-semibold mb-2">No transactions yet</h3>
-          <p className="text-muted-foreground text-center mb-6">Import your first transactions to get started</p>
+        <CardContent className="flex flex-col items-center justify-center py-12 md:py-16">
+          <Upload className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground mb-3 md:mb-4" />
+          <h3 className="text-base md:text-lg font-semibold mb-1 md:mb-2">No transactions yet</h3>
+          <p className="text-muted-foreground text-center text-xs md:text-sm mb-4 md:mb-6">Import your first transactions to get started</p>
           <Link href="/transactions/import">
-            <Button>
-              <Upload className="mr-2 h-4 w-4" />
+            <Button className="text-xs md:text-sm h-8 md:h-10">
+              <Upload className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
               Import Transactions
             </Button>
           </Link>
@@ -143,32 +175,34 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-4 md:pb-6">
         <div className="flex items-center justify-between">
           <div>
-            <CardTitle>Transactions</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-base md:text-lg">Transactions</CardTitle>
+            <CardDescription className="text-xs md:text-sm">
               {filteredTransactions.length} of {transactions.length} transactions
             </CardDescription>
           </div>
           {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={clearFilters}>
-              <X className="mr-2 h-4 w-4" />
-              Clear Filters
+            <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs md:text-sm h-7 md:h-9 px-2 md:px-3">
+              <X className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Clear Filters</span>
+              <span className="sm:hidden">Clear</span>
             </Button>
           )}
         </div>
-        
+
         {/* Filters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mt-3 md:mt-4">
           <Input
             placeholder="Search transactions..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            className="text-xs md:text-sm h-8 md:h-10"
           />
-          
+
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger>
+            <SelectTrigger className="text-xs md:text-sm h-8 md:h-10">
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
@@ -189,7 +223,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
           </Select>
 
           <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger>
+            <SelectTrigger className="text-xs md:text-sm h-8 md:h-10">
               <SelectValue placeholder="All types" />
             </SelectTrigger>
             <SelectContent>
@@ -205,21 +239,23 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
               type="number"
               value={amountMin}
               onChange={(e) => setAmountMin(e.target.value)}
+              className="text-xs md:text-sm h-8 md:h-10"
             />
             <Input
               placeholder="Max amount"
               type="number"
               value={amountMax}
               onChange={(e) => setAmountMax(e.target.value)}
+              className="text-xs md:text-sm h-8 md:h-10"
             />
           </div>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <CalendarIcon className="mr-2 h-4 w-4" />
+              <Button variant="outline" size="sm" className="text-xs md:text-sm h-7 md:h-9 px-2 md:px-3">
+                <CalendarIcon className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
                 {dateFrom ? format(dateFrom, "MMM dd") : "From date"}
               </Button>
             </PopoverTrigger>
@@ -235,8 +271,8 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
-                <CalendarIcon className="mr-2 h-4 w-4" />
+              <Button variant="outline" size="sm" className="text-xs md:text-sm h-7 md:h-9 px-2 md:px-3">
+                <CalendarIcon className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
                 {dateTo ? format(dateTo, "MMM dd") : "To date"}
               </Button>
             </PopoverTrigger>
@@ -249,39 +285,50 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
               />
             </PopoverContent>
           </Popover>
+
+          <Button
+            variant={showHidden ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowHidden(!showHidden)}
+            className="text-xs md:text-sm h-7 md:h-9 px-2 md:px-3"
+          >
+            {showHidden ? <Eye className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" /> : <EyeOff className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />}
+            {showHidden ? "Hiding hidden" : "Show hidden"}
+          </Button>
         </div>
       </CardHeader>
 
-      <CardContent>
-        <div className="overflow-x-auto">
+      <CardContent className="p-3 md:p-6">
+        <div className="overflow-x-auto -mx-3 md:mx-0">
           <table className="w-full">
             <thead className="border-b">
               <tr>
-                <th className="text-left p-3 text-sm font-medium">Date</th>
-                <th className="text-left p-3 text-sm font-medium">Description</th>
-                <th className="text-left p-3 text-sm font-medium">Category</th>
-                <th className="text-left p-3 text-sm font-medium">Bank</th>
-                <th className="text-right p-3 text-sm font-medium">Amount</th>
+                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Date</th>
+                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Description</th>
+                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Category</th>
+                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium hidden sm:table-cell">Bank</th>
+                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium">Amount</th>
+                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
               {filteredTransactions.map((tx, index) => {
                 console.log('Full transaction object:', tx)
                 console.log('Transaction keys:', Object.keys(tx))
-                
+
                 // Capture the ID in a variable to avoid closure issues
                 const txId = tx.id
                 console.log('Captured transaction ID:', txId)
-                
+
                 return (
                 <tr key={txId} className="hover:bg-muted/50">
-                  <td className="p-3 text-sm">
-                    {new Date(tx.date).toLocaleDateString()}
+                  <td className="p-2 md:p-3 text-[10px] md:text-sm whitespace-nowrap">
+                    {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                   </td>
-                  <td className="p-3 text-sm max-w-xs truncate" title={tx.description}>
+                  <td className="p-2 md:p-3 text-[10px] md:text-sm max-w-[120px] md:max-w-xs truncate" title={tx.description}>
                     {tx.description}
                   </td>
-                  <td className="p-3 text-sm min-w-48">
+                  <td className="p-2 md:p-3 text-[10px] md:text-sm min-w-32 md:min-w-48">
                     {txId ? (
                       <TransactionCategorizer
                         transactionId={txId}
@@ -296,18 +343,29 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                         }}
                       />
                     ) : (
-                      <span className="text-muted-foreground text-xs">
+                      <span className="text-muted-foreground text-[10px] md:text-xs">
                         No ID found
                       </span>
                     )}
                   </td>
-                  <td className="p-3 text-sm capitalize">{tx.bank}</td>
+                  <td className="p-2 md:p-3 text-[10px] md:text-sm capitalize hidden sm:table-cell">{tx.bank}</td>
                   <td
-                    className={`p-3 text-sm text-right font-medium ${
+                    className={`p-2 md:p-3 text-[10px] md:text-sm text-right font-medium whitespace-nowrap ${
                       tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                     }`}
                   >
                     {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
+                  </td>
+                  <td className="p-2 md:p-3 text-[10px] md:text-sm text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleToggleHidden(txId, tx.hidden || false)}
+                      className="h-6 md:h-7 px-1 md:px-2"
+                      title={tx.hidden ? "Show transaction" : "Hide transaction"}
+                    >
+                      {tx.hidden ? <Eye className="h-3 w-3 md:h-4 md:w-4" /> : <EyeOff className="h-3 w-3 md:h-4 md:w-4" />}
+                    </Button>
                   </td>
                 </tr>
               )

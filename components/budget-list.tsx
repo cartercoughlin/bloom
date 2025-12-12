@@ -160,17 +160,18 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
   const availableCategories = categories.filter((c) => !usedCategoryIds.includes(c.id) || c.id === selectedCategoryId)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Category Budgets</h2>
-          <p className="text-muted-foreground text-sm">Set spending limits for each category</p>
+          <h2 className="text-lg md:text-2xl font-bold">Category Budgets</h2>
+          <p className="text-muted-foreground text-xs md:text-sm">Set spending limits for each category</p>
         </div>
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => handleOpenDialog()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Budget
+            <Button onClick={() => handleOpenDialog()} className="text-xs md:text-sm h-8 md:h-10 px-3 md:px-4">
+              <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Add Budget</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -230,7 +231,7 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
       </div>
 
       {budgets.length > 0 ? (
-        <div className="grid gap-4">
+        <div className="grid gap-3 md:gap-4">
           {budgets.map((budget) => {
             const spent = spending[budget.category_id] || 0
             const percentage = (spent / Number(budget.amount)) * 100
@@ -238,35 +239,35 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
 
             return (
               <Card key={budget.id}>
-                <CardHeader>
+                <CardHeader className="pb-3 md:pb-6">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 md:gap-3">
                       {budget.categories && (
                         <div
-                          className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                          className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center text-base md:text-xl"
                           style={{ backgroundColor: `${budget.categories.color}20` }}
                         >
                           {budget.categories.icon}
                         </div>
                       )}
                       <div>
-                        <CardTitle className="text-lg">{budget.categories?.name}</CardTitle>
-                        <CardDescription>
+                        <CardTitle className="text-sm md:text-lg">{budget.categories?.name}</CardTitle>
+                        <CardDescription className="text-xs md:text-sm">
                           ${spent.toFixed(2)} of ${Number(budget.amount).toFixed(2)}
                         </CardDescription>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)}>
-                        <Edit className="h-4 w-4" />
+                    <div className="flex items-center gap-1 md:gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
+                        <Edit className="h-3 w-3 md:h-4 md:w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(budget.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(budget.id)} className="h-7 w-7 md:h-9 md:w-9">
+                        <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
                       </Button>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-2">
+                <CardContent className="space-y-2 pt-0">
                   <div className="relative">
                     <Progress
                       value={Math.min(percentage, 100)}
@@ -281,7 +282,7 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                       />
                     )}
                   </div>
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between text-xs md:text-sm">
                     <span className={isOverBudget ? "text-red-600 font-medium" : "text-muted-foreground"}>
                       {percentage.toFixed(1)}% used
                     </span>
@@ -296,14 +297,14 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
         </div>
       ) : (
         <Card>
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <Target className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">No budgets set</h3>
-            <p className="text-muted-foreground text-center mb-6">
+          <CardContent className="flex flex-col items-center justify-center py-12 md:py-16">
+            <Target className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground mb-3 md:mb-4" />
+            <h3 className="text-base md:text-lg font-semibold mb-1 md:mb-2">No budgets set</h3>
+            <p className="text-muted-foreground text-center text-xs md:text-sm mb-4 md:mb-6">
               Create your first budget to start tracking spending
             </p>
-            <Button onClick={() => handleOpenDialog()}>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button onClick={() => handleOpenDialog()} className="text-xs md:text-sm h-8 md:h-10">
+              <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
               Add Budget
             </Button>
           </CardContent>
