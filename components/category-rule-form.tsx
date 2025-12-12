@@ -178,20 +178,30 @@ export function CategoryRuleForm({ categories, initialData }: CategoryRuleFormPr
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="transaction_type">Transaction Type</Label>
+                  <Label htmlFor="transaction_type">Transaction Type (Optional)</Label>
                   <Select
-                    value={formData.transaction_type}
+                    value={formData.transaction_type || undefined}
                     onValueChange={(value) => setFormData({ ...formData, transaction_type: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Any type" />
+                      <SelectValue placeholder="Any type (no filter)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any type</SelectItem>
                       <SelectItem value="debit">Debit (Expense)</SelectItem>
                       <SelectItem value="credit">Credit (Income)</SelectItem>
                     </SelectContent>
                   </Select>
+                  {formData.transaction_type && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setFormData({ ...formData, transaction_type: "" })}
+                      className="h-6 text-xs"
+                    >
+                      Clear filter
+                    </Button>
+                  )}
                 </div>
 
                 <div className="space-y-2">

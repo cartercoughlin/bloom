@@ -86,6 +86,8 @@ A Next.js-based budget tracking application that allows users to import, categor
 - Completely rebuilt rule form with all condition fields
 - Updated rule matching logic to check all specified conditions
 - Rules are checked in priority order (highest first)
+- Fixed Select component empty value error
+- Added "Clear filter" button for transaction type selection
 - Files modified/created:
   - `scripts/004_create_category_rules.sql` (NEW)
   - `lib/category-rules.ts`
