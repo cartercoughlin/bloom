@@ -22,15 +22,8 @@ export async function getGoogleSheetsClient() {
   const credentials = {
     type: "service_account",
     project_id: "bloom-budget",
-    private_key_id: "67ea8f07b91bf1e137aac9e781208ba5744768ef",
     private_key: privateKey,
     client_email: clientEmail,
-    client_id: "111678461772918770769",
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: "https://www.googleapis.com/robot/v1/metadata/x509/carter%40bloom-budget.iam.gserviceaccount.com",
-    universe_domain: "googleapis.com"
   };
   
   console.log('Creating auth with credentials for:', credentials.client_email);
