@@ -83,6 +83,12 @@ export default async function BudgetsPage() {
   // Calculate total available (assuming all accounts are checking/assets, no liabilities for now)
   const totalAvailable = Object.values(accountBalances).reduce((sum, balance) => sum + balance, 0)
 
+  // Calculate total already allocated this month
+  const totalAllocated = budgets?.reduce((sum, budget) => sum + Number(budget.allocated_amount || 0), 0) || 0
+
+  // Available to budget = total available - already allocated
+  const availableToBudget = totalAvailable - totalAllocated
+
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
       <div className="mb-4 md:mb-8">
@@ -106,7 +112,7 @@ export default async function BudgetsPage() {
               spent_amount: spendingByCategory[b.category_id] || 0,
               available_amount: b.available_amount || 0
             })) || []}
-            availableToAllocate={totalAvailable}
+            availableToAllocate={availableToBudget}
           />
         </div>
 
