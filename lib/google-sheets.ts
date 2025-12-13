@@ -3,12 +3,28 @@ import { google } from 'googleapis';
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 export async function getGoogleSheetsClient() {
-  const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  let privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
+  
+  if (!privateKey) {
+    throw new Error('GOOGLE_SHEETS_PRIVATE_KEY is not set');
+  }
+  
+  // Handle different formats of the private key
+  privateKey = privateKey
+    .replace(/\\n/g, '\n')
+    .replace(/"/g, '')
+    .trim();
+  
+  // Ensure proper formatting
+  if (!privateKey.startsWith('-----BEGIN PRIVATE KEY-----')) {
+    throw new Error('Invalid private key format');
+  }
   
   const auth = new google.auth.GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
       private_key: privateKey,
+      type: 'service_account',
     },
     scopes: SCOPES,
   });
