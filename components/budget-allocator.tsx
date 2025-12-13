@@ -91,32 +91,44 @@ export function BudgetAllocator({ budgets, availableToAllocate, onAllocate }: Bu
                 <div>
                   <h4 className="font-medium">{budget.name}</h4>
                   <p className="text-sm text-muted-foreground">
-                    Allocated: ${budget.allocated_amount.toFixed(2)} | 
+                    Allocated: ${budget.allocated_amount.toFixed(2)} |
                     Available: ${budget.available_amount.toFixed(2)}
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex gap-2">
                 <div className="flex-1">
-                  <Label htmlFor={`allocation-${budget.id}`} className="sr-only">
-                    Allocation amount for {budget.name}
+                  <Label htmlFor={`allocation-${budget.id}`} className="text-xs text-muted-foreground mb-1">
+                    Set allocation amount
                   </Label>
                   <Input
                     id={`allocation-${budget.id}`}
                     type="number"
                     step="0.01"
-                    placeholder="0.00"
+                    placeholder={budget.allocated_amount > 0 ? budget.allocated_amount.toFixed(2) : "0.00"}
                     value={allocations[budget.id] || ''}
                     onChange={(e) => handleAllocationChange(budget.id, e.target.value)}
                   />
                 </div>
-                <Button 
-                  onClick={() => handleAllocate(budget.id)}
-                  disabled={!allocations[budget.id] || parseFloat(allocations[budget.id]) <= 0}
-                >
-                  Allocate
-                </Button>
+                <div className="flex flex-col gap-1">
+                  <Button
+                    onClick={() => handleAllocate(budget.id)}
+                    disabled={!allocations[budget.id]}
+                    size="sm"
+                  >
+                    {budget.allocated_amount > 0 ? 'Update' : 'Set'}
+                  </Button>
+                  {budget.allocated_amount > 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleAllocationChange(budget.id, budget.allocated_amount.toString())}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

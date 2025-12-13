@@ -13,10 +13,10 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { amount } = await request.json()
+    const { amount, mode = 'set' } = await request.json()
     const budgetId = params.id
 
-    if (!amount || amount <= 0) {
+    if (amount === undefined || amount < 0) {
       return NextResponse.json({ error: 'Invalid amount' }, { status: 400 })
     }
 
@@ -36,9 +36,21 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 403 })
     }
 
-    // Update budget with new allocation
-    const newAllocatedAmount = (budget.allocated_amount || 0) + amount
-    const newAvailableAmount = (budget.available_amount || 0) + amount
+    // Update budget allocation
+    let newAllocatedAmount: number
+    let newAvailableAmount: number
+
+    if (mode === 'add') {
+      // Add to existing allocation
+      newAllocatedAmount = (budget.allocated_amount || 0) + amount
+      newAvailableAmount = (budget.available_amount || 0) + amount
+    } else {
+      // Set allocation to specific amount (default mode for editing)
+      const currentAllocated = budget.allocated_amount || 0
+      const difference = amount - currentAllocated
+      newAllocatedAmount = amount
+      newAvailableAmount = (budget.available_amount || 0) + difference
+    }
 
     const { error: updateError } = await supabase
       .from('budgets')
