@@ -3,7 +3,9 @@
     "allow": [
       "Bash(ls:*)",
       "Bash(grep:*)",
-      "Bash(unzip:*)"
+      "Bash(unzip:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

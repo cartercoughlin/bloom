@@ -6,6 +6,7 @@ export interface SyncResult {
   newTransactions: number
   updatedTransactions: number
   totalProcessed: number
+  syncedAccounts?: number
   error?: string
 }
 
@@ -170,6 +171,102 @@ export async function syncGoogleSheets(): Promise<SyncResult> {
       processedCount++
     }
 
+    // Sync account balances from Balances sheet
+    let syncedAccountsCount = 0
+    try {
+      const balancesResponse = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: "Balances!A:Q", // Covers Sorted Assets and Sorted Liabilities columns
+      })
+
+      const balancesRows = balancesResponse.data.values
+      if (balancesRows && balancesRows.length > 2) {
+        // Row 0 is the main header, Row 1 is "Sorted Assets" and "Sorted Liabilities"
+        // Row 2 has the column names (Row, Id, Group, Account, Last Updated, Balance)
+        // Assets: Columns F-K (indices 5-10)
+        // Liabilities: Columns L-Q (indices 11-16)
+
+        // Process Assets (starting from row 3)
+        for (let i = 3; i < balancesRows.length; i++) {
+          const row = balancesRows[i]
+          if (!row || row.length < 11) continue // Need at least up to column K
+
+          const accountName = row[8]?.trim() // Column I (Account)
+          const balanceStr = row[10]?.trim() // Column K (Balance)
+
+          if (!accountName || !balanceStr) continue
+
+          // Parse balance (remove $ and commas)
+          const balance = Number.parseFloat(balanceStr.replace(/[$,]/g, ""))
+          if (isNaN(balance) || balance === 0) continue
+
+          // Determine if it's checking or savings
+          const accountType = accountName.toLowerCase().includes("savings") ? "savings" : "checking"
+
+          // Upsert account balance
+          const { error: upsertError } = await supabase
+            .from("account_balances")
+            .upsert(
+              {
+                user_id: user.id,
+                account_name: accountName,
+                account_type: accountType,
+                balance: balance,
+                updated_at: new Date().toISOString(),
+              },
+              {
+                onConflict: "user_id,account_name",
+              }
+            )
+
+          if (upsertError) {
+            console.error("[v0] Account balance upsert error:", upsertError)
+          } else {
+            syncedAccountsCount++
+          }
+        }
+
+        // Process Liabilities (starting from row 3)
+        for (let i = 3; i < balancesRows.length; i++) {
+          const row = balancesRows[i]
+          if (!row || row.length < 17) continue // Need at least up to column Q
+
+          const accountName = row[14]?.trim() // Column O (Account)
+          const balanceStr = row[16]?.trim() // Column Q (Balance)
+
+          if (!accountName || !balanceStr) continue
+
+          // Parse balance (remove $ and commas)
+          const balance = Number.parseFloat(balanceStr.replace(/[$,]/g, ""))
+          if (isNaN(balance) || balance === 0) continue
+
+          // Upsert account balance (store liabilities as negative)
+          const { error: upsertError } = await supabase
+            .from("account_balances")
+            .upsert(
+              {
+                user_id: user.id,
+                account_name: accountName,
+                account_type: "liability",
+                balance: -Math.abs(balance), // Credit cards are negative
+                updated_at: new Date().toISOString(),
+              },
+              {
+                onConflict: "user_id,account_name",
+              }
+            )
+
+          if (upsertError) {
+            console.error("[v0] Account balance upsert error:", upsertError)
+          } else {
+            syncedAccountsCount++
+          }
+        }
+      }
+    } catch (balanceError) {
+      console.error("[v0] Balance sync error (continuing):", balanceError)
+    }
+
     // Update last sync timestamp
     await supabase.from("profiles").update({ last_sync_at: new Date().toISOString() }).eq("id", user.id)
 
@@ -178,6 +275,7 @@ export async function syncGoogleSheets(): Promise<SyncResult> {
       newTransactions: newCount,
       updatedTransactions: updatedCount,
       totalProcessed: processedCount,
+      syncedAccounts: syncedAccountsCount,
     }
   } catch (error) {
     console.error("[v0] Sync error:", error)

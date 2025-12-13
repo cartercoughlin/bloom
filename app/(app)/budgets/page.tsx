@@ -57,31 +57,30 @@ export default async function BudgetsPage() {
     }
   })
 
-  // Calculate account balances from transactions instead of manual entry
-  const { data: allTransactions } = await supabase
-    .from("transactions")
-    .select("amount, transaction_type, bank, account, institution")
+  // Get account balances from account_balances table (synced from Tiller Balances sheet)
+  const { data: accounts } = await supabase
+    .from("account_balances")
+    .select("account_name, account_type, balance")
     .eq("user_id", user.id)
-    .eq("hidden", false)
 
-  // Group transactions by account and calculate balances
+  // Group balances by account
   const accountBalances: Record<string, number> = {}
-  allTransactions?.forEach((tx) => {
-    const accountKey = `${tx.bank || tx.institution || 'Unknown'} - ${tx.account || 'Main'}`
-    if (!accountBalances[accountKey]) {
-      accountBalances[accountKey] = 0
-    }
-    
-    // Credit transactions add to balance, debit transactions subtract
-    if (tx.transaction_type === 'credit') {
-      accountBalances[accountKey] += Number(tx.amount)
+  let totalAssets = 0
+  let totalLiabilities = 0
+
+  accounts?.forEach((account) => {
+    accountBalances[account.account_name] = Number(account.balance)
+
+    // Sum assets (checking, savings) and liabilities (credit cards) separately
+    if (account.account_type === 'liability') {
+      totalLiabilities += Math.abs(Number(account.balance)) // Liabilities are stored as negative, so abs for display
     } else {
-      accountBalances[accountKey] -= Number(tx.amount)
+      totalAssets += Number(account.balance)
     }
   })
 
-  // Calculate total available (assuming all accounts are checking/assets, no liabilities for now)
-  const totalAvailable = Object.values(accountBalances).reduce((sum, balance) => sum + balance, 0)
+  // Total available = assets - liabilities
+  const totalAvailable = totalAssets - totalLiabilities
 
   // Calculate total already allocated this month
   const totalAllocated = budgets?.reduce((sum, budget) => sum + Number(budget.allocated_amount || 0), 0) || 0
