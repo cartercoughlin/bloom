@@ -3,11 +3,21 @@ import { google } from 'googleapis';
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
 
 export async function getGoogleSheetsClient() {
+  let privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
+  
+  // Try base64 decoding first, fallback to direct use
+  try {
+    privateKey = Buffer.from(privateKey!, 'base64').toString('utf-8');
+  } catch {
+    // If not base64, use as-is and handle newlines
+    privateKey = privateKey?.replace(/\\n/g, '\n');
+  }
+  
   const credentials = {
     type: "service_account",
     project_id: "bloom-budget",
     private_key_id: "09d2ea03c17b02feca109194d2163fe5e99e7146",
-    private_key: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    private_key: privateKey,
     client_email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
     client_id: "111678461772918770769",
     auth_uri: "https://accounts.google.com/o/oauth2/auth",
