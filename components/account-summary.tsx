@@ -13,7 +13,7 @@ export function AccountSummary({ accountBalances, totalAvailable }: AccountSumma
       <CardHeader>
         <CardTitle>Account Balances</CardTitle>
         <CardDescription>
-          Calculated from your transaction history
+          Synced from Tiller Balances sheet
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

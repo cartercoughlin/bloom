@@ -182,6 +182,12 @@ export async function syncGoogleSheets(): Promise<SyncResult> {
 
       const balancesRows = balancesResponse.data.values
       if (balancesRows && balancesRows.length > 2) {
+        // Debug: Log the structure
+        console.log('[v0] Balances row 0:', balancesRows[0])
+        console.log('[v0] Balances row 1:', balancesRows[1])
+        console.log('[v0] Balances row 2:', balancesRows[2])
+        console.log('[v0] Balances row 3 (first data):', balancesRows[3])
+
         // Row 0 is the main header, Row 1 is "Sorted Assets" and "Sorted Liabilities"
         // Row 2 has the column names (Row, Id, Group, Account, Last Updated, Balance)
         // Assets: Columns F-K (indices 5-10)
@@ -194,6 +200,8 @@ export async function syncGoogleSheets(): Promise<SyncResult> {
 
           const accountName = row[8]?.trim() // Column I (Account)
           const balanceStr = row[10]?.trim() // Column K (Balance)
+
+          console.log(`[v0] Asset row ${i}: accountName="${accountName}", balance="${balanceStr}"`)
 
           if (!accountName || !balanceStr) continue
 
