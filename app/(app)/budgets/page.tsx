@@ -58,12 +58,22 @@ export default async function BudgetsPage() {
   })
 
   // Get account balances from account_balances table (synced from Tiller Balances sheet)
-  // For budgeting, only include checking accounts and credit cards
-  const { data: accounts } = await supabase
+  // For budgeting, only include specific accounts for budgeting
+  const budgetAccountNames = [
+    "FirstView Checking (xxxx4583)",
+    "CREDIT CARD (-3762) (xxxx3762)",
+    "Citi /AAdvantage Platinum Select World Elite Mastercard (xxxx8364)"
+  ]
+
+  const { data: allAccounts } = await supabase
     .from("account_balances")
     .select("account_name, account_type, balance")
     .eq("user_id", user.id)
-    .in("account_type", ["checking", "liability"])
+
+  // Filter to only budget accounts
+  const accounts = allAccounts?.filter(account =>
+    budgetAccountNames.includes(account.account_name)
+  )
 
   // Group balances by account
   const accountBalances: Record<string, number> = {}
