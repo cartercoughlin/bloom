@@ -57,7 +57,7 @@ export function TransactionCategorizer({
     if (!currentCategoryId) {
       fetchSuggestions()
     }
-  }, [transactionId, currentCategoryId])
+  }, [transactionId, currentCategoryId, description, amount])
 
   const fetchSuggestions = async () => {
     setLoading(true)

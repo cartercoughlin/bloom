@@ -5,10 +5,27 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev",
+    "dev:mobile": "next dev --port 3000",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "cap:sync": "npx cap sync",
+    "cap:open:ios": "npx cap open ios",
+    "cap:open:android": "npx cap open android",
+    "mobile:setup": "npx cap sync && echo 'Mobile platforms synced! Update capacitor.config.ts server.url to point to your deployed app.'",
+    "mobile:dev:ios": "npx cap open ios",
+    "mobile:dev:android": "npx cap open android",
+    "mobile:dev:local": "npm run dev:mobile & npx cap sync && npx cap open ios"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/haptics": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
+    "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/preferences": "^8.0.0",
+    "@capacitor/status-bar": "^8.0.0",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "1.2.2",
     "@radix-ui/react-alert-dialog": "1.1.4",

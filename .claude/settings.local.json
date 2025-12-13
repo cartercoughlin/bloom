@@ -6,7 +6,11 @@
       "Bash(unzip:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(vercel --prod)"
+      "Bash(vercel --prod)",
+      "Bash(npm install:*)",
+      "Bash(npx cap init:*)",
+      "Bash(npx cap:*)",
+      "Bash(npx cap add android)"
     ]
   }
 }

@@ -1,6 +1,6 @@
 # Budget App
 
-A Next.js-based budget tracking application that allows users to import, categorize, and analyze their financial transactions.
+A Next.js-based budget tracking application that allows users to import, categorize, and analyze their financial transactions. **Optimized for mobile** with native app capabilities via Capacitor.
 
 ## Features
 
@@ -12,22 +12,93 @@ A Next.js-based budget tracking application that allows users to import, categor
 - Budget tracking with expected spending indicators
   - Visual markers on progress bars showing expected spending based on time through the month
   - Helps identify if you're spending too fast or staying on track
+- **Mobile-First Design & Native App Support**
+  - Native iOS and Android app via Capacitor
+  - Client-side rendering for optimal mobile performance
+  - Offline data caching with Capacitor Storage
+  - Native haptic feedback for interactions
+  - Smart keyboard handling with auto-scroll
+  - Safe area support for iOS notch and home indicator
+  - Touch-optimized UI with proper tap targets
 - **Progressive Web App (PWA) Support**
-  - Install as a mobile app on iOS and Android
+  - Install as a web app on iOS and Android
   - Offline functionality with service worker
   - App-like experience with standalone display mode
   - Home screen icon and splash screen
 
 ## Tech Stack
 
-- Next.js 14
-- React
+- Next.js 16 (App Router)
+- React 19
+- Capacitor 8 (Native mobile platform)
 - Supabase (Authentication & Database)
 - TypeScript
-- Tailwind CSS
+- Tailwind CSS 4
 - shadcn/ui components
 
 ## Recent Changes
+
+### Mobile Optimizations (2025-12-13)
+
+**Capacitor Integration for Native Mobile Apps**
+- Installed and configured Capacitor for iOS and Android
+- Added native platform detection utilities
+- Configured app for native iOS and Android builds
+- Set up proper keyboard and status bar handling
+
+**Client-Side Rendering for Heavy Pages**
+- Converted dashboard and transactions pages to client components
+- Disabled SSR/streaming for better mobile performance
+- Implemented client-side data fetching with loading states
+- Added intelligent data caching with Capacitor Storage
+- Pages now load instantly from cache while fetching fresh data
+
+**Safe Area Support**
+- Added CSS variables for safe area insets (iOS notch, status bar, home indicator)
+- Configured viewport with `viewport-fit=cover` for full-screen support
+- Created utility classes: `.safe-top`, `.safe-bottom`, `.safe-area`, `.h-screen-safe`
+- Added mobile viewport optimizations (tap highlight, touch action)
+
+**Capacitor Storage API Integration**
+- Created comprehensive storage utilities replacing localStorage
+- Implemented offline data caching for dashboard and transactions
+- Added cache management utilities for JSON data
+- Automatic fallback to localStorage for web platform
+
+**Native Haptic Feedback**
+- Integrated Capacitor Haptics API
+- Added haptic feedback to all buttons (light for normal, warning for destructive)
+- Created `useHaptics` hook for easy integration
+- Support for impact feedback (light, medium, heavy) and notifications (success, warning, error)
+
+**Keyboard Handling**
+- Created `useKeyboard` hook for mobile keyboard interactions
+- Auto-scroll focused inputs into view when keyboard appears
+- Keyboard show/hide event listeners
+- Smart offset calculation to prevent input being hidden by keyboard
+
+**Files Created:**
+- `lib/capacitor.ts` - Platform detection and Capacitor utilities
+- `hooks/use-keyboard.ts` - Keyboard handling hook
+- `hooks/use-haptics.ts` - Haptic feedback hook
+- `capacitor.config.ts` - Capacitor configuration
+
+**Files Modified:**
+- `app/(app)/dashboard/page.tsx` - Converted to client component with caching
+- `app/(app)/transactions/page.tsx` - Converted to client component with caching
+- `components/ui/button.tsx` - Added haptic feedback
+- `styles/globals.css` - Added safe area variables and mobile utilities
+- `app/layout.tsx` - Added viewport-fit for safe areas
+- `package.json` - Added Capacitor scripts and dependencies
+- `next.config.mjs` - Optimized for mobile builds
+
+**New NPM Scripts:**
+- `npm run build:mobile` - Build app and sync to native platforms
+- `npm run dev:ios` - Build and open iOS project in Xcode
+- `npm run dev:android` - Build and open Android project in Android Studio
+- `npm run cap:sync` - Sync web assets to native platforms
+- `npm run cap:open:ios` - Open iOS project in Xcode
+- `npm run cap:open:android` - Open Android project in Android Studio
 
 ### New Features
 
@@ -232,8 +303,196 @@ To enable "Add to Home Screen" functionality and install the app as a mobile app
 - ✅ Faster loading with cached resources
 - ✅ Works on iOS, Android, and desktop
 
+## Native Mobile App Development (Capacitor)
+
+### Building the Native App
+
+The app uses Capacitor to create native iOS and Android applications with full access to native device features.
+
+#### Prerequisites
+
+**For iOS Development:**
+- macOS with Xcode 14+ installed
+- iOS Simulator or physical iOS device
+- Apple Developer account (for device testing/deployment)
+
+**For Android Development:**
+- Android Studio installed
+- Android SDK and emulator configured
+- Java Development Kit (JDK) 17+
+
+#### Build Process
+
+1. **Build the Next.js app:**
+   ```bash
+   npm run build
+   ```
+
+2. **Sync web assets to native platforms:**
+   ```bash
+   npm run cap:sync
+   ```
+
+3. **Open native IDE:**
+   ```bash
+   # For iOS
+   npm run cap:open:ios
+
+   # For Android
+   npm run cap:open:android
+   ```
+
+4. **Build and run from IDE:**
+   - **iOS**: Click the Play button in Xcode to run on simulator or device
+   - **Android**: Click Run in Android Studio to launch on emulator or device
+
+#### Quick Development Workflow
+
+Use the convenience scripts for faster iteration:
+
+```bash
+# Build and open iOS project
+npm run dev:ios
+
+# Build and open Android project
+npm run dev:android
+```
+
+### Mobile-Specific Features
+
+#### Capacitor Storage API
+- Replace `localStorage` calls with the storage utilities from `lib/capacitor.ts`
+- Automatically uses Capacitor Preferences on native, falls back to localStorage on web
+- JSON caching utilities for complex data structures
+
+```typescript
+import { storage, cache } from '@/lib/capacitor'
+
+// Simple storage
+await storage.set('key', 'value')
+const value = await storage.get('key')
+
+// JSON caching
+await cache.setJSON('user', { name: 'John', age: 30 })
+const user = await cache.getJSON('user')
+```
+
+#### Haptic Feedback
+- All buttons automatically trigger haptic feedback
+- Use the `useHaptics` hook for custom interactions
+
+```typescript
+import { useHaptics } from '@/hooks/use-haptics'
+
+const haptics = useHaptics()
+
+// Light tap
+haptics.light()
+
+// Success notification
+haptics.success()
+
+// Error notification
+haptics.error()
+```
+
+#### Keyboard Handling
+- Use the `useKeyboard` hook for smart keyboard management
+- Automatically scrolls inputs into view when keyboard appears
+
+```typescript
+import { useKeyboard } from '@/hooks/use-keyboard'
+
+const { isKeyboardVisible, hideKeyboard } = useKeyboard({
+  autoScroll: true,
+  scrollOffset: 20,
+  onKeyboardShow: () => console.log('Keyboard opened'),
+  onKeyboardHide: () => console.log('Keyboard closed')
+})
+```
+
+#### Safe Area Support
+- Use CSS utility classes for safe area padding:
+  - `.safe-top` - Add padding for status bar/notch
+  - `.safe-bottom` - Add padding for home indicator
+  - `.safe-area` - Add padding on all sides
+  - `.h-screen-safe` - Full height minus safe areas
+
+```tsx
+<div className="safe-top">
+  Content that respects iOS notch
+</div>
+```
+
+#### Platform Detection
+```typescript
+import { isNativePlatform, isIOS, isAndroid, isWeb } from '@/lib/capacitor'
+
+if (isNativePlatform()) {
+  // Native-specific code
+}
+
+if (isIOS()) {
+  // iOS-specific code
+}
+```
+
+### Performance Optimizations
+
+#### Client-Side Rendering
+- Heavy pages (dashboard, transactions) use client-side data fetching
+- Data is cached in Capacitor Storage for instant loads
+- Fresh data is fetched in background while showing cached data
+
+#### Offline Support
+- Service worker caches static assets
+- Capacitor Storage caches dynamic data
+- App works offline with last loaded data
+
+#### Mobile-Specific Optimizations
+- Disabled tap highlight for cleaner UI
+- Touch action optimizations for smooth scrolling
+- 44px minimum tap targets for accessibility
+- Responsive breakpoint at 768px (md:)
+
+### Troubleshooting
+
+**Bundle Identifier Issues (iOS):**
+If you see an error like "The app identifier 'com.budgetapp.app' cannot be registered":
+1. Open `capacitor.config.ts`
+2. Change the `appId` to a unique identifier:
+   ```typescript
+   appId: 'com.yourname.budgetapp', // Use your own unique ID
+   ```
+3. Run `npm run cap:sync` to update the native projects
+4. Open Xcode and update the Bundle Identifier in the project settings
+
+**iOS Build Issues:**
+- Ensure Xcode is updated to latest version
+- Run `pod install` in `ios/App` directory if pods are out of date
+- Clean build folder: Product → Clean Build Folder
+- Change Bundle Identifier to a unique string in Xcode project settings
+- Ensure you're signed in with an Apple Developer account in Xcode
+
+**Android Build Issues:**
+- Check SDK is installed via Android Studio SDK Manager
+- Ensure JAVA_HOME is set correctly
+- Sync Gradle files in Android Studio
+- Change `applicationId` in `android/app/build.gradle` if needed
+
+**Data not persisting:**
+- Check Capacitor Storage permissions in native settings
+- Verify `await` is used with all storage operations
+- Check browser console for errors on web platform
+
 ## Project Structure
 
 - `/app` - Next.js app router pages and API routes
 - `/components` - React components (UI and feature components)
 - `/lib` - Utility functions and configurations
+  - `/lib/capacitor.ts` - Mobile platform utilities
+- `/hooks` - React hooks
+  - `/hooks/use-keyboard.ts` - Keyboard handling
+  - `/hooks/use-haptics.ts` - Haptic feedback
+- `/ios` - iOS native project (generated by Capacitor)
+- `/android` - Android native project (generated by Capacitor)
