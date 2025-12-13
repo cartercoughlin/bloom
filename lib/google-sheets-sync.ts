@@ -151,6 +151,7 @@ export async function syncGoogleSheets(): Promise<SyncResult> {
         transaction_type: transactionType,
         category_id: categoryId,
         bank: bank,
+        hidden: false,
       }
 
       // Check if transaction already exists
