@@ -1,12 +1,15 @@
 import { google } from 'googleapis';
-import path from 'path';
 
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
-const KEY_FILE = path.join(process.cwd(), 'bloom-budget-09d2ea03c17b.json');
 
 export async function getGoogleSheetsClient() {
+  const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  
   const auth = new google.auth.GoogleAuth({
-    keyFile: KEY_FILE,
+    credentials: {
+      client_email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+      private_key: privateKey,
+    },
     scopes: SCOPES,
   });
 
