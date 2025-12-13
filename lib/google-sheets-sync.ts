@@ -7,6 +7,7 @@ export interface SyncResult {
   updatedTransactions: number
   totalProcessed: number
   syncedAccounts?: number
+  debugInfo?: any
   error?: string
 }
 
@@ -181,8 +182,15 @@ export async function syncGoogleSheets(): Promise<SyncResult> {
       })
 
       const balancesRows = balancesResponse.data.values
+      const debugInfo: any = {}
+
       if (balancesRows && balancesRows.length > 2) {
-        // Debug: Log the structure
+        // Debug: Capture the structure
+        debugInfo.row0 = balancesRows[0]
+        debugInfo.row1 = balancesRows[1]
+        debugInfo.row2 = balancesRows[2]
+        debugInfo.row3 = balancesRows[3]
+
         console.log('[v0] Balances row 0:', balancesRows[0])
         console.log('[v0] Balances row 1:', balancesRows[1])
         console.log('[v0] Balances row 2:', balancesRows[2])
@@ -285,6 +293,7 @@ export async function syncGoogleSheets(): Promise<SyncResult> {
       updatedTransactions: updatedCount,
       totalProcessed: processedCount,
       syncedAccounts: syncedAccountsCount,
+      debugInfo: debugInfo,
     }
   } catch (error) {
     console.error("[v0] Sync error:", error)
