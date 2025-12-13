@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { SpendingOverview } from "@/components/spending-overview"
+import { SpendingByCategory } from "@/components/spending-by-category"
 import { MonthlyTrend } from "@/components/monthly-trend"
 
 export default async function DashboardPage() {
@@ -87,7 +88,10 @@ export default async function DashboardPage() {
       <div className="space-y-4 md:space-y-6">
         <SpendingOverview transactions={currentMonthTransactions || []} budgets={budgets || []} />
 
-        <MonthlyTrend transactions={trendTransactions || []} />
+        <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
+          <SpendingByCategory transactions={currentMonthTransactions || []} />
+          <MonthlyTrend transactions={trendTransactions || []} />
+        </div>
       </div>
     </div>
   )

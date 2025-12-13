@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 import { LayoutDashboard, Receipt, Wallet, FolderKanban, LogOut, Menu } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
+import Image from "next/image"
 
 export function AppNav() {
   const pathname = usePathname()
@@ -50,51 +51,32 @@ export function AppNav() {
       <div className="container mx-auto flex h-16 items-center justify-between px-6">
         <div className="flex items-center gap-8">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <Wallet className="h-6 w-6" />
+            <Image src="/icon-32x32.png" alt="Bloom Budget" width={24} height={24} />
             <span className="text-xl font-bold">Bloom Budget</span>
           </Link>
+
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-1">
+            {navItems.map((item) => {
+              const Icon = item.icon
+              return (
+                <Link key={item.href} href={item.href}>
+                  <Button variant="ghost" className={cn("gap-2", pathname?.startsWith(item.href) && "bg-muted")}>
+                    <Icon className="h-4 w-4" />
+                    {item.title}
+                  </Button>
+                </Link>
+              )
+            })}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Mobile Menu */}
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Open menu</span>
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-64">
-              <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  Bloom Budget
-                </SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-col gap-2 mt-6">
-                {navItems.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <Link key={item.href} href={item.href} onClick={() => setMobileMenuOpen(false)}>
-                      <Button
-                        variant="ghost"
-                        className={cn("w-full justify-start gap-2", pathname?.startsWith(item.href) && "bg-muted")}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {item.title}
-                      </Button>
-                    </Link>
-                  )
-                })}
-                <div className="border-t pt-2 mt-2">
-                  <Button variant="ghost" onClick={handleLogout} className="w-full justify-start gap-2">
-                    <LogOut className="h-4 w-4" />
-                    Logout
-                  </Button>
-                </div>
-              </div>
-            </SheetContent>
-          </Sheet>
+          {/* Desktop Logout Button */}
+          <Button variant="ghost" onClick={handleLogout} className="hidden md:flex">
+            <LogOut className="h-4 w-4 mr-2" />
+            Logout
+          </Button>
         </div>
       </div>
     </nav>
