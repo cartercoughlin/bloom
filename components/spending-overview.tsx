@@ -6,6 +6,7 @@ import { TrendingDown, TrendingUp, ArrowUpRight, ArrowDownRight } from "lucide-r
 interface Transaction {
   amount: number
   transaction_type: string
+  category_id?: string
 }
 
 interface Budget {
@@ -19,8 +20,9 @@ interface SpendingOverviewProps {
 }
 
 export function SpendingOverview({ transactions, budgets }: SpendingOverviewProps) {
+  // Only count categorized expenses to match budget tab calculations
   const totalExpenses = transactions
-    .filter((t) => t.transaction_type === "debit")
+    .filter((t) => t.transaction_type === "debit" && t.category_id)
     .reduce((sum, t) => sum + Number(t.amount), 0)
 
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
