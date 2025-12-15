@@ -1,5 +1,5 @@
 // Service Worker for Bloom Budget PWA
-const CACHE_NAME = 'bloom-budget-v4';
+const CACHE_NAME = 'bloom-budget-v5';
 const urlsToCache = [
   '/',
   '/dashboard',
