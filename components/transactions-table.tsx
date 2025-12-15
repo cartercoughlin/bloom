@@ -376,7 +376,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-1 min-w-0 flex-1">
-                            <span className="truncate text-[9px] md:text-sm">{tx.merchant_name || tx.description}</span>
+                            <span className="truncate text-sm md:text-sm font-medium">{tx.merchant_name || tx.description}</span>
                             {tx.recurring && (
                               <Badge variant="outline" className="text-[7px] md:text-[10px] px-0.5 py-0 h-3 md:h-5 flex-shrink-0">
                                 <Repeat className="h-2 w-2 md:h-3 md:w-3" />
@@ -384,14 +384,14 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                             )}
                           </div>
                           {/* Mobile: Amount on the right */}
-                          <span className={`md:hidden text-[10px] font-medium ml-2 ${
+                          <span className={`md:hidden text-sm font-semibold ml-2 ${
                             tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                           }`}>
-                            {tx.transaction_type === "credit" ? "+" : "-"}${Math.round(tx.amount)}
+                            {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                         {/* Mobile: Category below transaction name */}
-                        <div className="md:hidden mt-1">
+                        <div className="md:hidden mt-1" onClick={(e) => e.stopPropagation()}>
                           {txId ? (
                             <TransactionCategorizer
                               transactionId={txId}
@@ -441,7 +441,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                       tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                     }`}
                   >
-                    {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
+                    {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </td>
                   <td className="p-1 md:p-3 text-[9px] md:text-sm text-right hidden md:table-cell">
                     <div className="flex items-center gap-1 justify-end">
@@ -499,7 +499,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                 <div className={`text-lg font-semibold ${
                   selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                 }`}>
-                  {selectedTransaction.transaction_type === "credit" ? "+" : "-"}${selectedTransaction.amount.toFixed(2)}
+                  {selectedTransaction.transaction_type === "credit" ? "+" : "-"}${selectedTransaction.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
 
