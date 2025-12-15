@@ -335,7 +335,7 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                     />
                     {percentageThroughMonth !== null && !isIncomeCategory && (
                       <div
-                        className="absolute -top-1 -bottom-1 w-0.5 bg-blue-500 z-10"
+                        className="absolute -top-1 -bottom-1 w-1 bg-blue-600 dark:bg-blue-400 z-10 shadow-lg"
                         style={{ left: `${Math.min((expectedSpending / Number(budget.amount)) * 100, 100)}%` }}
                         title={`Expected: $${expectedSpending.toFixed(2)} (${recurringExpenses > 0 ? `$${recurringExpenses.toFixed(2)} recurring + ` : ''}$${(variableExpenses * (percentageThroughMonth / 100)).toFixed(2)} variable)`}
                       />
