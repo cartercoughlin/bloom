@@ -133,13 +133,20 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   const { data: categories } = await supabase.from('categories').select('id, name').eq('user_id', userId)
   const categoryMap = new Map(categories?.map(c => [c.name.toLowerCase(), c.id]) || [])
 
-  // Get existing transactions to avoid duplicates
+  // Get existing transactions to avoid duplicates - use Plaid transaction ID
   const { data: existingTransactions } = await supabase
     .from('transactions')
-    .select('id, description, date, amount')
+    .select('id, plaid_transaction_id, category_id, merchant_name, logo_url, website')
     .eq('user_id', userId)
+    .is('plaid_transaction_id', 'not.null') // Only get transactions with Plaid IDs
 
-  const existingKeys = new Set(existingTransactions?.map(t => `${t.date}-${t.description}-${t.amount}`) || [])
+  // Create lookup by Plaid transaction ID
+  const existingByPlaidId = new Map<string, any>()
+  existingTransactions?.forEach(t => {
+    if (t.plaid_transaction_id) {
+      existingByPlaidId.set(t.plaid_transaction_id, t)
+    }
+  })
 
   let newCount = 0
   let updatedCount = 0
@@ -165,27 +172,63 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   console.log('Processing transactions...')
 
   for (const transaction of transactions) {
-    console.log('Processing transaction:', transaction.name, transaction.amount, transaction.date)
+    console.log('Processing transaction:', transaction.name, transaction.amount, transaction.date, 'ID:', transaction.transaction_id)
     const account = accounts.find(acc => acc.account_id === transaction.account_id)
     const bankName = account?.name || 'Unknown'
     
-    const transactionKey = `${transaction.date}-${transaction.name}-${Math.abs(transaction.amount)}`
+    // Check if transaction already exists by Plaid ID
+    const existingTransaction = transaction.transaction_id ? existingByPlaidId.get(transaction.transaction_id) : null
     
-    if (existingKeys.has(transactionKey)) {
-      updatedCount++
+    if (existingTransaction) {
+      // Update existing transaction with more accurate data
+      const updateData: any = {}
+      
+      // Update amount if it's more precise
+      if (Math.abs(transaction.amount) !== existingTransaction.amount) {
+        updateData.amount = Math.abs(transaction.amount)
+      }
+      
+      // Update merchant info if available (but preserve categorization)
+      if (transaction.merchant_name && !existingTransaction.merchant_name) {
+        updateData.merchant_name = transaction.merchant_name
+      }
+      
+      if (transaction.logo_url && !existingTransaction.logo_url) {
+        updateData.logo_url = transaction.logo_url
+      }
+      
+      if (transaction.website && !existingTransaction.website) {
+        updateData.website = transaction.website
+      }
+      
+      // Update if we have new data
+      if (Object.keys(updateData).length > 0) {
+        console.log('Updating existing transaction:', existingTransaction.id, updateData)
+        const { error: updateError } = await supabase
+          .from('transactions')
+          .update(updateData)
+          .eq('id', existingTransaction.id)
+        
+        if (!updateError) {
+          updatedCount++
+        }
+      } else {
+        console.log('Transaction already exists, skipping')
+      }
+      
+      processedCount++
       continue
     }
 
-    // Skip categorization for now to avoid loops
-    let categoryId = null
-
+    // Create new transaction
     const transactionData = {
       user_id: userId,
+      plaid_transaction_id: transaction.transaction_id,
       date: transaction.date,
       description: transaction.name,
       amount: Math.abs(transaction.amount),
       transaction_type: transaction.amount > 0 ? 'debit' : 'credit',
-      category_id: categoryId,
+      category_id: null,
       bank: bankName,
       hidden: false,
       merchant_name: transaction.merchant_name || null,
@@ -194,7 +237,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       category_detailed: transaction.category?.join(' > ') || null,
     }
 
-    console.log('Inserting transaction:', transactionData)
+    console.log('Inserting new transaction:', transactionData)
     const { error: insertError } = await supabase.from('transactions').insert(transactionData)
     
     if (insertError) {

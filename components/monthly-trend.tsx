@@ -87,11 +87,11 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="month" className="text-[10px] md:text-xs" />
-              <YAxis className="text-[10px] md:text-xs" tickFormatter={(value) => `$${value}`} />
+              <YAxis className="text-[10px] md:text-xs" tickFormatter={(value) => `$${value.toLocaleString('en-US')}`} />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
-                    formatter={(value) => `$${Number(value).toFixed(2)}`}
+                    formatter={(value) => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     labelFormatter={(label) => label}
                   />
                 }

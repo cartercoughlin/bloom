@@ -341,8 +341,8 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
       </div>
 
       <div className="sm:p-4 p-0">
-        <div className="overflow-x-auto pl-1 sm:pl-0">
-          <table className="w-full min-w-full">
+        <div className="w-full">
+          <table className="w-full table-fixed">
             <tbody className="divide-y">
               {filteredTransactions.map((tx, index) => {
                 console.log('Full transaction object:', tx)
@@ -353,45 +353,46 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                 console.log('Captured transaction ID:', txId)
 
                 return (
-                <tr key={txId} className="hover:bg-muted/50">
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm whitespace-nowrap">
-                    <div className="md:hidden">{new Date(tx.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</div>
+                <tr 
+                  key={txId} 
+                  className="hover:bg-muted/50 cursor-pointer md:cursor-default"
+                  onClick={() => window.innerWidth < 768 && setSelectedTransaction(tx)}
+                >
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm whitespace-nowrap w-8 md:w-auto">
+                    <div className="md:hidden">{new Date(tx.date).getDate()}</div>
                     <div className="hidden md:block">{new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
                   </td>
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm">
-                    <div 
-                      className="flex items-center gap-1 md:gap-2 cursor-pointer md:cursor-default"
-                      onClick={() => window.innerWidth < 768 && setSelectedTransaction(tx)}
-                    >
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm w-full md:w-auto">
+                    <div className="flex items-center gap-1 md:gap-2">
                       {tx.logo_url && (
                         <img 
                           src={tx.logo_url} 
                           alt={tx.merchant_name || tx.description}
-                          className="w-4 h-4 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
+                          className="w-3 h-3 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
                           }}
                         />
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1 min-w-0 flex-1">
-                            <span className="truncate text-sm md:text-sm font-medium">{tx.merchant_name || tx.description}</span>
+                            <span className="truncate text-xs md:text-sm font-medium max-w-[100px] md:max-w-none">{tx.merchant_name || tx.description}</span>
                             {tx.recurring && (
-                              <Badge variant="outline" className="text-[7px] md:text-[10px] px-0.5 py-0 h-3 md:h-5 flex-shrink-0">
-                                <Repeat className="h-2 w-2 md:h-3 md:w-3" />
+                              <Badge variant="outline" className="text-[6px] md:text-[10px] px-0.5 py-0 h-2.5 md:h-5 flex-shrink-0">
+                                <Repeat className="h-1.5 w-1.5 md:h-3 md:w-3" />
                               </Badge>
                             )}
                           </div>
                           {/* Mobile: Amount on the right */}
-                          <span className={`md:hidden text-sm font-semibold ml-2 ${
+                          <span className={`md:hidden text-xs font-semibold flex-shrink-0 ${
                             tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                           }`}>
                             {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                         {/* Mobile: Category below transaction name */}
-                        <div className="md:hidden mt-1" onClick={(e) => e.stopPropagation()}>
+                        <div className="md:hidden mt-0.5 max-w-[180px]" onClick={(e) => e.stopPropagation()}>
                           {txId ? (
                             <TransactionCategorizer
                               transactionId={txId}
