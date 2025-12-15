@@ -423,18 +423,20 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                         </div>
                         
                         {/* Category */}
-                        <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                        <div className="mt-2">
                           {txId ? (
-                            <TransactionCategorizer
-                              transactionId={txId}
-                              description={tx.description}
-                              amount={tx.amount}
-                              currentCategoryId={tx.category_id}
-                              categories={categories}
-                              onCategoryChange={(categoryId, newCategory) => {
-                                handleCategoryChange(txId, categoryId, newCategory)
-                              }}
-                            />
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <TransactionCategorizer
+                                transactionId={txId}
+                                description={tx.description}
+                                amount={tx.amount}
+                                currentCategoryId={tx.category_id}
+                                categories={categories}
+                                onCategoryChange={(categoryId, newCategory) => {
+                                  handleCategoryChange(txId, categoryId, newCategory)
+                                }}
+                              />
+                            </div>
                           ) : (
                             <span className="text-muted-foreground text-xs">No ID</span>
                           )}

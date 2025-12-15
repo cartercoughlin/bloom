@@ -57,7 +57,7 @@ export function AppNav() {
   ]
 
   return (
-    <nav className="border-b bg-background safe-top" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 44px)' }}>
+    <nav className="border-b bg-background" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)' }}>
       <div className="container mx-auto flex h-16 items-center justify-between px-6">
         <div className="flex items-center gap-8">
           <Link href="/dashboard" className="flex items-center gap-2">
