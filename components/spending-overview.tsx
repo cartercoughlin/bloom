@@ -20,9 +20,12 @@ interface SpendingOverviewProps {
 }
 
 export function SpendingOverview({ transactions, budgets }: SpendingOverviewProps) {
-  // Only count categorized expenses to match budget tab calculations
+  // Create a set of budgeted category IDs for quick lookup
+  const budgetedCategoryIds = new Set(budgets.map(b => b.category_id))
+
+  // Only count expenses for categories that have budgets (matches budget tab)
   const totalExpenses = transactions
-    .filter((t) => t.transaction_type === "debit" && t.category_id)
+    .filter((t) => t.transaction_type === "debit" && t.category_id && budgetedCategoryIds.has(t.category_id))
     .reduce((sum, t) => sum + Number(t.amount), 0)
 
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)

@@ -17,16 +17,18 @@ interface Budget {
 
 interface BudgetOverviewProps {
   budgets: Budget[]
-  spending: Record<string, number>
+  netByCategory: Record<string, { income: number; expenses: number; net: number }>
   month: number
   year: number
 }
 
-export function BudgetOverview({ budgets, spending, month, year }: BudgetOverviewProps) {
+export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOverviewProps) {
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
+  // Use only expenses (not net) to compare against budget
   const totalSpent = budgets.reduce((sum, budget) => {
-    const categorySpent = spending[budget.categories?.id || ''] || 0
-    return sum + categorySpent
+    const categoryData = netByCategory[budget.categories?.id || '']
+    const categoryExpenses = categoryData?.expenses || 0
+    return sum + categoryExpenses
   }, 0)
   const remaining = totalBudget - totalSpent
   const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0

@@ -37,22 +37,33 @@ export default async function BudgetsPage() {
   // Get all categories
   const { data: categories } = await supabase.from("categories").select("*").order("name")
 
-  // Get spending for current month
+  // Get transactions for current month
   const firstDay = new Date(currentYear, currentMonth - 1, 1).toISOString().split("T")[0]
   const lastDay = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0]
 
+  // Get all transactions for current month (both debit and credit for net calculation)
   const { data: transactions } = await supabase
     .from("transactions")
     .select("category_id, amount, transaction_type")
     .gte("date", firstDay)
     .lte("date", lastDay)
-    .eq("transaction_type", "debit")
 
-  // Calculate spending by category
-  const spendingByCategory: Record<string, number> = {}
+  // Calculate net spending by category (income - expenses)
+  const netByCategory: Record<string, { income: number; expenses: number; net: number }> = {}
   transactions?.forEach((tx) => {
     if (tx.category_id) {
-      spendingByCategory[tx.category_id] = (spendingByCategory[tx.category_id] || 0) + Number(tx.amount)
+      if (!netByCategory[tx.category_id]) {
+        netByCategory[tx.category_id] = { income: 0, expenses: 0, net: 0 }
+      }
+
+      if (tx.transaction_type === "credit") {
+        netByCategory[tx.category_id].income += Number(tx.amount)
+      } else if (tx.transaction_type === "debit") {
+        netByCategory[tx.category_id].expenses += Number(tx.amount)
+      }
+
+      netByCategory[tx.category_id].net =
+        netByCategory[tx.category_id].income - netByCategory[tx.category_id].expenses
     }
   })
 
@@ -66,15 +77,15 @@ export default async function BudgetsPage() {
       <div className="space-y-6">
         <BudgetOverview
           budgets={budgets || []}
-          spending={spendingByCategory}
+          netByCategory={netByCategory}
           month={currentMonth}
           year={currentYear}
         />
-        
+
         <BudgetList
           budgets={budgets || []}
           categories={categories || []}
-          spending={spendingByCategory}
+          netByCategory={netByCategory}
           month={currentMonth}
           year={currentYear}
         />

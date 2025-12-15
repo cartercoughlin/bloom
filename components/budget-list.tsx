@@ -42,12 +42,12 @@ interface Category {
 interface BudgetListProps {
   budgets: Budget[]
   categories: Category[]
-  spending: Record<string, number>
+  netByCategory: Record<string, { income: number; expenses: number; net: number }>
   month: number
   year: number
 }
 
-export function BudgetList({ budgets: initialBudgets, categories: initialCategories, spending, month, year }: BudgetListProps) {
+export function BudgetList({ budgets: initialBudgets, categories: initialCategories, netByCategory, month, year }: BudgetListProps) {
   const [budgets, setBudgets] = useState(initialBudgets)
   const [categories, setCategories] = useState(initialCategories)
   const [isOpen, setIsOpen] = useState(false)
@@ -233,9 +233,12 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
       {budgets.length > 0 ? (
         <div className="grid gap-3 md:gap-4">
           {budgets.map((budget) => {
-            const spent = spending[budget.category_id] || 0
-            const percentage = (spent / Number(budget.amount)) * 100
-            const isOverBudget = spent > Number(budget.amount)
+            const categoryData = netByCategory[budget.category_id] || { income: 0, expenses: 0, net: 0 }
+            const expenses = categoryData.expenses
+            const income = categoryData.income
+            const net = categoryData.net
+            const percentage = (expenses / Number(budget.amount)) * 100
+            const isOverBudget = expenses > Number(budget.amount)
 
             return (
               <Card key={budget.id}>
@@ -253,17 +256,27 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                       <div>
                         <CardTitle className="text-sm md:text-lg">{budget.categories?.name}</CardTitle>
                         <CardDescription className="text-xs md:text-sm">
-                          ${spent.toFixed(2)} of ${Number(budget.amount).toFixed(2)}
+                          Expenses: ${expenses.toFixed(2)} of ${Number(budget.amount).toFixed(2)}
+                          {income > 0 && (
+                            <span className="text-green-600 ml-2">
+                              • Income: ${income.toFixed(2)}
+                            </span>
+                          )}
                         </CardDescription>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 md:gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
-                        <Edit className="h-3 w-3 md:h-4 md:w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(budget.id)} className="h-7 w-7 md:h-9 md:w-9">
-                        <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
-                      </Button>
+                    <div className="flex flex-col items-end gap-1">
+                      <span className={`text-sm md:text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {net >= 0 ? '+' : '-'}${Math.abs(net).toFixed(2)}
+                      </span>
+                      <div className="flex items-center gap-1 md:gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
+                          <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(budget.id)} className="h-7 w-7 md:h-9 md:w-9">
+                          <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
@@ -287,7 +300,7 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                       {percentage.toFixed(1)}% used
                     </span>
                     <span className={isOverBudget ? "text-red-600 font-medium" : "text-green-600"}>
-                      ${Math.abs(Number(budget.amount) - spent).toFixed(2)} {isOverBudget ? "over budget" : "remaining"}
+                      ${Math.abs(Number(budget.amount) - expenses).toFixed(2)} {isOverBudget ? "over budget" : "remaining"}
                     </span>
                   </div>
                 </CardContent>
