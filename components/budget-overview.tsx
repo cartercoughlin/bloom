@@ -17,7 +17,13 @@ interface Budget {
 
 interface BudgetOverviewProps {
   budgets: Budget[]
-  netByCategory: Record<string, { income: number; expenses: number; net: number }>
+  netByCategory: Record<string, {
+    income: number
+    expenses: number
+    net: number
+    recurringExpenses: number
+    variableExpenses: number
+  }>
   month: number
   year: number
 }

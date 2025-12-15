@@ -42,7 +42,13 @@ interface Category {
 interface BudgetListProps {
   budgets: Budget[]
   categories: Category[]
-  netByCategory: Record<string, { income: number; expenses: number; net: number }>
+  netByCategory: Record<string, {
+    income: number
+    expenses: number
+    net: number
+    recurringExpenses: number
+    variableExpenses: number
+  }>
   month: number
   year: number
 }
@@ -233,10 +239,18 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
       {budgets.length > 0 ? (
         <div className="grid gap-3 md:gap-4">
           {budgets.map((budget) => {
-            const categoryData = netByCategory[budget.category_id] || { income: 0, expenses: 0, net: 0 }
+            const categoryData = netByCategory[budget.category_id] || {
+              income: 0,
+              expenses: 0,
+              net: 0,
+              recurringExpenses: 0,
+              variableExpenses: 0,
+            }
             const expenses = categoryData.expenses
             const income = categoryData.income
             const net = categoryData.net
+            const recurringExpenses = categoryData.recurringExpenses
+            const variableExpenses = categoryData.variableExpenses
 
             // For income categories (income > expenses), net is negative, so don't show budget usage
             // For expense categories, show net spending (expenses - income) against budget
@@ -244,6 +258,24 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
             const percentage = (netSpending / Number(budget.amount)) * 100
             const isOverBudget = netSpending > Number(budget.amount)
             const isIncomeCategory = income > expenses
+
+            // Calculate expected spending considering recurring vs variable expenses
+            // Recurring expenses are expected immediately, variable expenses scale through the month
+            const calculateExpectedSpending = () => {
+              if (percentageThroughMonth === null) return 0
+
+              // Net recurring after income offset
+              const netRecurringExpenses = Math.max(0, recurringExpenses - income)
+              // Remaining variable expenses after any income offset applied to recurring
+              const netVariableExpenses = income > recurringExpenses
+                ? Math.max(0, variableExpenses - (income - recurringExpenses))
+                : variableExpenses
+
+              // Expected = recurring (immediate) + variable (scaled by time)
+              return netRecurringExpenses + (netVariableExpenses * (percentageThroughMonth / 100))
+            }
+
+            const expectedSpending = calculateExpectedSpending()
 
             return (
               <Card key={budget.id}>
@@ -301,11 +333,11 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                       className={isOverBudget ? "bg-red-100" : undefined}
                       indicatorClassName={isOverBudget ? "bg-red-600" : undefined}
                     />
-                    {percentageThroughMonth !== null && (
+                    {percentageThroughMonth !== null && !isIncomeCategory && (
                       <div
                         className="absolute -top-1 -bottom-1 w-0.5 bg-blue-500 z-10"
-                        style={{ left: `${Math.min(percentageThroughMonth, 100)}%` }}
-                        title={`Expected: $${(Number(budget.amount) * (percentageThroughMonth / 100)).toFixed(2)}`}
+                        style={{ left: `${Math.min((expectedSpending / Number(budget.amount)) * 100, 100)}%` }}
+                        title={`Expected: $${expectedSpending.toFixed(2)} (${recurringExpenses > 0 ? `$${recurringExpenses.toFixed(2)} recurring + ` : ''}$${(variableExpenses * (percentageThroughMonth / 100)).toFixed(2)} variable)`}
                       />
                     )}
                   </div>
