@@ -161,9 +161,11 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
             {/* Expected spending line (only for variable expenses) */}
             {percentageThroughMonth !== null && (
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-blue-500 z-10"
+                className="absolute w-0.5 bg-blue-600 z-10 shadow-sm"
                 style={{ 
-                  left: `${Math.min(recurringPercentage + ((100 - recurringPercentage) * (percentageThroughMonth / 100)), 100)}%` 
+                  left: `${Math.min(recurringPercentage + ((100 - recurringPercentage) * (percentageThroughMonth / 100)), 100)}%`,
+                  top: '-2px',
+                  bottom: '-2px'
                 }}
                 title={`Expected variable: $${((totalBudget - totalRecurring) * (percentageThroughMonth / 100)).toFixed(2)}`}
               />
