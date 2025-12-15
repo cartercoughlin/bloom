@@ -17,24 +17,35 @@ export async function PUT(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    if (!id || id === 'undefined' || id === 'null') {
+      return NextResponse.json({ error: "Invalid transaction ID" }, { status: 400 })
+    }
+
     const { recurring } = await request.json()
 
     if (typeof recurring !== "boolean") {
       return NextResponse.json({ error: "Recurring must be a boolean" }, { status: 400 })
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("transactions")
       .update({ recurring })
       .eq("id", id)
       .eq("user_id", user.id)
+      .select()
+      .single()
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    return NextResponse.json({ success: true })
+    if (!data) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 })
+    }
+
+    return NextResponse.json(data)
   } catch (error) {
+    console.error("Error updating transaction recurring status:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -206,6 +206,25 @@ Run `scripts/017_add_recurring_to_transactions.sql` in Supabase to add the recur
 
 ### Bug Fixes
 
+**2025-12-15: Fixed category suggestions running in infinite loop**
+- Category suggestions were being fetched repeatedly on every render
+- Removed `description` and `amount` from useEffect dependency array
+- Added `hasFetchedSuggestions` flag to prevent duplicate API calls
+- Suggestions now only fetch once per transaction unless category is removed
+- File modified:
+  - `components/transaction-categorizer.tsx`
+
+**2025-12-15: Fixed recurring transaction status not persisting**
+- Added `recurring` field to transaction queries and TypeScript interfaces
+- Created API endpoint to handle recurring status updates
+- Added recurring toggle button with Repeat icon in transactions table
+- Recurring transactions are now highlighted with blue color
+- Files created:
+  - `app/api/transactions/[id]/recurring/route.ts`
+- Files modified:
+  - `app/(app)/transactions/page.tsx`
+  - `components/transactions-table.tsx`
+
 **2025-12-12: Fixed UUID validation error in category updates**
 - Fixed error "invalid input syntax for type uuid: 'undefined'" when updating transaction categories
 - Added validation in both frontend and backend to handle invalid UUID strings

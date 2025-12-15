@@ -49,31 +49,31 @@ export default async function NetWorthPage() {
       <div className="grid gap-6 md:grid-cols-2">
         {/* Assets */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-green-600">Assets</CardTitle>
-            <CardDescription>Checking, savings, and investment accounts</CardDescription>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-green-600 text-base md:text-lg">Assets</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Checking, savings, and investment accounts</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 md:space-y-3 px-3 md:px-6 pb-3 md:pb-6">
             {assets.map((account) => (
               <div
                 key={account.account_name}
-                className="flex justify-between items-center p-3 border rounded-lg"
+                className="flex justify-between items-center p-2 md:p-3 border rounded-lg"
               >
                 <div>
-                  <span className="font-medium">{account.account_name}</span>
+                  <span className="font-medium text-sm md:text-base">{account.account_name}</span>
                   <span className="text-xs text-muted-foreground ml-2 capitalize">
                     ({account.account_type})
                   </span>
                 </div>
-                <span className="font-bold text-green-600">
+                <span className="font-bold text-green-600 text-sm md:text-base">
                   ${Number(account.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             ))}
-            <div className="pt-4 border-t">
+            <div className="pt-3 md:pt-4 border-t">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-medium">Total Assets</span>
-                <span className="text-xl font-bold text-green-600">
+                <span className="text-base md:text-lg font-medium">Total Assets</span>
+                <span className="text-lg md:text-xl font-bold text-green-600">
                   ${totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -83,26 +83,26 @@ export default async function NetWorthPage() {
 
         {/* Liabilities */}
         <Card>
-          <CardHeader>
-            <CardTitle className="text-red-600">Liabilities</CardTitle>
-            <CardDescription>Credit cards and loans</CardDescription>
+          <CardHeader className="pb-3 md:pb-6">
+            <CardTitle className="text-red-600 text-base md:text-lg">Liabilities</CardTitle>
+            <CardDescription className="text-xs md:text-sm">Credit cards and loans</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 md:space-y-3 px-3 md:px-6 pb-3 md:pb-6">
             {liabilities.map((account) => (
               <div
                 key={account.account_name}
-                className="flex justify-between items-center p-3 border rounded-lg"
+                className="flex justify-between items-center p-2 md:p-3 border rounded-lg"
               >
-                <span className="font-medium">{account.account_name}</span>
-                <span className="font-bold text-red-600">
+                <span className="font-medium text-sm md:text-base">{account.account_name}</span>
+                <span className="font-bold text-red-600 text-sm md:text-base">
                   ${Math.abs(Number(account.balance)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
             ))}
-            <div className="pt-4 border-t">
+            <div className="pt-3 md:pt-4 border-t">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-medium">Total Liabilities</span>
-                <span className="text-xl font-bold text-red-600">
+                <span className="text-base md:text-lg font-medium">Total Liabilities</span>
+                <span className="text-lg md:text-xl font-bold text-red-600">
                   ${totalLiabilities.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -113,26 +113,26 @@ export default async function NetWorthPage() {
 
       {/* Net Worth Summary */}
       <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>Net Worth Summary</CardTitle>
+        <CardHeader className="pb-3 md:pb-6">
+          <CardTitle className="text-base md:text-lg">Net Worth Summary</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center p-4 bg-green-50 dark:bg-green-950 rounded-lg">
-              <span className="text-lg font-medium">Total Assets</span>
-              <span className="text-xl font-bold text-green-600">
+        <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+          <div className="space-y-3 md:space-y-4">
+            <div className="flex justify-between items-center p-3 md:p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+              <span className="text-base md:text-lg font-medium">Total Assets</span>
+              <span className="text-lg md:text-xl font-bold text-green-600">
                 ${totalAssets.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center p-4 bg-red-50 dark:bg-red-950 rounded-lg">
-              <span className="text-lg font-medium">Total Liabilities</span>
-              <span className="text-xl font-bold text-red-600">
+            <div className="flex justify-between items-center p-3 md:p-4 bg-red-50 dark:bg-red-950 rounded-lg">
+              <span className="text-base md:text-lg font-medium">Total Liabilities</span>
+              <span className="text-lg md:text-xl font-bold text-red-600">
                 ${totalLiabilities.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="flex justify-between items-center p-6 bg-blue-50 dark:bg-blue-950 rounded-lg border-2 border-blue-200 dark:border-blue-800">
-              <span className="text-2xl font-bold">Net Worth</span>
-              <span className="text-3xl font-bold text-blue-600">
+            <div className="flex justify-between items-center p-4 md:p-6 bg-blue-50 dark:bg-blue-950 rounded-lg border-2 border-blue-200 dark:border-blue-800">
+              <span className="text-xl md:text-2xl font-bold">Net Worth</span>
+              <span className="text-2xl md:text-3xl font-bold text-blue-600">
                 ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>

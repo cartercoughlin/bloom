@@ -1,13 +1,13 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat } from "lucide-react"
 import { format } from "date-fns"
 import { TransactionCategorizer } from "./transaction-categorizer"
@@ -63,6 +63,8 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
   const [amountMax, setAmountMax] = useState("")
   const [showHidden, setShowHidden] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
+  const [categoryJustChanged, setCategoryJustChanged] = useState<string | null>(null)
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
@@ -103,6 +105,27 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
       return true
     })
   }, [transactions, searchTerm, categoryFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax, showHidden])
+
+  // Group transactions by date
+  const groupedTransactions = useMemo(() => {
+    const groups: Record<string, Transaction[]> = {}
+    
+    filteredTransactions.forEach(tx => {
+      const dateKey = tx.date
+      if (!groups[dateKey]) {
+        groups[dateKey] = []
+      }
+      groups[dateKey].push(tx)
+    })
+    
+    // Sort dates descending and sort transactions within each date
+    return Object.keys(groups)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+      .map(date => ({
+        date,
+        transactions: groups[date].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      }))
+  }, [filteredTransactions])
 
   const handleToggleHidden = async (transactionId: string, currentHidden: boolean) => {
     try {
@@ -169,6 +192,10 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
           : tx
       )
     )
+
+    // Prevent modal from opening for a short time after category change
+    setCategoryJustChanged(transactionId)
+    setTimeout(() => setCategoryJustChanged(null), 300)
   }
 
   const clearFilters = () => {
@@ -187,45 +214,42 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
   if (transactions.length === 0) {
     return (
-      <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12 md:py-16">
+      <div className="sm:bg-card sm:border sm:rounded-lg">
+        <div className="flex flex-col items-center justify-center py-12 md:py-16 px-6">
           <Upload className="h-8 w-8 md:h-12 md:w-12 text-muted-foreground mb-3 md:mb-4" />
           <h3 className="text-base md:text-lg font-semibold mb-1 md:mb-2">No transactions yet</h3>
           <p className="text-muted-foreground text-center text-xs md:text-sm mb-4 md:mb-6">Import your first transactions to get started</p>
           <Link href="/transactions/import">
-            <Button className="text-xs md:text-sm h-8 md:h-10">
+            <Button className="text-xs md:text-sm h-8 md:h-10 bg-gradient-fern hover:bg-gradient-fern-light">
               <Upload className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
               Import Transactions
             </Button>
           </Link>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     )
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-4 md:pb-6">
+    <div className="sm:bg-card sm:border sm:rounded-lg">
+      <div className="p-2 sm:p-4 border-b sm:border-b-border border-b-transparent">
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-base md:text-lg">Transactions</CardTitle>
-            <CardDescription className="text-xs md:text-sm">
-              {filteredTransactions.length} of {transactions.length} transactions
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
+          <p className="text-xs text-muted-foreground">
+            {filteredTransactions.length} of {transactions.length}
+          </p>
+          <div className="flex items-center gap-1">
             <Button 
               variant="outline" 
               size="sm" 
               onClick={() => setShowFilters(!showFilters)}
-              className="text-xs md:text-sm h-7 md:h-9 px-2 md:px-3"
+              className="text-xs h-7 px-2"
             >
-              <Filter className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+              <Filter className="mr-1 h-3 w-3" />
               <span className="hidden sm:inline">Filters</span>
             </Button>
             {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs md:text-sm h-7 md:h-9 px-2 md:px-3">
-                <X className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+              <Button variant="outline" size="sm" onClick={clearFilters} className="text-xs h-7 px-2">
+                <X className="mr-1 h-3 w-3" />
                 <span className="hidden sm:inline">Clear</span>
               </Button>
             )}
@@ -234,7 +258,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
         {/* Collapsible Filters */}
         {showFilters && (
-          <div className="space-y-3 mt-4 p-4 bg-muted/30 rounded-lg">
+          <div className="space-y-3 mt-4 p-4 bg-green-50 rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
           <Input
             placeholder="Search transactions..."
@@ -340,121 +364,194 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
           </div>
           </div>
         )}
-      </CardHeader>
+      </div>
 
-      <CardContent className="p-0 sm:p-6">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b">
-              <tr>
-                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Date</th>
-                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Description</th>
-                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Category</th>
-                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium hidden sm:table-cell">Bank</th>
-                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium">Amount</th>
-                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {filteredTransactions.map((tx, index) => {
-                console.log('Full transaction object:', tx)
-                console.log('Transaction keys:', Object.keys(tx))
+      <div className="sm:p-4 p-0">
+        <div className="w-full space-y-4">
+          {groupedTransactions.map(({ date, transactions: dayTransactions }) => (
+            <div key={date}>
+              {/* Date Divider */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="text-sm md:text-base font-medium text-muted-foreground">
+                  {new Date(date).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </div>
+                <div className="flex-1 h-px bg-border"></div>
+              </div>
+              
+              {/* Transactions for this date */}
+              <div className="space-y-2">
+                {dayTransactions.map((tx) => {
+                  const txId = tx.id
+                  console.log('Captured transaction ID:', txId)
 
-                // Capture the ID in a variable to avoid closure issues
-                const txId = tx.id
-                console.log('Captured transaction ID:', txId)
-
-                return (
-                <tr key={txId} className="hover:bg-muted/50">
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm whitespace-nowrap">
-                    {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                  </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm max-w-[120px] md:max-w-xs" title={tx.description}>
-                    <div className="flex items-center gap-2">
+                  return (
+                    <div 
+                      key={txId} 
+                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer md:cursor-default"
+                      onClick={() => {
+                        if (window.innerWidth < 768 && categoryJustChanged !== txId) {
+                          setSelectedTransaction(tx)
+                        }
+                      }}
+                    >
+                      {/* Logo - Desktop only */}
                       {tx.logo_url && (
                         <img 
                           src={tx.logo_url} 
                           alt={tx.merchant_name || tx.description}
-                          className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
+                          className="hidden md:block w-8 h-8 rounded-full object-cover flex-shrink-0"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
                           }}
                         />
                       )}
-                      <div className="truncate">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate">{tx.merchant_name || tx.description}</span>
-                          {tx.recurring && (
-                            <Badge variant="outline" className="text-[8px] md:text-[10px] px-1 py-0 h-4 md:h-5">
-                              <Repeat className="h-2.5 w-2.5 md:h-3 md:w-3" />
-                            </Badge>
+                      
+                      {/* Transaction Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="font-medium text-sm md:text-base truncate">
+                              {tx.merchant_name || tx.description}
+                            </span>
+                            {tx.recurring && (
+                              <Badge variant="outline" className="text-xs px-1 py-0 h-5 flex-shrink-0">
+                                <Repeat className="h-3 w-3" />
+                              </Badge>
+                            )}
+                          </div>
+                          <span className={`text-sm md:text-base font-semibold flex-shrink-0 ${
+                            tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                          }`}>
+                            {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                        
+                        {/* Category */}
+                        <div className="mt-2">
+                          {txId ? (
+                            <TransactionCategorizer
+                              transactionId={txId}
+                              description={tx.description}
+                              amount={tx.amount}
+                              currentCategoryId={tx.category_id}
+                              categories={categories}
+                              onCategoryChange={(categoryId, newCategory) => {
+                                handleCategoryChange(txId, categoryId, newCategory)
+                              }}
+                            />
+                          ) : (
+                            <span className="text-muted-foreground text-xs">No ID</span>
                           )}
                         </div>
+                        
                         {tx.category_detailed && (
-                          <div className="text-[8px] md:text-xs text-muted-foreground truncate">
+                          <div className="text-xs text-muted-foreground truncate mt-1">
                             {tx.category_detailed}
                           </div>
                         )}
                       </div>
                     </div>
-                  </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm min-w-20 md:min-w-48">
-                    {txId ? (
-                      <TransactionCategorizer
-                        transactionId={txId}
-                        description={tx.description}
-                        amount={tx.amount}
-                        currentCategoryId={tx.category_id}
-                        categories={categories}
-                        onCategoryChange={(categoryId, newCategory) => {
-                          console.log('Callback - Transaction ID:', txId)
-                          console.log('Callback - Category ID:', categoryId)
-                          handleCategoryChange(txId, categoryId, newCategory)
-                        }}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground text-[10px] md:text-xs">
-                        No ID found
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm capitalize hidden sm:table-cell">{tx.bank}</td>
-                  <td
-                    className={`p-2 md:p-3 text-[10px] md:text-sm text-right font-medium whitespace-nowrap ${
-                      tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
-                  </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm text-right">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleRecurring(txId, tx.recurring || false)}
-                        className={`h-6 md:h-7 px-1 md:px-2 ${tx.recurring ? 'text-blue-600' : ''}`}
-                        title={tx.recurring ? "Mark as non-recurring" : "Mark as recurring"}
-                      >
-                        <Repeat className="h-3 w-3 md:h-4 md:w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleHidden(txId, tx.hidden || false)}
-                        className="h-6 md:h-7 px-1 md:px-2"
-                        title={tx.hidden ? "Show transaction" : "Hide transaction"}
-                      >
-                        {tx.hidden ? <Eye className="h-3 w-3 md:h-4 md:w-4" /> : <EyeOff className="h-3 w-3 md:h-4 md:w-4" />}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              )
-              })}
-            </tbody>
-          </table>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          
+          {groupedTransactions.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No transactions found</p>
+            </div>
+          )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Mobile Transaction Detail Modal */}
+      <Dialog open={!!selectedTransaction} onOpenChange={() => setSelectedTransaction(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Transaction Details</DialogTitle>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                {selectedTransaction.logo_url && (
+                  <img 
+                    src={selectedTransaction.logo_url} 
+                    alt={selectedTransaction.merchant_name || selectedTransaction.description}
+                    className="w-8 h-8 rounded-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                )}
+                <div className="flex-1">
+                  <h3 className="font-medium">{selectedTransaction.merchant_name || selectedTransaction.description}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedTransaction.bank}</p>
+                </div>
+                <div className={`text-lg font-semibold ${
+                  selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                }`}>
+                  {selectedTransaction.transaction_type === "credit" ? "+" : "-"}${selectedTransaction.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Category</label>
+                <div className="mt-1">
+                  <TransactionCategorizer
+                    transactionId={selectedTransaction.id}
+                    description={selectedTransaction.description}
+                    amount={selectedTransaction.amount}
+                    currentCategoryId={selectedTransaction.category_id}
+                    categories={categories}
+                    onCategoryChange={(categoryId, newCategory) => {
+                      handleCategoryChange(selectedTransaction.id, categoryId, newCategory)
+                      // Update the selected transaction to reflect the change
+                      setSelectedTransaction(prev => prev ? {
+                        ...prev,
+                        category_id: categoryId || undefined,
+                        categories: categoryId ? (newCategory || categories.find(c => c.id === categoryId)) : undefined
+                      } : null)
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant={selectedTransaction.recurring ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    handleToggleRecurring(selectedTransaction.id, selectedTransaction.recurring || false)
+                    setSelectedTransaction(prev => prev ? { ...prev, recurring: !prev.recurring } : null)
+                  }}
+                  className="flex-1"
+                >
+                  <Repeat className="mr-2 h-4 w-4" />
+                  {selectedTransaction.recurring ? "Recurring" : "Mark Recurring"}
+                </Button>
+                <Button
+                  variant={selectedTransaction.hidden ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    handleToggleHidden(selectedTransaction.id, selectedTransaction.hidden || false)
+                    setSelectedTransaction(prev => prev ? { ...prev, hidden: !prev.hidden } : null)
+                  }}
+                  className="flex-1"
+                >
+                  {selectedTransaction.hidden ? <Eye className="mr-2 h-4 w-4" /> : <EyeOff className="mr-2 h-4 w-4" />}
+                  {selectedTransaction.hidden ? "Show" : "Hide"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   )
 }

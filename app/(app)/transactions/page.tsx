@@ -48,6 +48,7 @@ export default function TransactionsPage() {
               category_id,
               user_id,
               hidden,
+              recurring,
               merchant_name,
               logo_url,
               website,
@@ -91,13 +92,10 @@ export default function TransactionsPage() {
 
   if (loading && transactions.length === 0) {
     return (
-      <div className="container mx-auto px-3 sm:px-6 max-w-7xl pb-20 sm:pb-6">
-        <div className="flex items-center justify-between mb-4 md:mb-8">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-64" />
-          </div>
-          <Skeleton className="h-10 w-32" />
+      <div className="px-2 sm:px-6 max-w-full pb-20 sm:pb-6">
+        <div className="flex items-center justify-between mt-3 mb-2">
+          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-8 w-20" />
         </div>
         <Skeleton className="h-96 w-full" />
       </div>
@@ -105,12 +103,9 @@ export default function TransactionsPage() {
   }
 
   return (
-    <div className="container mx-auto px-3 sm:px-6 max-w-7xl pb-20 sm:pb-6">
-      <div className="flex items-center justify-between mb-4 md:mb-8">
-        <div>
-          <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">Transactions</h1>
-          <p className="text-muted-foreground text-xs md:text-sm">View and manage your transactions</p>
-        </div>
+    <div className="px-2 sm:px-6 max-w-full pb-20 sm:pb-6">
+      <div className="flex items-center justify-between mt-3 mb-2">
+        <h1 className="text-lg font-semibold text-green-600">Transactions</h1>
         <SyncButton />
       </div>
 

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.budgetapp.app',
-  appName: 'Budget App',
+  appName: 'Bloom Budget',
   webDir: 'public',
   server: {
     // For production
@@ -26,7 +26,7 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: 'dark',
-      backgroundColor: '#3b82f6'
+      backgroundColor: '#22c55e'
     }
   }
 };

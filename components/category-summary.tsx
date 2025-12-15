@@ -81,12 +81,12 @@ export function CategorySummary({ transactions }: CategorySummaryProps) {
                   </span>
                 </div>
                 <span className={`font-bold text-sm ${item.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {item.net >= 0 ? '+' : '-'}${Math.abs(item.net).toFixed(2)}
+                  {item.net >= 0 ? '+' : '-'}${Math.abs(item.net).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="flex justify-between text-xs text-muted-foreground pl-5">
-                <span>Income: ${item.income.toFixed(2)}</span>
-                <span>Expenses: ${item.expenses.toFixed(2)}</span>
+                <span>Income: ${item.income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span>Expenses: ${item.expenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
               </div>
             </div>
           ))}

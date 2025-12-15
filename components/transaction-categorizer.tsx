@@ -52,14 +52,11 @@ export function TransactionCategorizer({
   const [newCategoryName, setNewCategoryName] = useState("")
   const [newCategoryIcon, setNewCategoryIcon] = useState("💰")
   const [newCategoryColor, setNewCategoryColor] = useState("#3b82f6")
-
-  useEffect(() => {
-    if (!currentCategoryId) {
-      fetchSuggestions()
-    }
-  }, [transactionId, currentCategoryId, description, amount])
+  const [hasInteracted, setHasInteracted] = useState(false)
 
   const fetchSuggestions = async () => {
+    if (loading || suggestions.length > 0) return
+    
     setLoading(true)
     try {
       const response = await fetch("/api/category-suggestions", {
@@ -67,7 +64,7 @@ export function TransactionCategorizer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description, amount }),
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setSuggestions(data.suggestions || [])
@@ -77,6 +74,20 @@ export function TransactionCategorizer({
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSelectOpen = () => {
+    setHasInteracted(true)
+    if (!currentCategoryId && suggestions.length === 0) {
+      fetchSuggestions()
+    }
+  }
+
+  const handleCategorySelectWithStopPropagation = (categoryId: string) => {
+    // Prevent the modal from opening after category selection
+    setTimeout(() => {
+      handleCategorySelect(categoryId)
+    }, 0)
   }
 
   const handleCategorySelect = async (categoryId: string) => {
@@ -158,8 +169,11 @@ export function TransactionCategorizer({
     <div className="space-y-2">
       {currentCategory ? (
         <button
-          onClick={() => handleCategorySelect("")}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs hover:opacity-80 transition-opacity cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleCategorySelect("")
+          }}
+          className="inline-flex items-center gap-1 px-2 h-8 rounded-md text-xs hover:opacity-80 transition-opacity cursor-pointer"
           style={{ backgroundColor: `${currentCategory.color}20`, color: currentCategory.color }}
           title="Click to change category"
         >
@@ -179,7 +193,10 @@ export function TransactionCategorizer({
                     variant="outline"
                     size="sm"
                     className="h-6 px-2 text-xs justify-start"
-                    onClick={() => handleCategorySelect(suggestion.categoryId)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleCategorySelect(suggestion.categoryId)
+                    }}
                   >
                     <div className="flex items-center gap-1">
                       <div
@@ -197,8 +214,8 @@ export function TransactionCategorizer({
             </div>
           )}
 
-          <Select onValueChange={handleCategorySelect}>
-            <SelectTrigger className="h-8 text-xs">
+          <Select onValueChange={handleCategorySelectWithStopPropagation} onOpenChange={(open) => open && handleSelectOpen()}>
+            <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
               <SelectValue placeholder="Select category..." />
             </SelectTrigger>
             <SelectContent>

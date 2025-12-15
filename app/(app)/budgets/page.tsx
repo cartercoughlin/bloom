@@ -44,11 +44,11 @@ export default async function BudgetsPage() {
   // Get all transactions for current month (both debit and credit for net calculation)
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("category_id, amount, transaction_type, recurring")
+    .select("category_id, amount, transaction_type, recurring, hidden")
     .gte("date", firstDay)
     .lte("date", lastDay)
 
-  // Calculate net spending by category (income - expenses) and separate recurring
+  // Calculate net by category with recurring/variable breakdown
   const netByCategory: Record<string, {
     income: number
     expenses: number
@@ -56,7 +56,11 @@ export default async function BudgetsPage() {
     recurringExpenses: number
     variableExpenses: number
   }> = {}
+
   transactions?.forEach((tx) => {
+    // Skip hidden transactions
+    if (tx.hidden) return
+
     if (tx.category_id) {
       if (!netByCategory[tx.category_id]) {
         netByCategory[tx.category_id] = {
@@ -68,27 +72,36 @@ export default async function BudgetsPage() {
         }
       }
 
-      if (tx.transaction_type === "credit") {
-        netByCategory[tx.category_id].income += Number(tx.amount)
-      } else if (tx.transaction_type === "debit") {
-        const amount = Number(tx.amount)
-        netByCategory[tx.category_id].expenses += amount
+      const amount = Number(tx.amount)
+      const categoryData = netByCategory[tx.category_id]
+
+      if (tx.transaction_type === 'credit') {
+        categoryData.income += amount
+      } else {
+        categoryData.expenses += amount
+        
+        // Separate recurring from variable expenses
         if (tx.recurring) {
-          netByCategory[tx.category_id].recurringExpenses += amount
+          categoryData.recurringExpenses += amount
         } else {
-          netByCategory[tx.category_id].variableExpenses += amount
+          categoryData.variableExpenses += amount
         }
       }
 
-      netByCategory[tx.category_id].net =
-        netByCategory[tx.category_id].income - netByCategory[tx.category_id].expenses
+      categoryData.net = categoryData.income - categoryData.expenses
     }
+  })
+
+  // Also create simple spending record for backward compatibility
+  const spendingByCategory: Record<string, number> = {}
+  Object.entries(netByCategory).forEach(([categoryId, data]) => {
+    spendingByCategory[categoryId] = Math.max(0, data.expenses - data.income)
   })
 
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
       <div className="mb-4 md:mb-8">
-        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">Budget</h1>
+        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Budget</h1>
         <p className="text-muted-foreground text-xs md:text-sm">Set spending limits and track progress by category</p>
       </div>
 
@@ -104,6 +117,7 @@ export default async function BudgetsPage() {
           budgets={budgets || []}
           categories={categories || []}
           netByCategory={netByCategory}
+          spending={spendingByCategory}
           month={currentMonth}
           year={currentYear}
         />

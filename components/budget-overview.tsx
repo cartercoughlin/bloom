@@ -7,8 +7,8 @@ import { TrendingDown, TrendingUp, DollarSign, Target } from "lucide-react"
 interface Budget {
   id: string
   amount: number
+  category_id: string
   categories: {
-    id: string
     name: string
     color: string
     icon: string | null
@@ -30,16 +30,31 @@ interface BudgetOverviewProps {
 
 export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOverviewProps) {
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
-  // Use net spending (expenses - income) but don't go negative for income categories
-  const totalSpent = budgets.reduce((sum, budget) => {
-    const categoryData = netByCategory[budget.categories?.id || '']
-    const categoryExpenses = categoryData?.expenses || 0
+  
+  // Calculate recurring and variable spending separately
+  const { totalRecurring, totalVariable } = budgets.reduce((acc, budget) => {
+    const categoryData = netByCategory?.[budget.category_id || '']
+    const recurringExpenses = categoryData?.recurringExpenses || 0
+    const variableExpenses = categoryData?.variableExpenses || 0
     const categoryIncome = categoryData?.income || 0
-    const netSpending = Math.max(0, categoryExpenses - categoryIncome)
-    return sum + netSpending
-  }, 0)
+    
+    // Use same logic as individual budgets: income offsets recurring first, then variable
+    const netRecurringExpenses = Math.max(0, recurringExpenses - categoryIncome)
+    const netVariableExpenses = categoryIncome > recurringExpenses
+      ? Math.max(0, variableExpenses - (categoryIncome - recurringExpenses))
+      : variableExpenses
+    
+    return {
+      totalRecurring: acc.totalRecurring + netRecurringExpenses,
+      totalVariable: acc.totalVariable + netVariableExpenses
+    }
+  }, { totalRecurring: 0, totalVariable: 0 })
+  
+  const totalSpent = totalRecurring + totalVariable
   const remaining = totalBudget - totalSpent
   const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
+  const recurringPercentage = totalBudget > 0 ? (totalRecurring / totalBudget) * 100 : 0
+  const variablePercentage = totalBudget > 0 ? (totalVariable / totalBudget) * 100 : 0
 
   // Calculate percentage through the month
   const getPercentageThroughMonth = () => {
@@ -62,29 +77,29 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
   return (
     <div className="grid gap-2 grid-cols-2 md:gap-4 lg:grid-cols-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
           <CardTitle className="text-xs md:text-sm font-medium">Total Budget</CardTitle>
           <Target className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6">
-          <div className="text-lg md:text-2xl font-bold">${totalBudget.toFixed(2)}</div>
-          <p className="text-[10px] md:text-xs text-muted-foreground">This month</p>
+        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+          <div className="text-base md:text-2xl font-bold">${totalBudget.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          <p className="text-[9px] md:text-xs text-muted-foreground">This month</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
           <CardTitle className="text-xs md:text-sm font-medium">Total Spent</CardTitle>
           <DollarSign className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6">
-          <div className="text-lg md:text-2xl font-bold text-red-600">${totalSpent.toFixed(2)}</div>
-          <p className="text-[10px] md:text-xs text-muted-foreground">{percentageUsed.toFixed(1)}% of budget</p>
+        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+          <div className="text-base md:text-2xl font-bold text-red-600">${totalSpent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          <p className="text-[9px] md:text-xs text-muted-foreground">{percentageUsed.toFixed(1)}% of budget</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
           <CardTitle className="text-xs md:text-sm font-medium">Remaining</CardTitle>
           {remaining >= 0 ? (
             <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
@@ -92,30 +107,75 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
             <TrendingDown className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
           )}
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6">
-          <div className={`text-lg md:text-2xl font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}>
-            ${Math.abs(remaining).toFixed(2)}
+        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+          <div className={`text-base md:text-2xl font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}>
+            ${Math.abs(remaining).toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
-          <p className="text-[10px] md:text-xs text-muted-foreground">{remaining >= 0 ? "Under budget" : "Over budget"}</p>
+          <p className="text-[9px] md:text-xs text-muted-foreground">{remaining >= 0 ? "Under budget" : "Over budget"}</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
-          <CardTitle className="text-xs md:text-sm font-medium">Progress</CardTitle>
+          <div>
+            <CardTitle className="text-xs md:text-sm font-medium">Progress</CardTitle>
+            {percentageThroughMonth !== null && (
+              <div className="flex items-center gap-1 mt-1">
+                {totalSpent <= (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))) ? (
+                  <>
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-[10px] text-green-600 font-medium">On Track</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <span className="text-[10px] text-red-600 font-medium">
+                      {(((totalSpent - (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100)))) / totalBudget) * 100).toFixed(0)}% over pace
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
-          <div className="relative">
-            <Progress value={Math.min(percentageUsed, 100)} className="h-2" />
+          <div className="relative h-4 md:h-6 bg-gray-100 rounded-full overflow-hidden">
+            {/* Recurring expenses baseline (always "committed") */}
+            <div 
+              className="absolute left-0 top-0 h-full bg-gray-400 transition-all duration-300"
+              style={{ width: `${Math.min(recurringPercentage, 100)}%` }}
+              title={`Recurring: $${totalRecurring.toFixed(2)}`}
+            />
+            
+            {/* Variable expenses progress */}
+            <div 
+              className="absolute top-0 h-full transition-all duration-300"
+              style={{ 
+                left: `${Math.min(recurringPercentage, 100)}%`,
+                width: `${Math.min(variablePercentage, 100 - recurringPercentage)}%`,
+                background: 'linear-gradient(to right, #9ca3af, #22c55e)'
+              }}
+              title={`Variable: $${totalVariable.toFixed(2)}`}
+            />
+            
+            {/* Expected spending line (only for variable expenses) */}
             {percentageThroughMonth !== null && (
               <div
-                className="absolute -top-1 -bottom-1 w-0.5 bg-blue-500 z-10"
-                style={{ left: `${Math.min(percentageThroughMonth, 100)}%` }}
-                title={`Expected: $${(totalBudget * (percentageThroughMonth / 100)).toFixed(2)}`}
+                className="absolute w-0.5 bg-blue-400 dark:bg-blue-300 z-10 shadow-sm dark:shadow-blue-400/50 dark:shadow-lg"
+                style={{ 
+                  left: `${Math.min(recurringPercentage + ((100 - recurringPercentage) * (percentageThroughMonth / 100)), 100)}%`,
+                  top: '-2px',
+                  bottom: '-2px'
+                }}
+                title={`Expected variable: $${((totalBudget - totalRecurring) * (percentageThroughMonth / 100)).toFixed(2)}`}
               />
             )}
           </div>
-          <p className="text-[10px] md:text-xs text-muted-foreground mt-2">{percentageUsed.toFixed(1)}% used</p>
+          
+          <div className="flex justify-between text-[10px] md:text-xs text-muted-foreground mt-2">
+            <span>Recurring: ${totalRecurring.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+            <span className="text-green-600">Variable: ${totalVariable.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -49,11 +49,19 @@ interface BudgetListProps {
     recurringExpenses: number
     variableExpenses: number
   }>
+  spending: Record<string, number>
   month: number
   year: number
 }
 
-export function BudgetList({ budgets: initialBudgets, categories: initialCategories, netByCategory, month, year }: BudgetListProps) {
+export function BudgetList({
+  budgets: initialBudgets,
+  categories: initialCategories,
+  netByCategory,
+  spending,
+  month,
+  year
+}: BudgetListProps) {
   const [budgets, setBudgets] = useState(initialBudgets)
   const [categories, setCategories] = useState(initialCategories)
   const [isOpen, setIsOpen] = useState(false)
@@ -264,15 +272,27 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
             const calculateExpectedSpending = () => {
               if (percentageThroughMonth === null) return 0
 
-              // Net recurring after income offset
+              // Expected spending should be based on budget, not historical spending
+              // Recurring expenses are expected immediately, remaining budget scales with time
               const netRecurringExpenses = Math.max(0, recurringExpenses - income)
-              // Remaining variable expenses after any income offset applied to recurring
-              const netVariableExpenses = income > recurringExpenses
-                ? Math.max(0, variableExpenses - (income - recurringExpenses))
-                : variableExpenses
-
-              // Expected = recurring (immediate) + variable (scaled by time)
-              return netRecurringExpenses + (netVariableExpenses * (percentageThroughMonth / 100))
+              const remainingBudgetAfterRecurring = Math.max(0, Number(budget.amount) - netRecurringExpenses)
+              
+              // Expected = recurring (immediate) + remaining budget (scaled by time)
+              const expected = netRecurringExpenses + (remainingBudgetAfterRecurring * (percentageThroughMonth / 100))
+              
+              // Debug for wants category
+              if (budget.categories?.name === 'Wants') {
+                console.log('Wants category debug (fixed):', {
+                  percentageThroughMonth,
+                  budgetAmount: Number(budget.amount),
+                  netRecurringExpenses,
+                  remainingBudgetAfterRecurring,
+                  expected,
+                  expectedPercentage: (expected / Number(budget.amount)) * 100
+                })
+              }
+              
+              return expected
             }
 
             const expectedSpending = calculateExpectedSpending()
@@ -295,15 +315,15 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                         <CardDescription className="text-xs md:text-sm">
                           {isIncomeCategory ? (
                             <>
-                              Income: ${income.toFixed(2)}
-                              {expenses > 0 && <span className="text-muted-foreground ml-2">• Expenses: ${expenses.toFixed(2)}</span>}
+                              Income: ${income.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                              {expenses > 0 && <span className="text-muted-foreground ml-2">• Expenses: ${expenses.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>}
                             </>
                           ) : (
                             <>
-                              Net Spending: ${netSpending.toFixed(2)} of ${Number(budget.amount).toFixed(2)}
+                              Net Spending: ${netSpending.toLocaleString('en-US', { maximumFractionDigits: 0 })} of ${Number(budget.amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}
                               {income > 0 && (
                                 <span className="text-green-600 ml-2">
-                                  • Income offset: ${income.toFixed(2)}
+                                  • Income offset: ${income.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                                 </span>
                               )}
                             </>
@@ -313,7 +333,7 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                     </div>
                     <div className="flex flex-col items-end gap-1">
                       <span className={`text-sm md:text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {net >= 0 ? '+' : '-'}${Math.abs(net).toFixed(2)}
+                        {net >= 0 ? '+' : '-'}${Math.abs(net).toLocaleString('en-US', { maximumFractionDigits: 0 })}
                       </span>
                       <div className="flex items-center gap-1 md:gap-2">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
@@ -330,8 +350,8 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                   <div className="relative">
                     <Progress
                       value={Math.min(percentage, 100)}
-                      className={isOverBudget ? "bg-red-100" : undefined}
-                      indicatorClassName={isOverBudget ? "bg-red-600" : undefined}
+                      className={`h-1.5 md:h-2 ${isOverBudget ? "bg-red-100" : undefined}`}
+                      indicatorClassName={isOverBudget ? "bg-red-600" : "bg-green-600"}
                     />
                     {percentageThroughMonth !== null && !isIncomeCategory && (
                       <div
@@ -347,8 +367,8 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                     </span>
                     <span className={isOverBudget ? "text-red-600 font-medium" : "text-green-600"}>
                       {isIncomeCategory
-                        ? `Net: +$${Math.abs(net).toFixed(2)}`
-                        : `$${Math.abs(Number(budget.amount) - netSpending).toFixed(2)} ${isOverBudget ? "over budget" : "remaining"}`
+                        ? `Net: +$${Math.abs(net).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+                        : `$${Math.abs(Number(budget.amount) - netSpending).toLocaleString('en-US', { maximumFractionDigits: 0 })} ${isOverBudget ? "over budget" : "remaining"}`
                       }
                     </span>
                   </div>
