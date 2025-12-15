@@ -44,22 +44,40 @@ export default async function BudgetsPage() {
   // Get all transactions for current month (both debit and credit for net calculation)
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("category_id, amount, transaction_type")
+    .select("category_id, amount, transaction_type, recurring")
     .gte("date", firstDay)
     .lte("date", lastDay)
 
-  // Calculate net spending by category (income - expenses)
-  const netByCategory: Record<string, { income: number; expenses: number; net: number }> = {}
+  // Calculate net spending by category (income - expenses) and separate recurring
+  const netByCategory: Record<string, {
+    income: number
+    expenses: number
+    net: number
+    recurringExpenses: number
+    variableExpenses: number
+  }> = {}
   transactions?.forEach((tx) => {
     if (tx.category_id) {
       if (!netByCategory[tx.category_id]) {
-        netByCategory[tx.category_id] = { income: 0, expenses: 0, net: 0 }
+        netByCategory[tx.category_id] = {
+          income: 0,
+          expenses: 0,
+          net: 0,
+          recurringExpenses: 0,
+          variableExpenses: 0,
+        }
       }
 
       if (tx.transaction_type === "credit") {
         netByCategory[tx.category_id].income += Number(tx.amount)
       } else if (tx.transaction_type === "debit") {
-        netByCategory[tx.category_id].expenses += Number(tx.amount)
+        const amount = Number(tx.amount)
+        netByCategory[tx.category_id].expenses += amount
+        if (tx.recurring) {
+          netByCategory[tx.category_id].recurringExpenses += amount
+        } else {
+          netByCategory[tx.category_id].variableExpenses += amount
+        }
       }
 
       netByCategory[tx.category_id].net =

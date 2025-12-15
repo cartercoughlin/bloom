@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { CalendarIcon, Filter, X, Upload, EyeOff, Eye } from "lucide-react"
+import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat } from "lucide-react"
 import { format } from "date-fns"
 import { TransactionCategorizer } from "./transaction-categorizer"
 import Link from "next/link"
@@ -22,6 +22,7 @@ interface Transaction {
   bank: string
   category_id?: string
   hidden?: boolean
+  recurring?: boolean
   merchant_name?: string | null
   logo_url?: string | null
   website?: string | null
@@ -124,6 +125,30 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
     } catch (error) {
       console.error("Error toggling hidden status:", error)
       alert("Error updating transaction visibility")
+    }
+  }
+
+  const handleToggleRecurring = async (transactionId: string, currentRecurring: boolean) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}/recurring`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recurring: !currentRecurring }),
+      })
+
+      if (response.ok) {
+        setTransactions(prev =>
+          prev.map(tx =>
+            tx.id === transactionId ? { ...tx, recurring: !currentRecurring } : tx
+          )
+        )
+      } else {
+        console.error("Failed to toggle recurring status")
+        alert("Failed to update recurring status")
+      }
+    } catch (error) {
+      console.error("Error toggling recurring status:", error)
+      alert("Error updating recurring status")
     }
   }
 
@@ -357,8 +382,13 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                         />
                       )}
                       <div className="truncate">
-                        <div className="truncate">
-                          {tx.merchant_name || tx.description}
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate">{tx.merchant_name || tx.description}</span>
+                          {tx.recurring && (
+                            <Badge variant="outline" className="text-[8px] md:text-[10px] px-1 py-0 h-4 md:h-5">
+                              <Repeat className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                            </Badge>
+                          )}
                         </div>
                         {tx.category_detailed && (
                           <div className="text-[8px] md:text-xs text-muted-foreground truncate">
@@ -397,15 +427,26 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                     {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
                   </td>
                   <td className="p-2 md:p-3 text-[10px] md:text-sm text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleToggleHidden(txId, tx.hidden || false)}
-                      className="h-6 md:h-7 px-1 md:px-2"
-                      title={tx.hidden ? "Show transaction" : "Hide transaction"}
-                    >
-                      {tx.hidden ? <Eye className="h-3 w-3 md:h-4 md:w-4" /> : <EyeOff className="h-3 w-3 md:h-4 md:w-4" />}
-                    </Button>
+                    <div className="flex items-center gap-1 justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleToggleRecurring(txId, tx.recurring || false)}
+                        className={`h-6 md:h-7 px-1 md:px-2 ${tx.recurring ? 'text-blue-600' : ''}`}
+                        title={tx.recurring ? "Mark as non-recurring" : "Mark as recurring"}
+                      >
+                        <Repeat className="h-3 w-3 md:h-4 md:w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleToggleHidden(txId, tx.hidden || false)}
+                        className="h-6 md:h-7 px-1 md:px-2"
+                        title={tx.hidden ? "Show transaction" : "Hide transaction"}
+                      >
+                        {tx.hidden ? <Eye className="h-3 w-3 md:h-4 md:w-4" /> : <EyeOff className="h-3 w-3 md:h-4 md:w-4" />}
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               )

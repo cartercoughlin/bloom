@@ -42,7 +42,13 @@ interface Category {
 interface BudgetListProps {
   budgets: Budget[]
   categories: Category[]
-  netByCategory: Record<string, { income: number; expenses: number; net: number }>
+  netByCategory: Record<string, {
+    income: number
+    expenses: number
+    net: number
+    recurringExpenses: number
+    variableExpenses: number
+  }>
   month: number
   year: number
 }
@@ -233,12 +239,43 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
       {budgets.length > 0 ? (
         <div className="grid gap-3 md:gap-4">
           {budgets.map((budget) => {
-            const categoryData = netByCategory[budget.category_id] || { income: 0, expenses: 0, net: 0 }
+            const categoryData = netByCategory[budget.category_id] || {
+              income: 0,
+              expenses: 0,
+              net: 0,
+              recurringExpenses: 0,
+              variableExpenses: 0,
+            }
             const expenses = categoryData.expenses
             const income = categoryData.income
             const net = categoryData.net
-            const percentage = (expenses / Number(budget.amount)) * 100
-            const isOverBudget = expenses > Number(budget.amount)
+            const recurringExpenses = categoryData.recurringExpenses
+            const variableExpenses = categoryData.variableExpenses
+
+            // For income categories (income > expenses), net is negative, so don't show budget usage
+            // For expense categories, show net spending (expenses - income) against budget
+            const netSpending = Math.max(0, expenses - income) // Don't go negative
+            const percentage = (netSpending / Number(budget.amount)) * 100
+            const isOverBudget = netSpending > Number(budget.amount)
+            const isIncomeCategory = income > expenses
+
+            // Calculate expected spending considering recurring vs variable expenses
+            // Recurring expenses are expected immediately, variable expenses scale through the month
+            const calculateExpectedSpending = () => {
+              if (percentageThroughMonth === null) return 0
+
+              // Net recurring after income offset
+              const netRecurringExpenses = Math.max(0, recurringExpenses - income)
+              // Remaining variable expenses after any income offset applied to recurring
+              const netVariableExpenses = income > recurringExpenses
+                ? Math.max(0, variableExpenses - (income - recurringExpenses))
+                : variableExpenses
+
+              // Expected = recurring (immediate) + variable (scaled by time)
+              return netRecurringExpenses + (netVariableExpenses * (percentageThroughMonth / 100))
+            }
+
+            const expectedSpending = calculateExpectedSpending()
 
             return (
               <Card key={budget.id}>
@@ -256,11 +293,20 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                       <div>
                         <CardTitle className="text-sm md:text-lg">{budget.categories?.name}</CardTitle>
                         <CardDescription className="text-xs md:text-sm">
-                          Expenses: ${expenses.toFixed(2)} of ${Number(budget.amount).toFixed(2)}
-                          {income > 0 && (
-                            <span className="text-green-600 ml-2">
-                              • Income: ${income.toFixed(2)}
-                            </span>
+                          {isIncomeCategory ? (
+                            <>
+                              Income: ${income.toFixed(2)}
+                              {expenses > 0 && <span className="text-muted-foreground ml-2">• Expenses: ${expenses.toFixed(2)}</span>}
+                            </>
+                          ) : (
+                            <>
+                              Net Spending: ${netSpending.toFixed(2)} of ${Number(budget.amount).toFixed(2)}
+                              {income > 0 && (
+                                <span className="text-green-600 ml-2">
+                                  • Income offset: ${income.toFixed(2)}
+                                </span>
+                              )}
+                            </>
                           )}
                         </CardDescription>
                       </div>
@@ -287,20 +333,23 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                       className={isOverBudget ? "bg-red-100" : undefined}
                       indicatorClassName={isOverBudget ? "bg-red-600" : undefined}
                     />
-                    {percentageThroughMonth !== null && (
+                    {percentageThroughMonth !== null && !isIncomeCategory && (
                       <div
                         className="absolute -top-1 -bottom-1 w-0.5 bg-blue-500 z-10"
-                        style={{ left: `${Math.min(percentageThroughMonth, 100)}%` }}
-                        title={`Expected: $${(Number(budget.amount) * (percentageThroughMonth / 100)).toFixed(2)}`}
+                        style={{ left: `${Math.min((expectedSpending / Number(budget.amount)) * 100, 100)}%` }}
+                        title={`Expected: $${expectedSpending.toFixed(2)} (${recurringExpenses > 0 ? `$${recurringExpenses.toFixed(2)} recurring + ` : ''}$${(variableExpenses * (percentageThroughMonth / 100)).toFixed(2)} variable)`}
                       />
                     )}
                   </div>
                   <div className="flex justify-between text-xs md:text-sm">
                     <span className={isOverBudget ? "text-red-600 font-medium" : "text-muted-foreground"}>
-                      {percentage.toFixed(1)}% used
+                      {isIncomeCategory ? "Income category" : `${percentage.toFixed(1)}% used`}
                     </span>
                     <span className={isOverBudget ? "text-red-600 font-medium" : "text-green-600"}>
-                      ${Math.abs(Number(budget.amount) - expenses).toFixed(2)} {isOverBudget ? "over budget" : "remaining"}
+                      {isIncomeCategory
+                        ? `Net: +$${Math.abs(net).toFixed(2)}`
+                        : `$${Math.abs(Number(budget.amount) - netSpending).toFixed(2)} ${isOverBudget ? "over budget" : "remaining"}`
+                      }
                     </span>
                   </div>
                 </CardContent>

@@ -17,18 +17,26 @@ interface Budget {
 
 interface BudgetOverviewProps {
   budgets: Budget[]
-  netByCategory: Record<string, { income: number; expenses: number; net: number }>
+  netByCategory: Record<string, {
+    income: number
+    expenses: number
+    net: number
+    recurringExpenses: number
+    variableExpenses: number
+  }>
   month: number
   year: number
 }
 
 export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOverviewProps) {
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
-  // Use only expenses (not net) to compare against budget
+  // Use net spending (expenses - income) but don't go negative for income categories
   const totalSpent = budgets.reduce((sum, budget) => {
     const categoryData = netByCategory[budget.categories?.id || '']
     const categoryExpenses = categoryData?.expenses || 0
-    return sum + categoryExpenses
+    const categoryIncome = categoryData?.income || 0
+    const netSpending = Math.max(0, categoryExpenses - categoryIncome)
+    return sum + netSpending
   }, 0)
   const remaining = totalBudget - totalSpent
   const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0

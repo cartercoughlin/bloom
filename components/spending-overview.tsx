@@ -23,10 +23,27 @@ export function SpendingOverview({ transactions, budgets }: SpendingOverviewProp
   // Create a set of budgeted category IDs for quick lookup
   const budgetedCategoryIds = new Set(budgets.map(b => b.category_id))
 
-  // Only count expenses for categories that have budgets (matches budget tab)
-  const totalExpenses = transactions
-    .filter((t) => t.transaction_type === "debit" && t.category_id && budgetedCategoryIds.has(t.category_id))
-    .reduce((sum, t) => sum + Number(t.amount), 0)
+  // Calculate net spending (expenses - income) per category, only for budgeted categories
+  const categoryTotals: Record<string, { expenses: number; income: number }> = {}
+
+  transactions
+    .filter((t) => t.category_id && budgetedCategoryIds.has(t.category_id))
+    .forEach((t) => {
+      if (!categoryTotals[t.category_id!]) {
+        categoryTotals[t.category_id!] = { expenses: 0, income: 0 }
+      }
+      if (t.transaction_type === "debit") {
+        categoryTotals[t.category_id!].expenses += Number(t.amount)
+      } else if (t.transaction_type === "credit") {
+        categoryTotals[t.category_id!].income += Number(t.amount)
+      }
+    })
+
+  // Sum net spending across all categories (don't go negative for income categories)
+  const totalExpenses = Object.values(categoryTotals).reduce((sum, cat) => {
+    const netSpending = Math.max(0, cat.expenses - cat.income)
+    return sum + netSpending
+  }, 0)
 
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
   const budgetRemaining = totalBudget - totalExpenses
