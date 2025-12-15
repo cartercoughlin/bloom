@@ -105,6 +105,27 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
     })
   }, [transactions, searchTerm, categoryFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax, showHidden])
 
+  // Group transactions by date
+  const groupedTransactions = useMemo(() => {
+    const groups: Record<string, Transaction[]> = {}
+    
+    filteredTransactions.forEach(tx => {
+      const dateKey = tx.date
+      if (!groups[dateKey]) {
+        groups[dateKey] = []
+      }
+      groups[dateKey].push(tx)
+    })
+    
+    // Sort dates descending and sort transactions within each date
+    return Object.keys(groups)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+      .map(date => ({
+        date,
+        transactions: groups[date].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      }))
+  }, [filteredTransactions])
+
   const handleToggleHidden = async (transactionId: string, currentHidden: boolean) => {
     try {
       const response = await fetch(`/api/transactions/${transactionId}/hidden`, {
@@ -341,58 +362,68 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
       </div>
 
       <div className="sm:p-4 p-0">
-        <div className="w-full">
-          <table className="w-full table-fixed">
-            <tbody className="divide-y">
-              {filteredTransactions.map((tx, index) => {
-                console.log('Full transaction object:', tx)
-                console.log('Transaction keys:', Object.keys(tx))
+        <div className="w-full space-y-4">
+          {groupedTransactions.map(({ date, transactions: dayTransactions }) => (
+            <div key={date}>
+              {/* Date Divider */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="text-sm md:text-base font-medium text-muted-foreground">
+                  {new Date(date).toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                </div>
+                <div className="flex-1 h-px bg-border"></div>
+              </div>
+              
+              {/* Transactions for this date */}
+              <div className="space-y-2">
+                {dayTransactions.map((tx) => {
+                  const txId = tx.id
+                  console.log('Captured transaction ID:', txId)
 
-                // Capture the ID in a variable to avoid closure issues
-                const txId = tx.id
-                console.log('Captured transaction ID:', txId)
-
-                return (
-                <tr 
-                  key={txId} 
-                  className="hover:bg-muted/50 cursor-pointer md:cursor-default"
-                  onClick={() => window.innerWidth < 768 && setSelectedTransaction(tx)}
-                >
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm whitespace-nowrap w-8 md:w-auto">
-                    <div className="md:hidden">{new Date(tx.date).getDate()}</div>
-                    <div className="hidden md:block">{new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
-                  </td>
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm w-full md:w-auto">
-                    <div className="flex items-center gap-1 md:gap-2">
+                  return (
+                    <div 
+                      key={txId} 
+                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer md:cursor-default"
+                      onClick={() => window.innerWidth < 768 && setSelectedTransaction(tx)}
+                    >
+                      {/* Logo - Desktop only */}
                       {tx.logo_url && (
                         <img 
                           src={tx.logo_url} 
                           alt={tx.merchant_name || tx.description}
-                          className="w-3 h-3 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
+                          className="hidden md:block w-8 h-8 rounded-full object-cover flex-shrink-0"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
                           }}
                         />
                       )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-1">
-                          <div className="flex items-center gap-1 min-w-0 flex-1">
-                            <span className="truncate text-xs md:text-sm font-medium max-w-[100px] md:max-w-none">{tx.merchant_name || tx.description}</span>
+                      
+                      {/* Transaction Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                            <span className="font-medium text-sm md:text-base truncate">
+                              {tx.merchant_name || tx.description}
+                            </span>
                             {tx.recurring && (
-                              <Badge variant="outline" className="text-[6px] md:text-[10px] px-0.5 py-0 h-2.5 md:h-5 flex-shrink-0">
-                                <Repeat className="h-1.5 w-1.5 md:h-3 md:w-3" />
+                              <Badge variant="outline" className="text-xs px-1 py-0 h-5 flex-shrink-0">
+                                <Repeat className="h-3 w-3" />
                               </Badge>
                             )}
                           </div>
-                          {/* Mobile: Amount on the right */}
-                          <span className={`md:hidden text-xs font-semibold flex-shrink-0 ${
+                          <span className={`text-sm md:text-base font-semibold flex-shrink-0 ${
                             tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                           }`}>
                             {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
-                        {/* Mobile: Category below transaction name */}
-                        <div className="md:hidden mt-0.5 max-w-[180px]" onClick={(e) => e.stopPropagation()}>
+                        
+                        {/* Category */}
+                        <div className="mt-2" onClick={(e) => e.stopPropagation()}>
                           {txId ? (
                             <TransactionCategorizer
                               transactionId={txId}
@@ -405,72 +436,28 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                               }}
                             />
                           ) : (
-                            <span className="text-muted-foreground text-[8px]">No ID</span>
+                            <span className="text-muted-foreground text-xs">No ID</span>
                           )}
                         </div>
+                        
                         {tx.category_detailed && (
-                          <div className="text-[7px] md:text-xs text-muted-foreground truncate">
+                          <div className="text-xs text-muted-foreground truncate mt-1">
                             {tx.category_detailed}
                           </div>
                         )}
                       </div>
                     </div>
-                  </td>
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm w-12 md:w-40 hidden md:table-cell">
-                    {txId ? (
-                      <TransactionCategorizer
-                        transactionId={txId}
-                        description={tx.description}
-                        amount={tx.amount}
-                        currentCategoryId={tx.category_id}
-                        categories={categories}
-                        onCategoryChange={(categoryId, newCategory) => {
-                          console.log('Callback - Transaction ID:', txId)
-                          console.log('Callback - Category ID:', categoryId)
-                          handleCategoryChange(txId, categoryId, newCategory)
-                        }}
-                      />
-                    ) : (
-                      <span className="text-muted-foreground text-[8px] md:text-xs">
-                        No ID
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm capitalize hidden sm:table-cell w-16">{tx.bank}</td>
-                  <td
-                    className={`p-1 md:p-3 text-[9px] md:text-sm text-right font-medium whitespace-nowrap hidden md:table-cell ${
-                      tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
-                    }`}
-                  >
-                    {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm text-right hidden md:table-cell">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleRecurring(txId, tx.recurring || false)}
-                        className={`h-7 px-2 ${tx.recurring ? 'text-blue-600' : ''}`}
-                        title={tx.recurring ? "Mark as non-recurring" : "Mark as recurring"}
-                      >
-                        <Repeat className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleToggleHidden(txId, tx.hidden || false)}
-                        className="h-7 px-2"
-                        title={tx.hidden ? "Show transaction" : "Hide transaction"}
-                      >
-                        {tx.hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              )
-              })}
-            </tbody>
-          </table>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+          
+          {groupedTransactions.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No transactions found</p>
+            </div>
+          )}
         </div>
       </div>
 

@@ -163,7 +163,7 @@ export function TransactionCategorizer({
       {currentCategory ? (
         <button
           onClick={() => handleCategorySelect("")}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs hover:opacity-80 transition-opacity cursor-pointer"
+          className="inline-flex items-center gap-1 px-2 h-8 rounded-md text-xs hover:opacity-80 transition-opacity cursor-pointer"
           style={{ backgroundColor: `${currentCategory.color}20`, color: currentCategory.color }}
           title="Click to change category"
         >
