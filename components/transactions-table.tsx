@@ -342,16 +342,16 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
       </div>
 
       <div className="sm:p-6 p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="overflow-x-auto -mx-3 sm:mx-0">
+          <table className="w-full min-w-full">
             <thead className="border-b">
               <tr>
-                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Date</th>
+                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium w-16 md:w-auto">Date</th>
                 <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium">Description</th>
-                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium w-20 md:w-48">Category</th>
+                <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium w-16 md:w-48">Category</th>
                 <th className="text-left p-2 md:p-3 text-[10px] md:text-sm font-medium hidden sm:table-cell">Bank</th>
-                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium">Amount</th>
-                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium">Actions</th>
+                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium w-20 md:w-auto">Amount</th>
+                <th className="text-right p-2 md:p-3 text-[10px] md:text-sm font-medium w-16 md:w-auto">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -365,39 +365,40 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
                 return (
                 <tr key={txId} className="hover:bg-muted/50">
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm whitespace-nowrap">
-                    {new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm whitespace-nowrap">
+                    <div className="md:hidden">{new Date(tx.date).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' })}</div>
+                    <div className="hidden md:block">{new Date(tx.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div>
                   </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm max-w-[120px] md:max-w-xs" title={tx.description}>
-                    <div className="flex items-center gap-2">
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm">
+                    <div className="flex items-center gap-1 md:gap-2">
                       {tx.logo_url && (
                         <img 
                           src={tx.logo_url} 
                           alt={tx.merchant_name || tx.description}
-                          className="w-6 h-6 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
+                          className="w-4 h-4 md:w-8 md:h-8 rounded-full object-cover flex-shrink-0"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
                           }}
                         />
                       )}
-                      <div className="truncate">
-                        <div className="flex items-center gap-1.5">
-                          <span className="truncate">{tx.merchant_name || tx.description}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1">
+                          <span className="truncate text-[9px] md:text-sm">{tx.merchant_name || tx.description}</span>
                           {tx.recurring && (
-                            <Badge variant="outline" className="text-[8px] md:text-[10px] px-1 py-0 h-4 md:h-5">
-                              <Repeat className="h-2.5 w-2.5 md:h-3 md:w-3" />
+                            <Badge variant="outline" className="text-[7px] md:text-[10px] px-0.5 py-0 h-3 md:h-5 flex-shrink-0">
+                              <Repeat className="h-2 w-2 md:h-3 md:w-3" />
                             </Badge>
                           )}
                         </div>
                         {tx.category_detailed && (
-                          <div className="text-[8px] md:text-xs text-muted-foreground truncate">
+                          <div className="text-[7px] md:text-xs text-muted-foreground truncate">
                             {tx.category_detailed}
                           </div>
                         )}
                       </div>
                     </div>
                   </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm w-20 md:w-48">
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm w-16 md:w-48">
                     {txId ? (
                       <TransactionCategorizer
                         transactionId={txId}
@@ -412,38 +413,39 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                         }}
                       />
                     ) : (
-                      <span className="text-muted-foreground text-[10px] md:text-xs">
-                        No ID found
+                      <span className="text-muted-foreground text-[8px] md:text-xs">
+                        No ID
                       </span>
                     )}
                   </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm capitalize hidden sm:table-cell">{tx.bank}</td>
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm capitalize hidden sm:table-cell">{tx.bank}</td>
                   <td
-                    className={`p-2 md:p-3 text-[10px] md:text-sm text-right font-medium whitespace-nowrap ${
+                    className={`p-1 md:p-3 text-[9px] md:text-sm text-right font-medium whitespace-nowrap ${
                       tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                     }`}
                   >
-                    {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
+                    <div className="md:hidden">{tx.transaction_type === "credit" ? "+" : "-"}${Math.round(tx.amount)}</div>
+                    <div className="hidden md:block">{tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}</div>
                   </td>
-                  <td className="p-2 md:p-3 text-[10px] md:text-sm text-right">
-                    <div className="flex items-center gap-1 justify-end">
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm text-right">
+                    <div className="flex items-center gap-0.5 md:gap-1 justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleToggleRecurring(txId, tx.recurring || false)}
-                        className={`h-6 md:h-7 px-1 md:px-2 ${tx.recurring ? 'text-blue-600' : ''}`}
+                        className={`h-5 md:h-7 px-0.5 md:px-2 ${tx.recurring ? 'text-blue-600' : ''}`}
                         title={tx.recurring ? "Mark as non-recurring" : "Mark as recurring"}
                       >
-                        <Repeat className="h-3 w-3 md:h-4 md:w-4" />
+                        <Repeat className="h-2.5 w-2.5 md:h-4 md:w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleToggleHidden(txId, tx.hidden || false)}
-                        className="h-6 md:h-7 px-1 md:px-2"
+                        className="h-5 md:h-7 px-0.5 md:px-2"
                         title={tx.hidden ? "Show transaction" : "Hide transaction"}
                       >
-                        {tx.hidden ? <Eye className="h-3 w-3 md:h-4 md:w-4" /> : <EyeOff className="h-3 w-3 md:h-4 md:w-4" />}
+                        {tx.hidden ? <Eye className="h-2.5 w-2.5 md:h-4 md:w-4" /> : <EyeOff className="h-2.5 w-2.5 md:h-4 md:w-4" />}
                       </Button>
                     </div>
                   </td>

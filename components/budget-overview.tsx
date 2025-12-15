@@ -77,29 +77,29 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
   return (
     <div className="grid gap-2 grid-cols-2 md:gap-4 lg:grid-cols-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
           <CardTitle className="text-xs md:text-sm font-medium">Total Budget</CardTitle>
           <Target className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6">
-          <div className="text-lg md:text-2xl font-bold">${totalBudget.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
-          <p className="text-[10px] md:text-xs text-muted-foreground">This month</p>
+        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+          <div className="text-base md:text-2xl font-bold">${totalBudget.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          <p className="text-[9px] md:text-xs text-muted-foreground">This month</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
           <CardTitle className="text-xs md:text-sm font-medium">Total Spent</CardTitle>
           <DollarSign className="h-3 w-3 md:h-4 md:w-4 text-muted-foreground" />
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6">
-          <div className="text-lg md:text-2xl font-bold text-red-600">${totalSpent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
-          <p className="text-[10px] md:text-xs text-muted-foreground">{percentageUsed.toFixed(1)}% of budget</p>
+        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+          <div className="text-base md:text-2xl font-bold text-red-600">${totalSpent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          <p className="text-[9px] md:text-xs text-muted-foreground">{percentageUsed.toFixed(1)}% of budget</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
           <CardTitle className="text-xs md:text-sm font-medium">Remaining</CardTitle>
           {remaining >= 0 ? (
             <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
@@ -107,34 +107,36 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
             <TrendingDown className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
           )}
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6">
-          <div className={`text-lg md:text-2xl font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}>
+        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+          <div className={`text-base md:text-2xl font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}>
             ${Math.abs(remaining).toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
-          <p className="text-[10px] md:text-xs text-muted-foreground">{remaining >= 0 ? "Under budget" : "Over budget"}</p>
+          <p className="text-[9px] md:text-xs text-muted-foreground">{remaining >= 0 ? "Under budget" : "Over budget"}</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
-          <CardTitle className="text-xs md:text-sm font-medium">Progress</CardTitle>
-          {percentageThroughMonth !== null && (
-            <div className="flex items-center gap-1">
-              {totalSpent <= (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))) ? (
-                <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-[10px] text-green-600 font-medium">On Track</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                  <span className="text-[10px] text-red-600 font-medium">
-                    {(((totalSpent - (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100)))) / totalBudget) * 100).toFixed(0)}% over pace
-                  </span>
-                </>
-              )}
-            </div>
-          )}
+          <div>
+            <CardTitle className="text-xs md:text-sm font-medium">Progress</CardTitle>
+            {percentageThroughMonth !== null && (
+              <div className="flex items-center gap-1 mt-1">
+                {totalSpent <= (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))) ? (
+                  <>
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    <span className="text-[10px] text-green-600 font-medium">On Track</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <span className="text-[10px] text-red-600 font-medium">
+                      {(((totalSpent - (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100)))) / totalBudget) * 100).toFixed(0)}% over pace
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
           <div className="relative h-4 md:h-6 bg-gray-100 rounded-full overflow-hidden">
@@ -172,7 +174,6 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
             <span>Recurring: ${totalRecurring.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
             <span className="text-green-600">Variable: ${totalVariable.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
           </div>
-          <p className="text-[10px] md:text-xs text-muted-foreground">{percentageUsed.toFixed(1)}% used total</p>
         </CardContent>
       </Card>
     </div>
