@@ -139,29 +139,31 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
           </div>
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
-          <div className="relative h-4 md:h-6 bg-gray-100 rounded-full overflow-hidden">
-            {/* Recurring expenses baseline (always "committed") */}
-            <div 
-              className="absolute left-0 top-0 h-full bg-gray-400 transition-all duration-300"
-              style={{ width: `${Math.min(recurringPercentage, 100)}%` }}
-              title={`Recurring: $${totalRecurring.toFixed(2)}`}
-            />
-            
-            {/* Variable expenses progress */}
-            <div 
-              className="absolute top-0 h-full transition-all duration-300"
-              style={{ 
-                left: `${Math.min(recurringPercentage, 100)}%`,
-                width: `${Math.min(variablePercentage, 100 - recurringPercentage)}%`,
-                background: 'linear-gradient(to right, #9ca3af, #22c55e)'
-              }}
-              title={`Variable: $${totalVariable.toFixed(2)}`}
-            />
-            
-            {/* Expected spending line (only for variable expenses) */}
+          <div className="relative">
+            <div className="h-4 md:h-6 bg-gray-100 rounded-full overflow-hidden">
+              {/* Recurring expenses baseline (always "committed") */}
+              <div
+                className="absolute left-0 top-0 h-full bg-gray-400 transition-all duration-300"
+                style={{ width: `${Math.min(recurringPercentage, 100)}%` }}
+                title={`Recurring: $${totalRecurring.toFixed(2)}`}
+              />
+
+              {/* Variable expenses progress */}
+              <div
+                className="absolute top-0 h-full transition-all duration-300"
+                style={{
+                  left: `${Math.min(recurringPercentage, 100)}%`,
+                  width: `${Math.min(variablePercentage, 100 - recurringPercentage)}%`,
+                  background: 'linear-gradient(to right, #9ca3af, #22c55e)'
+                }}
+                title={`Variable: $${totalVariable.toFixed(2)}`}
+              />
+            </div>
+
+            {/* Expected spending line (only for variable expenses) - outside overflow container */}
             {percentageThroughMonth !== null && (
               <div
-                className="absolute -top-1 -bottom-1 w-1 bg-blue-600 dark:bg-blue-400 z-10 shadow-lg"
+                className="absolute -top-2 -bottom-2 w-1 bg-blue-600 dark:bg-blue-400 z-10 shadow-lg"
                 style={{
                   left: `${Math.min(recurringPercentage + ((100 - recurringPercentage) * (percentageThroughMonth / 100)), 100)}%`
                 }}
