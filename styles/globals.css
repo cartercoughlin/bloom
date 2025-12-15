@@ -196,30 +196,30 @@
 
   /* Gradient utilities */
   .bg-gradient-fern {
-    background: linear-gradient(135deg, oklch(0.55 0.18 140) 0%, oklch(0.45 0.15 140) 100%);
+    background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%) !important;
   }
 
   .bg-gradient-fern-light {
-    background: linear-gradient(135deg, oklch(0.75 0.12 140) 0%, oklch(0.65 0.15 140) 100%);
+    background: linear-gradient(135deg, #86efac 0%, #4ade80 100%) !important;
   }
 
   .bg-gradient-fern-subtle {
-    background: linear-gradient(135deg, oklch(0.96 0.02 140) 0%, oklch(0.94 0.03 140) 100%);
+    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%) !important;
   }
 
   .text-gradient-fern {
-    background: linear-gradient(135deg, oklch(0.45 0.15 140) 0%, oklch(0.35 0.18 140) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
+    -webkit-background-clip: text !important;
+    -webkit-text-fill-color: transparent !important;
+    background-clip: text !important;
   }
 
   /* Progress bar gradients */
   .progress-gradient {
-    background: linear-gradient(90deg, oklch(0.65 0.15 140) 0%, oklch(0.55 0.18 140) 100%);
+    background: linear-gradient(90deg, #4ade80 0%, #22c55e 100%) !important;
   }
 
   .progress-gradient-over {
-    background: linear-gradient(90deg, oklch(0.65 0.25 25) 0%, oklch(0.55 0.28 20) 100%);
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%) !important;
   }
 }

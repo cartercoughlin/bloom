@@ -109,7 +109,7 @@ export default function TransactionsPage() {
     <div className="container mx-auto px-3 sm:px-6 max-w-7xl pb-20 sm:pb-6">
       <div className="flex items-center justify-between mb-4 md:mb-8">
         <div>
-          <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-gradient-fern">Transactions</h1>
+          <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Transactions</h1>
           <p className="text-muted-foreground text-xs md:text-sm">View and manage your transactions</p>
         </div>
         <SyncButton />

@@ -52,22 +52,11 @@ export function TransactionCategorizer({
   const [newCategoryName, setNewCategoryName] = useState("")
   const [newCategoryIcon, setNewCategoryIcon] = useState("💰")
   const [newCategoryColor, setNewCategoryColor] = useState("#3b82f6")
-  const [hasFetchedSuggestions, setHasFetchedSuggestions] = useState(false)
-
-  useEffect(() => {
-    // Only fetch suggestions if:
-    // 1. Transaction has no category assigned
-    // 2. We haven't already fetched suggestions for this transaction
-    if (!currentCategoryId && !hasFetchedSuggestions && transactionId) {
-      fetchSuggestions()
-    }
-    // Reset the flag when currentCategoryId changes (e.g., category is removed)
-    if (currentCategoryId) {
-      setHasFetchedSuggestions(false)
-    }
-  }, [transactionId, currentCategoryId, hasFetchedSuggestions])
+  const [hasInteracted, setHasInteracted] = useState(false)
 
   const fetchSuggestions = async () => {
+    if (loading || suggestions.length > 0) return
+    
     setLoading(true)
     try {
       const response = await fetch("/api/category-suggestions", {
@@ -79,12 +68,18 @@ export function TransactionCategorizer({
       if (response.ok) {
         const data = await response.json()
         setSuggestions(data.suggestions || [])
-        setHasFetchedSuggestions(true)
       }
     } catch (error) {
       console.error("Error fetching suggestions:", error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSelectOpen = () => {
+    setHasInteracted(true)
+    if (!currentCategoryId && suggestions.length === 0) {
+      fetchSuggestions()
     }
   }
 
@@ -206,7 +201,7 @@ export function TransactionCategorizer({
             </div>
           )}
 
-          <Select onValueChange={handleCategorySelect}>
+          <Select onValueChange={handleCategorySelect} onOpenChange={(open) => open && handleSelectOpen()}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue placeholder="Select category..." />
             </SelectTrigger>
