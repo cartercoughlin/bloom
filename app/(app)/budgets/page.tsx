@@ -108,7 +108,7 @@ export default async function BudgetsPage() {
       <div className="space-y-6">
         <BudgetOverview
           budgets={budgets || []}
-          spending={spendingByCategory}
+          netByCategory={netByCategory}
           month={currentMonth}
           year={currentYear}
         />

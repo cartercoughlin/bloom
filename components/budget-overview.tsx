@@ -32,7 +32,7 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
   // Use net spending (expenses - income) but don't go negative for income categories
   const totalSpent = budgets.reduce((sum, budget) => {
-    const categoryData = netByCategory[budget.categories?.id || '']
+    const categoryData = netByCategory?.[budget.categories?.id || '']
     const categoryExpenses = categoryData?.expenses || 0
     const categoryIncome = categoryData?.income || 0
     const netSpending = Math.max(0, categoryExpenses - categoryIncome)
