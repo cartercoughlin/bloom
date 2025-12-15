@@ -52,12 +52,20 @@ export function TransactionCategorizer({
   const [newCategoryName, setNewCategoryName] = useState("")
   const [newCategoryIcon, setNewCategoryIcon] = useState("💰")
   const [newCategoryColor, setNewCategoryColor] = useState("#3b82f6")
+  const [hasFetchedSuggestions, setHasFetchedSuggestions] = useState(false)
 
   useEffect(() => {
-    if (!currentCategoryId) {
+    // Only fetch suggestions if:
+    // 1. Transaction has no category assigned
+    // 2. We haven't already fetched suggestions for this transaction
+    if (!currentCategoryId && !hasFetchedSuggestions && transactionId) {
       fetchSuggestions()
     }
-  }, [transactionId, currentCategoryId, description, amount])
+    // Reset the flag when currentCategoryId changes (e.g., category is removed)
+    if (currentCategoryId) {
+      setHasFetchedSuggestions(false)
+    }
+  }, [transactionId, currentCategoryId, hasFetchedSuggestions])
 
   const fetchSuggestions = async () => {
     setLoading(true)
@@ -67,10 +75,11 @@ export function TransactionCategorizer({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description, amount }),
       })
-      
+
       if (response.ok) {
         const data = await response.json()
         setSuggestions(data.suggestions || [])
+        setHasFetchedSuggestions(true)
       }
     } catch (error) {
       console.error("Error fetching suggestions:", error)

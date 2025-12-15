@@ -48,6 +48,7 @@ export default function TransactionsPage() {
               category_id,
               user_id,
               hidden,
+              recurring,
               merchant_name,
               logo_url,
               website,

@@ -96,10 +96,10 @@ export function BudgetOverview({ budgets, spending, month, year }: BudgetOvervie
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
           <div className="relative">
-            <Progress value={Math.min(percentageUsed, 100)} className="h-2" />
+            <Progress value={Math.min(percentageUsed, 100)} className="h-1.5 md:h-2" />
             {percentageThroughMonth !== null && (
               <div
-                className="absolute -top-1 -bottom-1 w-0.5 bg-blue-500 z-10"
+                className="absolute -top-0.5 -bottom-0.5 md:-top-1 md:-bottom-1 w-0.5 bg-blue-500 z-10"
                 style={{ left: `${Math.min(percentageThroughMonth, 100)}%` }}
                 title={`Expected: $${(totalBudget * (percentageThroughMonth / 100)).toFixed(2)}`}
               />

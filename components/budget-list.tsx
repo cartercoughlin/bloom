@@ -43,11 +43,21 @@ interface BudgetListProps {
   budgets: Budget[]
   categories: Category[]
   spending: Record<string, number>
+  recurringExpenses: Record<string, number>
+  variableExpenses: Record<string, number>
   month: number
   year: number
 }
 
-export function BudgetList({ budgets: initialBudgets, categories: initialCategories, spending, month, year }: BudgetListProps) {
+export function BudgetList({
+  budgets: initialBudgets,
+  categories: initialCategories,
+  spending,
+  recurringExpenses,
+  variableExpenses,
+  month,
+  year
+}: BudgetListProps) {
   const [budgets, setBudgets] = useState(initialBudgets)
   const [categories, setCategories] = useState(initialCategories)
   const [isOpen, setIsOpen] = useState(false)
@@ -234,7 +244,19 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
         <div className="grid gap-3 md:gap-4">
           {budgets.map((budget) => {
             const spent = spending[budget.category_id] || 0
+            const recurring = recurringExpenses[budget.category_id] || 0
+            const variable = variableExpenses[budget.category_id] || 0
             const percentage = (spent / Number(budget.amount)) * 100
+
+            // Smart expected spending: recurring expenses (counted from day 1) + variable expenses (scaled by time through month)
+            const expectedSpending = percentageThroughMonth !== null
+              ? recurring + (variable * 0) + (Number(budget.amount) - recurring) * (percentageThroughMonth / 100)
+              : null
+
+            const expectedPercentage = expectedSpending !== null
+              ? (expectedSpending / Number(budget.amount)) * 100
+              : null
+
             const isOverBudget = spent > Number(budget.amount)
 
             return (
@@ -271,14 +293,17 @@ export function BudgetList({ budgets: initialBudgets, categories: initialCategor
                   <div className="relative">
                     <Progress
                       value={Math.min(percentage, 100)}
-                      className={isOverBudget ? "bg-red-100" : undefined}
+                      className={`h-1.5 md:h-2 ${isOverBudget ? "bg-red-100" : undefined}`}
                       indicatorClassName={isOverBudget ? "bg-red-600" : undefined}
                     />
-                    {percentageThroughMonth !== null && (
+                    {expectedPercentage !== null && expectedSpending !== null && (
                       <div
-                        className="absolute -top-1 -bottom-1 w-0.5 bg-blue-500 z-10"
-                        style={{ left: `${Math.min(percentageThroughMonth, 100)}%` }}
-                        title={`Expected: $${(Number(budget.amount) * (percentageThroughMonth / 100)).toFixed(2)}`}
+                        className="absolute -top-0.5 -bottom-0.5 md:-top-1 md:-bottom-1 w-0.5 bg-blue-500 z-10"
+                        style={{ left: `${Math.min(expectedPercentage, 100)}%` }}
+                        title={recurring > 0
+                          ? `Expected: $${expectedSpending.toFixed(2)} ($${recurring.toFixed(2)} recurring + $${(expectedSpending - recurring).toFixed(2)} variable)`
+                          : `Expected: $${expectedSpending.toFixed(2)}`
+                        }
                       />
                     )}
                   </div>

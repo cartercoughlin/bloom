@@ -43,16 +43,30 @@ export default async function BudgetsPage() {
 
   const { data: transactions } = await supabase
     .from("transactions")
-    .select("category_id, amount, transaction_type")
+    .select("category_id, amount, transaction_type, recurring, hidden")
     .gte("date", firstDay)
     .lte("date", lastDay)
     .eq("transaction_type", "debit")
 
-  // Calculate spending by category
+  // Calculate spending by category, separating recurring and variable expenses
   const spendingByCategory: Record<string, number> = {}
+  const recurringByCategory: Record<string, number> = {}
+  const variableByCategory: Record<string, number> = {}
+
   transactions?.forEach((tx) => {
+    // Skip hidden transactions
+    if (tx.hidden) return
+
     if (tx.category_id) {
-      spendingByCategory[tx.category_id] = (spendingByCategory[tx.category_id] || 0) + Number(tx.amount)
+      const amount = Number(tx.amount)
+      spendingByCategory[tx.category_id] = (spendingByCategory[tx.category_id] || 0) + amount
+
+      // Separate recurring from variable expenses
+      if (tx.recurring) {
+        recurringByCategory[tx.category_id] = (recurringByCategory[tx.category_id] || 0) + amount
+      } else {
+        variableByCategory[tx.category_id] = (variableByCategory[tx.category_id] || 0) + amount
+      }
     }
   })
 
@@ -67,14 +81,18 @@ export default async function BudgetsPage() {
         <BudgetOverview
           budgets={budgets || []}
           spending={spendingByCategory}
+          recurringExpenses={recurringByCategory}
+          variableExpenses={variableByCategory}
           month={currentMonth}
           year={currentYear}
         />
-        
+
         <BudgetList
           budgets={budgets || []}
           categories={categories || []}
           spending={spendingByCategory}
+          recurringExpenses={recurringByCategory}
+          variableExpenses={variableByCategory}
           month={currentMonth}
           year={currentYear}
         />
