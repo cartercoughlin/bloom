@@ -77,29 +77,29 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
   return (
     <div className="grid gap-2 grid-cols-2 md:gap-4 lg:grid-cols-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
           <CardTitle className="text-sm md:text-base font-medium">Total Budget</CardTitle>
           <Target className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+        <CardContent className="pb-2 md:pb-6">
           <div className="text-xl md:text-3xl font-bold">${totalBudget.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
           <p className="text-xs md:text-sm text-muted-foreground">This month</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
           <CardTitle className="text-sm md:text-base font-medium">Total Spent</CardTitle>
           <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+        <CardContent className="pb-2 md:pb-6">
           <div className="text-xl md:text-3xl font-bold text-red-600">${totalSpent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
           <p className="text-xs md:text-sm text-muted-foreground">{percentageUsed.toFixed(1)}% of budget</p>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2 px-3 md:px-6 pt-2 md:pt-6">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
           <CardTitle className="text-sm md:text-base font-medium">Remaining</CardTitle>
           {remaining >= 0 ? (
             <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-green-600" />
@@ -107,7 +107,7 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
             <TrendingDown className="h-4 w-4 md:h-5 md:w-5 text-red-600" />
           )}
         </CardHeader>
-        <CardContent className="pb-2 md:pb-6 px-3 md:px-6">
+        <CardContent className="pb-2 md:pb-6">
           <div className={`text-xl md:text-3xl font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}>
             ${Math.abs(remaining).toLocaleString('en-US', { maximumFractionDigits: 0 })}
           </div>
