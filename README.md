@@ -14,8 +14,11 @@ A Next.js-based budget tracking application that allows users to connect their b
 - Transaction filtering and search
 - Category creation and customization
 - Real-time transaction categorization
-- Budget tracking with expected spending indicators
-  - Visual markers on progress bars showing expected spending based on time through the month
+- Budget tracking with intelligent expected spending indicators
+  - **Recurring transaction support** for rent, utilities, subscriptions
+  - Smart progress bars that distinguish recurring vs variable expenses
+  - Visual markers showing expected spending accounting for payment timing
+  - Prevents false "over budget" alerts when recurring expenses hit early
   - Helps identify if you're spending too fast or staying on track
 - **Mobile-First Design & Native App Support**
   - Native iOS and Android app via Capacitor
@@ -42,6 +45,57 @@ A Next.js-based budget tracking application that allows users to connect their b
 - shadcn/ui components
 
 ## Recent Changes
+
+### Recurring Transaction Tracking (2025-12-15)
+
+**Smart Budget Trending with Recurring Expenses**
+
+Traditional budget progress bars assume expenses are evenly distributed throughout the month. However, large recurring expenses like rent and utilities often hit at the beginning of the month, making it appear you're "over budget" when you're actually on track. This feature solves that problem.
+
+**How It Works:**
+
+When you mark a transaction as recurring (rent, mortgage, utilities, subscriptions), the budget system treats it differently:
+
+- **Recurring expenses** are counted as "expected" immediately from day 1 of the month
+- **Variable expenses** continue to scale evenly through the month
+- The blue "expected spending" line on progress bars adjusts to show: `expected = recurring expenses + (variable expenses × % through month)`
+
+**Example:**
+Let's say you have a $1,500 monthly budget:
+- $1,000 rent (marked as recurring, paid on day 1)
+- $500 in groceries and other variable expenses
+
+Without recurring tracking:
+- Day 1: You've spent $1,000 of $50 expected (1,900% over budget! 😱)
+- Day 15: You've spent $1,200 of $750 expected (160% over budget 😰)
+
+With recurring tracking:
+- Day 1: You've spent $1,000 of $1,016 expected (98% - on track! ✅)
+- Day 15: You've spent $1,200 of $1,250 expected (96% - on track! ✅)
+
+**Features:**
+- Mark any transaction as recurring with the Repeat icon button
+- Recurring transactions show a badge in the transactions table
+- Progress bars automatically calculate smarter expected spending
+- Tooltips show breakdown: "Expected: $1,250 ($1,000 recurring + $250 variable)"
+- Works seamlessly with income offsets within categories
+
+**Technical Implementation:**
+- Added `recurring` boolean column to transactions table
+- Separate tracking of `recurringExpenses` vs `variableExpenses` per category
+- Smart expected spending formula in budget progress calculations
+- API endpoint: `PUT /api/transactions/[id]/recurring`
+
+**Files Modified:**
+- `scripts/017_add_recurring_to_transactions.sql` - Database migration
+- `components/transactions-table.tsx` - UI toggle and display
+- `app/api/transactions/[id]/recurring/route.ts` - API endpoint
+- `app/(app)/budgets/page.tsx` - Data fetching and calculation
+- `components/budget-list.tsx` - Progress bar logic
+- `components/budget-overview.tsx` - Interface updates
+
+**Migration Required:**
+Run `scripts/017_add_recurring_to_transactions.sql` in Supabase to add the recurring column.
 
 ### Mobile Optimizations (2025-12-13)
 
@@ -280,6 +334,7 @@ A Next.js-based budget tracking application that allows users to connect their b
    - `scripts/004_create_category_rules.sql` - Create category rules table
    - `scripts/005_add_hidden_to_transactions.sql` - Add hidden column to transactions
    - `scripts/006_create_plaid_items.sql` - Create Plaid items table
+   - `scripts/017_add_recurring_to_transactions.sql` - Add recurring column for smart budget trending
 
 5. Run the development server:
    ```bash
