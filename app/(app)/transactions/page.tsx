@@ -93,7 +93,8 @@ export default function TransactionsPage() {
   if (loading && transactions.length === 0) {
     return (
       <div className="px-2 sm:px-6 max-w-full pb-20 sm:pb-6">
-        <div className="flex justify-end mb-2">
+        <div className="flex items-center justify-between mt-3 mb-2">
+          <Skeleton className="h-6 w-24" />
           <Skeleton className="h-8 w-20" />
         </div>
         <Skeleton className="h-96 w-full" />
@@ -103,7 +104,8 @@ export default function TransactionsPage() {
 
   return (
     <div className="px-2 sm:px-6 max-w-full pb-20 sm:pb-6">
-      <div className="flex justify-end mb-2">
+      <div className="flex items-center justify-between mt-3 mb-2">
+        <h1 className="text-lg font-semibold">Transactions</h1>
         <SyncButton />
       </div>
 

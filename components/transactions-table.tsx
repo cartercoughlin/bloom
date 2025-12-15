@@ -382,6 +382,34 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                             {tx.category_detailed}
                           </div>
                         )}
+                        {/* Mobile: Amount and Actions under description */}
+                        <div className="md:hidden flex items-center justify-between mt-1">
+                          <span className={`text-[10px] font-medium ${
+                            tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                          }`}>
+                            {tx.transaction_type === "credit" ? "+" : "-"}${Math.round(tx.amount)}
+                          </span>
+                          <div className="flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleRecurring(txId, tx.recurring || false)}
+                              className={`h-5 px-0.5 ${tx.recurring ? 'text-blue-600' : ''}`}
+                              title={tx.recurring ? "Mark as non-recurring" : "Mark as recurring"}
+                            >
+                              <Repeat className="h-2.5 w-2.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleHidden(txId, tx.hidden || false)}
+                              className="h-5 px-0.5"
+                              title={tx.hidden ? "Show transaction" : "Hide transaction"}
+                            >
+                              {tx.hidden ? <Eye className="h-2.5 w-2.5" /> : <EyeOff className="h-2.5 w-2.5" />}
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -407,32 +435,31 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                   </td>
                   <td className="p-1 md:p-3 text-[9px] md:text-sm capitalize hidden sm:table-cell w-16">{tx.bank}</td>
                   <td
-                    className={`p-1 md:p-3 text-[9px] md:text-sm text-right font-medium whitespace-nowrap ${
+                    className={`p-1 md:p-3 text-[9px] md:text-sm text-right font-medium whitespace-nowrap hidden md:table-cell ${
                       tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
                     }`}
                   >
-                    <div className="md:hidden">{tx.transaction_type === "credit" ? "+" : "-"}${Math.round(tx.amount)}</div>
-                    <div className="hidden md:block">{tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}</div>
+                    {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toFixed(2)}
                   </td>
-                  <td className="p-1 md:p-3 text-[9px] md:text-sm text-right">
-                    <div className="flex items-center gap-0.5 md:gap-1 justify-end">
+                  <td className="p-1 md:p-3 text-[9px] md:text-sm text-right hidden md:table-cell">
+                    <div className="flex items-center gap-1 justify-end">
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleToggleRecurring(txId, tx.recurring || false)}
-                        className={`h-5 md:h-7 px-0.5 md:px-2 ${tx.recurring ? 'text-blue-600' : ''}`}
+                        className={`h-7 px-2 ${tx.recurring ? 'text-blue-600' : ''}`}
                         title={tx.recurring ? "Mark as non-recurring" : "Mark as recurring"}
                       >
-                        <Repeat className="h-2.5 w-2.5 md:h-4 md:w-4" />
+                        <Repeat className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleToggleHidden(txId, tx.hidden || false)}
-                        className="h-5 md:h-7 px-0.5 md:px-2"
+                        className="h-7 px-2"
                         title={tx.hidden ? "Show transaction" : "Hide transaction"}
                       >
-                        {tx.hidden ? <Eye className="h-2.5 w-2.5 md:h-4 md:w-4" /> : <EyeOff className="h-2.5 w-2.5 md:h-4 md:w-4" />}
+                        {tx.hidden ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                       </Button>
                     </div>
                   </td>
