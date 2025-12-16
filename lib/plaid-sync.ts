@@ -91,27 +91,24 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
 
         console.log('Syncing account:', accountName, 'Balance:', balance)
 
-        // Delete existing record for this plaid account, then insert new one
-        await supabase
+        // Use upsert to handle conflicts properly
+        const { data, error: upsertError } = await supabase
           .from('account_balances')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('plaid_account_id', account.account_id)
-
-        const { data, error: insertError } = await supabase
-          .from('account_balances')
-          .insert({
+          .upsert({
             user_id: user.id,
             account_name: accountName,
             account_type: accountType,
             balance: balance,
             plaid_account_id: account.account_id,
             updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'user_id,plaid_account_id',
+            ignoreDuplicates: false
           })
           .select()
 
-        if (insertError) {
-          console.error('Account balance insert error:', insertError)
+        if (upsertError) {
+          console.error('Account balance upsert error:', upsertError)
         } else {
           console.log('Successfully synced account balance:', data)
           syncedAccountsCount++
