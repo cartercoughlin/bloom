@@ -200,10 +200,11 @@ export function TransactionCategorizer({
             </div>
           )}
 
-          <Select onValueChange={(value) => {
+          <Select value="" onValueChange={(value) => {
             if (value === '__create_new__') {
-              setShowNewCategory(true)
-            } else {
+              // Use setTimeout to ensure Select closes first
+              setTimeout(() => setShowNewCategory(true), 100)
+            } else if (value) {
               handleCategorySelect(value)
             }
           }} onOpenChange={(open) => {
@@ -217,9 +218,9 @@ export function TransactionCategorizer({
             <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
               <SelectValue placeholder="Select category..." />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent onClick={(e) => e.stopPropagation()}>
               {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id}>
+                <SelectItem key={category.id} value={category.id} onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-2">
                     <div
                       className="w-3 h-3 rounded-full"
@@ -229,7 +230,7 @@ export function TransactionCategorizer({
                   </div>
                 </SelectItem>
               ))}
-              <SelectItem value="__create_new__">
+              <SelectItem value="__create_new__" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
                   Create new category
@@ -238,8 +239,11 @@ export function TransactionCategorizer({
             </SelectContent>
           </Select>
 
-          <Dialog open={showNewCategory} onOpenChange={setShowNewCategory}>
-            <DialogContent className="sm:max-w-md" onClick={(e) => e.stopPropagation()}>
+          <Dialog open={showNewCategory} onOpenChange={(open) => {
+            // Only allow closing, not opening via external events
+            if (!open) setShowNewCategory(false)
+          }}>
+            <DialogContent className="sm:max-w-md" onClick={(e) => e.stopPropagation()} onPointerDownOutside={(e) => e.preventDefault()}>
                   <DialogHeader>
                     <DialogTitle>Create New Category</DialogTitle>
                     <DialogDescription>
