@@ -26,6 +26,9 @@ export async function POST() {
       return NextResponse.json({ error: 'No connected accounts found. Please connect a bank account first.' }, { status: 400 })
     }
 
+    // Get all current account IDs from all active Plaid connections
+    let allCurrentAccountIds: string[] = []
+    
     let totalNewTransactions = 0
     let totalUpdatedTransactions = 0
     let totalProcessed = 0
@@ -45,12 +48,34 @@ export async function POST() {
           totalUpdatedTransactions += result.updatedTransactions
           totalProcessed += result.totalProcessed
           totalSyncedAccounts += result.syncedAccounts || 0
+          
+          // Collect account IDs from this connection
+          if (result.accountIds) {
+            allCurrentAccountIds = [...allCurrentAccountIds, ...result.accountIds]
+          }
         } else {
           errors.push(result.error || 'Unknown sync error')
         }
       } catch (itemError) {
         console.error('Item sync error:', itemError)
         errors.push(`Sync failed for one account: ${itemError instanceof Error ? itemError.message : 'Unknown error'}`)
+      }
+    }
+
+    // Clean up old accounts that are no longer in ANY active Plaid connection
+    if (allCurrentAccountIds.length > 0) {
+      console.log('Cleaning up old accounts. Current account IDs:', allCurrentAccountIds)
+      const { error: cleanupError } = await supabase
+        .from('account_balances')
+        .delete()
+        .eq('user_id', user.id)
+        .not('plaid_account_id', 'in', `(${allCurrentAccountIds.map(id => `'${id}'`).join(',')})`)
+        .not('plaid_account_id', 'is', null)
+      
+      if (cleanupError) {
+        console.error('Error cleaning up old accounts:', cleanupError)
+      } else {
+        console.log('Successfully cleaned up old accounts')
       }
     }
 

@@ -13,6 +13,7 @@ export interface SyncResult {
   updatedTransactions: number
   totalProcessed: number
   syncedAccounts?: number
+  accountIds?: string[]
   error?: string
 }
 
@@ -107,21 +108,7 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
       }
       
       // Clean up accounts that no longer exist in this Plaid connection
-      // Only remove accounts that have plaid_account_id but aren't in current sync
-      if (currentAccountIds.length > 0) {
-        const { error: cleanupError } = await supabase
-          .from('account_balances')
-          .delete()
-          .eq('user_id', user.id)
-          .not('plaid_account_id', 'in', `(${currentAccountIds.map(id => `'${id}'`).join(',')})`)
-          .not('plaid_account_id', 'is', null)
-        
-        if (cleanupError) {
-          console.error('Error cleaning up old accounts:', cleanupError)
-        } else {
-          console.log('Cleaned up removed accounts')
-        }
-      }
+      // This will be handled globally in the sync route
     } else {
       console.log('Balance sync disabled for this account')
     }
@@ -129,7 +116,11 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
     // Sync transactions only if enabled
     if (syncTransactions) {
       console.log('Syncing transactions...')
-      return await syncTransactionsForAccounts(accessToken, accounts, user.id, syncedAccountsCount)
+      const result = await syncTransactionsForAccounts(accessToken, accounts, user.id, syncedAccountsCount)
+      return {
+        ...result,
+        accountIds: accounts.map(acc => acc.account_id)
+      }
     } else {
       console.log('Transaction sync disabled for this account')
       return {
@@ -138,6 +129,7 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
         updatedTransactions: 0,
         totalProcessed: 0,
         syncedAccounts: syncedAccountsCount,
+        accountIds: accounts.map(acc => acc.account_id)
       }
     }
     
