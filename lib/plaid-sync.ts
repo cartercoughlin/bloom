@@ -100,15 +100,25 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
           name: account.name,
           official_name: account.official_name,
           type: account.type,
-          subtype: account.subtype
+          subtype: account.subtype,
+          balances: account.balances
         })
 
         const accountType = account.subtype === 'savings' ? 'savings' :
                            account.type === 'credit' ? 'liability' : 'checking'
 
+        // Get balance - prefer current, fall back to available
+        const rawBalance = account.balances.current ?? account.balances.available ?? 0
         const balance = account.type === 'credit' ?
-                       -Math.abs(account.balances.current || 0) :
-                       account.balances.current || 0
+                       -Math.abs(rawBalance) :
+                       rawBalance
+
+        console.log('Balance calculation:', {
+          current: account.balances.current,
+          available: account.balances.available,
+          rawBalance,
+          finalBalance: balance
+        })
 
         // Create better account name using institution and account details
         let accountName = account.official_name || account.name
