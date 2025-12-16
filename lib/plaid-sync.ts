@@ -76,16 +76,28 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
 
         // Create better account name using institution and account details
         let accountName = account.official_name || account.name
-        
+
         // If it's a generic name, use institution + account type
-        if (accountName === 'Connected Account' || accountName === 'Account' || !accountName) {
+        // Check case-insensitively and trim whitespace
+        const normalizedName = accountName?.trim().toLowerCase() || ''
+        const isGenericName = !normalizedName ||
+                              normalizedName === 'connected account' ||
+                              normalizedName === 'account' ||
+                              normalizedName === 'plaid account' ||
+                              normalizedName === 'checking' ||
+                              normalizedName === 'savings' ||
+                              normalizedName === 'credit card'
+
+        if (isGenericName) {
           const institutionId = accountsResponse.data.item.institution_id
-          const accountTypeDisplay = account.subtype === 'savings' ? 'Savings' : 
+          const accountTypeDisplay = account.subtype === 'savings' ? 'Savings' :
                                    account.subtype === 'checking' ? 'Checking' :
-                                   account.type === 'credit' ? 'Credit Card' : 
+                                   account.type === 'credit' ? 'Credit Card' :
                                    account.subtype || 'Account'
-          // Clean up institution ID (remove ins_ prefix)
-          const cleanInstitutionId = institutionId?.replace('ins_', '') || 'Bank'
+          // Clean up institution ID (remove ins_ prefix and capitalize)
+          const cleanInstitutionId = institutionId?.replace('ins_', '').replace(/_/g, ' ').split(' ').map(word =>
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          ).join(' ') || 'Bank'
           accountName = `${cleanInstitutionId} ${accountTypeDisplay}`
         }
 
@@ -222,14 +234,28 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   for (const transaction of transactions) {
     console.log('Processing transaction:', transaction.name, transaction.amount, transaction.date, 'ID:', transaction.transaction_id)
     const account = accounts.find(acc => acc.account_id === transaction.account_id)
-    
-    // Create better bank name
-    let bankName = account?.name || 'Unknown'
-    if (bankName === 'Connected Account' || bankName === 'Account' || !bankName) {
-      const cleanInstitutionId = institutionId?.replace('ins_', '') || 'Bank'
-      bankName = cleanInstitutionId
+
+    // Create better bank name using same logic as balance sync
+    let bankName = account?.official_name || account?.name || 'Unknown'
+
+    // Check case-insensitively and trim whitespace
+    const normalizedBankName = bankName?.trim().toLowerCase() || ''
+    const isGenericName = !normalizedBankName ||
+                          normalizedBankName === 'connected account' ||
+                          normalizedBankName === 'account' ||
+                          normalizedBankName === 'plaid account' ||
+                          normalizedBankName === 'checking' ||
+                          normalizedBankName === 'savings' ||
+                          normalizedBankName === 'credit card' ||
+                          normalizedBankName === 'unknown'
+
+    if (isGenericName) {
+      // Clean up institution ID (remove ins_ prefix and capitalize)
+      bankName = institutionId?.replace('ins_', '').replace(/_/g, ' ').split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ') || 'Bank'
     }
-    
+
     // Create transaction fingerprint for deduplication
     const fingerprint = `${transaction.date}_${transaction.name.toLowerCase().trim()}_${Math.abs(transaction.amount)}_${bankName}`
     
