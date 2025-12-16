@@ -47,19 +47,24 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
       }
     }
 
-    // Get accounts
+    // Get accounts and institution info
     console.log('Getting accounts for access token...')
     const accountsRequest: AccountsGetRequest = {
       access_token: accessToken,
     }
     const accountsResponse: AccountsGetResponse = await plaidClient.accountsGet(accountsRequest)
     const accounts = accountsResponse.data.accounts
+    const institutionName = accountsResponse.data.item.institution_id
     console.log('Found accounts:', accounts.length)
 
     // Sync account balances only if enabled
     let syncedAccountsCount = 0
     if (syncBalances) {
       console.log('Syncing account balances...')
+      
+      // Get current account IDs from this Plaid connection
+      const currentAccountIds = accounts.map(acc => acc.account_id)
+      
       for (const account of accounts) {
         const accountType = account.subtype === 'savings' ? 'savings' : 
                            account.type === 'credit' ? 'liability' : 'checking'
@@ -68,8 +73,18 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
                        -Math.abs(account.balances.current || 0) : 
                        account.balances.current || 0
 
-        // Use the actual account name from Plaid, not the generic type
-        const accountName = account.official_name || account.name
+        // Create better account name using institution and account details
+        let accountName = account.official_name || account.name
+        
+        // If it's a generic name, use institution + account type
+        if (accountName === 'Connected Account' || accountName === 'Account' || !accountName) {
+          const institutionId = accountsResponse.data.item.institution_id
+          const accountTypeDisplay = account.subtype === 'savings' ? 'Savings' : 
+                                   account.subtype === 'checking' ? 'Checking' :
+                                   account.type === 'credit' ? 'Credit Card' : 
+                                   account.subtype || 'Account'
+          accountName = `${institutionId} ${accountTypeDisplay}`
+        }
 
         console.log('Syncing account:', accountName, 'Balance:', balance)
 
@@ -80,13 +95,31 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
             account_name: accountName,
             account_type: accountType,
             balance: balance,
+            plaid_account_id: account.account_id,
             updated_at: new Date().toISOString(),
           }, {
-            onConflict: 'user_id,account_name'
+            onConflict: 'user_id,plaid_account_id'
           })
 
         if (!upsertError) {
           syncedAccountsCount++
+        }
+      }
+      
+      // Clean up accounts that no longer exist in this Plaid connection
+      // Only remove accounts that have plaid_account_id but aren't in current sync
+      if (currentAccountIds.length > 0) {
+        const { error: cleanupError } = await supabase
+          .from('account_balances')
+          .delete()
+          .eq('user_id', user.id)
+          .not('plaid_account_id', 'in', `(${currentAccountIds.map(id => `'${id}'`).join(',')})`)
+          .not('plaid_account_id', 'is', null)
+        
+        if (cleanupError) {
+          console.error('Error cleaning up old accounts:', cleanupError)
+        } else {
+          console.log('Cleaned up removed accounts')
         }
       }
     } else {
@@ -128,6 +161,11 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
 
 async function syncTransactionsForAccounts(accessToken: string, accounts: any[], userId: string, syncedAccountsCount: number): Promise<SyncResult> {
   const supabase = await createClient()
+  
+  // Get institution info for better bank names
+  const accountsRequest: AccountsGetRequest = { access_token: accessToken }
+  const accountsResponse: AccountsGetResponse = await plaidClient.accountsGet(accountsRequest)
+  const institutionId = accountsResponse.data.item.institution_id
   
   // Get existing categories
   const { data: categories } = await supabase.from('categories').select('id, name').eq('user_id', userId)
@@ -184,7 +222,12 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   for (const transaction of transactions) {
     console.log('Processing transaction:', transaction.name, transaction.amount, transaction.date, 'ID:', transaction.transaction_id)
     const account = accounts.find(acc => acc.account_id === transaction.account_id)
-    const bankName = account?.name || 'Unknown'
+    
+    // Create better bank name
+    let bankName = account?.name || 'Unknown'
+    if (bankName === 'Connected Account' || bankName === 'Account' || !bankName) {
+      bankName = institutionId || 'Bank'
+    }
     
     // Create transaction fingerprint for deduplication
     const fingerprint = `${transaction.date}_${transaction.name.toLowerCase().trim()}_${Math.abs(transaction.amount)}_${bankName}`
