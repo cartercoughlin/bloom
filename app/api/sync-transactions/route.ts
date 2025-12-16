@@ -98,43 +98,48 @@ export async function POST() {
     // Clean up old accounts and transactions that are no longer in ANY active Plaid connection
     if (allCurrentAccountIds.length > 0) {
       console.log('Cleaning up old accounts. Current account IDs:', allCurrentAccountIds)
-      
-      // Get accounts that will be removed (for transaction cleanup)
-      const { data: accountsToRemove } = await supabase
+
+      // Get all Plaid accounts for this user
+      const { data: allPlaidAccounts } = await supabase
         .from('account_balances')
-        .select('plaid_account_id')
+        .select('id, plaid_account_id')
         .eq('user_id', user.id)
-        .not('plaid_account_id', 'in', `(${allCurrentAccountIds.map(id => `'${id}'`).join(',')})`)
         .not('plaid_account_id', 'is', null)
-      
-      if (accountsToRemove && accountsToRemove.length > 0) {
+
+      // Find accounts that should be removed (not in current account IDs)
+      const accountsToRemove = allPlaidAccounts?.filter(acc =>
+        acc.plaid_account_id && !allCurrentAccountIds.includes(acc.plaid_account_id)
+      ) || []
+
+      if (accountsToRemove.length > 0) {
         const accountIdsToRemove = accountsToRemove.map(acc => acc.plaid_account_id)
-        console.log('Removing transactions for accounts:', accountIdsToRemove)
-        
+        const dbIdsToRemove = accountsToRemove.map(acc => acc.id)
+        console.log('Removing transactions for disconnected accounts:', accountIdsToRemove)
+
         // Remove transactions from disconnected accounts
         const { error: txCleanupError } = await supabase
           .from('transactions')
           .delete()
           .eq('user_id', user.id)
           .in('plaid_account_id', accountIdsToRemove)
-        
+
         if (txCleanupError) {
           console.error('Error cleaning up transactions:', txCleanupError)
         }
-      }
-      
-      // Remove account balances
-      const { error: cleanupError } = await supabase
-        .from('account_balances')
-        .delete()
-        .eq('user_id', user.id)
-        .not('plaid_account_id', 'in', `(${allCurrentAccountIds.map(id => `'${id}'`).join(',')})`)
-        .not('plaid_account_id', 'is', null)
-      
-      if (cleanupError) {
-        console.error('Error cleaning up old accounts:', cleanupError)
+
+        // Remove account balances
+        const { error: cleanupError } = await supabase
+          .from('account_balances')
+          .delete()
+          .in('id', dbIdsToRemove)
+
+        if (cleanupError) {
+          console.error('Error cleaning up old accounts:', cleanupError)
+        } else {
+          console.log('Successfully cleaned up old accounts and transactions')
+        }
       } else {
-        console.log('Successfully cleaned up old accounts and transactions')
+        console.log('No old accounts to clean up')
       }
     }
 
