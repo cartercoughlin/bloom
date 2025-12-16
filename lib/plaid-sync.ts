@@ -257,6 +257,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     const transactionData = {
       user_id: userId,
       plaid_transaction_id: transaction.transaction_id,
+      plaid_account_id: transaction.account_id,
       date: transaction.date,
       description: transaction.name,
       amount: Math.abs(transaction.amount),

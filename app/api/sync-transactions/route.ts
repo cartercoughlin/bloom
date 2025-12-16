@@ -62,9 +62,35 @@ export async function POST() {
       }
     }
 
-    // Clean up old accounts that are no longer in ANY active Plaid connection
+    // Clean up old accounts and transactions that are no longer in ANY active Plaid connection
     if (allCurrentAccountIds.length > 0) {
       console.log('Cleaning up old accounts. Current account IDs:', allCurrentAccountIds)
+      
+      // Get accounts that will be removed (for transaction cleanup)
+      const { data: accountsToRemove } = await supabase
+        .from('account_balances')
+        .select('plaid_account_id')
+        .eq('user_id', user.id)
+        .not('plaid_account_id', 'in', `(${allCurrentAccountIds.map(id => `'${id}'`).join(',')})`)
+        .not('plaid_account_id', 'is', null)
+      
+      if (accountsToRemove && accountsToRemove.length > 0) {
+        const accountIdsToRemove = accountsToRemove.map(acc => acc.plaid_account_id)
+        console.log('Removing transactions for accounts:', accountIdsToRemove)
+        
+        // Remove transactions from disconnected accounts
+        const { error: txCleanupError } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('user_id', user.id)
+          .in('plaid_account_id', accountIdsToRemove)
+        
+        if (txCleanupError) {
+          console.error('Error cleaning up transactions:', txCleanupError)
+        }
+      }
+      
+      // Remove account balances
       const { error: cleanupError } = await supabase
         .from('account_balances')
         .delete()
@@ -75,7 +101,7 @@ export async function POST() {
       if (cleanupError) {
         console.error('Error cleaning up old accounts:', cleanupError)
       } else {
-        console.log('Successfully cleaned up old accounts')
+        console.log('Successfully cleaned up old accounts and transactions')
       }
     }
 
