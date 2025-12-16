@@ -67,15 +67,25 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
       const currentAccountIds = accounts.map(acc => acc.account_id)
       
       for (const account of accounts) {
-        const accountType = account.subtype === 'savings' ? 'savings' : 
+        console.log('Raw account data:', {
+          account_id: account.account_id,
+          name: account.name,
+          official_name: account.official_name,
+          type: account.type,
+          subtype: account.subtype
+        })
+
+        const accountType = account.subtype === 'savings' ? 'savings' :
                            account.type === 'credit' ? 'liability' : 'checking'
-        
-        const balance = account.type === 'credit' ? 
-                       -Math.abs(account.balances.current || 0) : 
+
+        const balance = account.type === 'credit' ?
+                       -Math.abs(account.balances.current || 0) :
                        account.balances.current || 0
 
         // Create better account name using institution and account details
         let accountName = account.official_name || account.name
+
+        console.log('Initial account name from Plaid:', accountName)
 
         // If it's a generic name, use institution + account type
         // Check case-insensitively and trim whitespace
@@ -88,6 +98,8 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
                               normalizedName === 'savings' ||
                               normalizedName === 'credit card'
 
+        console.log('Is generic name?', isGenericName, 'Normalized:', normalizedName)
+
         if (isGenericName) {
           const institutionId = accountsResponse.data.item.institution_id
           const accountTypeDisplay = account.subtype === 'savings' ? 'Savings' :
@@ -99,9 +111,10 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
             word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
           ).join(' ') || 'Bank'
           accountName = `${cleanInstitutionId} ${accountTypeDisplay}`
+          console.log('Using generated name:', accountName)
         }
 
-        console.log('Syncing account:', accountName, 'Balance:', balance)
+        console.log('Final account name for sync:', accountName, 'Balance:', balance)
 
         // Use upsert to handle conflicts properly
         const { data, error: upsertError } = await supabase
@@ -120,9 +133,14 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
           .select()
 
         if (upsertError) {
-          console.error('Account balance upsert error:', upsertError)
+          console.error('❌ Account balance upsert error:', upsertError)
         } else {
-          console.log('Successfully synced account balance:', data)
+          console.log('✅ Successfully synced account balance:', {
+            id: data?.[0]?.id,
+            account_name: data?.[0]?.account_name,
+            plaid_account_id: data?.[0]?.plaid_account_id,
+            balance: data?.[0]?.balance
+          })
           syncedAccountsCount++
         }
       }
