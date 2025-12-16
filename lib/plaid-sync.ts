@@ -76,16 +76,28 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
 
         // Create better account name using institution and account details
         let accountName = account.official_name || account.name
-        
+
         // If it's a generic name, use institution + account type
-        if (accountName === 'Connected Account' || accountName === 'Account' || !accountName) {
+        // Check case-insensitively and trim whitespace
+        const normalizedName = accountName?.trim().toLowerCase() || ''
+        const isGenericName = !normalizedName ||
+                              normalizedName === 'connected account' ||
+                              normalizedName === 'account' ||
+                              normalizedName === 'plaid account' ||
+                              normalizedName === 'checking' ||
+                              normalizedName === 'savings' ||
+                              normalizedName === 'credit card'
+
+        if (isGenericName) {
           const institutionId = accountsResponse.data.item.institution_id
-          const accountTypeDisplay = account.subtype === 'savings' ? 'Savings' : 
+          const accountTypeDisplay = account.subtype === 'savings' ? 'Savings' :
                                    account.subtype === 'checking' ? 'Checking' :
-                                   account.type === 'credit' ? 'Credit Card' : 
+                                   account.type === 'credit' ? 'Credit Card' :
                                    account.subtype || 'Account'
-          // Clean up institution ID (remove ins_ prefix)
-          const cleanInstitutionId = institutionId?.replace('ins_', '') || 'Bank'
+          // Clean up institution ID (remove ins_ prefix and capitalize)
+          const cleanInstitutionId = institutionId?.replace('ins_', '').replace(/_/g, ' ').split(' ').map(word =>
+            word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+          ).join(' ') || 'Bank'
           accountName = `${cleanInstitutionId} ${accountTypeDisplay}`
         }
 
