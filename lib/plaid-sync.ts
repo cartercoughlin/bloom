@@ -234,14 +234,28 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   for (const transaction of transactions) {
     console.log('Processing transaction:', transaction.name, transaction.amount, transaction.date, 'ID:', transaction.transaction_id)
     const account = accounts.find(acc => acc.account_id === transaction.account_id)
-    
-    // Create better bank name
-    let bankName = account?.name || 'Unknown'
-    if (bankName === 'Connected Account' || bankName === 'Account' || !bankName) {
-      const cleanInstitutionId = institutionId?.replace('ins_', '') || 'Bank'
-      bankName = cleanInstitutionId
+
+    // Create better bank name using same logic as balance sync
+    let bankName = account?.official_name || account?.name || 'Unknown'
+
+    // Check case-insensitively and trim whitespace
+    const normalizedBankName = bankName?.trim().toLowerCase() || ''
+    const isGenericName = !normalizedBankName ||
+                          normalizedBankName === 'connected account' ||
+                          normalizedBankName === 'account' ||
+                          normalizedBankName === 'plaid account' ||
+                          normalizedBankName === 'checking' ||
+                          normalizedBankName === 'savings' ||
+                          normalizedBankName === 'credit card' ||
+                          normalizedBankName === 'unknown'
+
+    if (isGenericName) {
+      // Clean up institution ID (remove ins_ prefix and capitalize)
+      bankName = institutionId?.replace('ins_', '').replace(/_/g, ' ').split(' ').map(word =>
+        word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+      ).join(' ') || 'Bank'
     }
-    
+
     // Create transaction fingerprint for deduplication
     const fingerprint = `${transaction.date}_${transaction.name.toLowerCase().trim()}_${Math.abs(transaction.amount)}_${bankName}`
     
