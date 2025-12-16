@@ -116,24 +116,48 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
 
         console.log('Final account name for sync:', accountName, 'Balance:', balance)
 
-        // Use upsert to handle conflicts properly
-        const { data, error: upsertError } = await supabase
+        // Check if account already exists
+        const { data: existingAccounts } = await supabase
           .from('account_balances')
-          .upsert({
-            user_id: user.id,
-            account_name: accountName,
-            account_type: accountType,
-            balance: balance,
-            plaid_account_id: account.account_id,
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: 'user_id,plaid_account_id',
-            ignoreDuplicates: false
-          })
-          .select()
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('plaid_account_id', account.account_id)
+          .limit(1)
 
-        if (upsertError) {
-          console.error('❌ Account balance upsert error:', upsertError)
+        let result
+        if (existingAccounts && existingAccounts.length > 0) {
+          // Update existing account
+          console.log('Updating existing account:', existingAccounts[0].id)
+          result = await supabase
+            .from('account_balances')
+            .update({
+              account_name: accountName,
+              account_type: accountType,
+              balance: balance,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingAccounts[0].id)
+            .select()
+        } else {
+          // Insert new account
+          console.log('Inserting new account')
+          result = await supabase
+            .from('account_balances')
+            .insert({
+              user_id: user.id,
+              account_name: accountName,
+              account_type: accountType,
+              balance: balance,
+              plaid_account_id: account.account_id,
+              updated_at: new Date().toISOString(),
+            })
+            .select()
+        }
+
+        const { data, error: saveError } = result
+
+        if (saveError) {
+          console.error('❌ Account balance save error:', saveError)
         } else {
           console.log('✅ Successfully synced account balance:', {
             id: data?.[0]?.id,
