@@ -133,19 +133,29 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   const { data: categories } = await supabase.from('categories').select('id, name').eq('user_id', userId)
   const categoryMap = new Map(categories?.map(c => [c.name.toLowerCase(), c.id]) || [])
 
-  // Get existing transactions to avoid duplicates - use Plaid transaction ID
+  // Get existing transactions from last 35 days to avoid duplicates
+  const lookbackDate = new Date()
+  lookbackDate.setDate(lookbackDate.getDate() - 35)
+  
   const { data: existingTransactions } = await supabase
     .from('transactions')
-    .select('id, plaid_transaction_id, category_id, merchant_name, logo_url, website')
+    .select('id, plaid_transaction_id, date, description, amount, bank')
     .eq('user_id', userId)
-    .is('plaid_transaction_id', 'not.null') // Only get transactions with Plaid IDs
+    .gte('date', lookbackDate.toISOString().split('T')[0])
 
-  // Create lookup by Plaid transaction ID
+  // Create multiple lookup maps for robust deduplication
   const existingByPlaidId = new Map<string, any>()
+  const existingByFingerprint = new Map<string, any>()
+  
   existingTransactions?.forEach(t => {
+    // Plaid ID lookup (primary)
     if (t.plaid_transaction_id) {
       existingByPlaidId.set(t.plaid_transaction_id, t)
     }
+    
+    // Fingerprint lookup (fallback) - date + description + amount + bank
+    const fingerprint = `${t.date}_${t.description.toLowerCase().trim()}_${t.amount}_${t.bank}`
+    existingByFingerprint.set(fingerprint, t)
   })
 
   let newCount = 0
@@ -176,46 +186,34 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     const account = accounts.find(acc => acc.account_id === transaction.account_id)
     const bankName = account?.name || 'Unknown'
     
-    // Check if transaction already exists by Plaid ID
-    const existingTransaction = transaction.transaction_id ? existingByPlaidId.get(transaction.transaction_id) : null
+    // Create transaction fingerprint for deduplication
+    const fingerprint = `${transaction.date}_${transaction.name.toLowerCase().trim()}_${Math.abs(transaction.amount)}_${bankName}`
+    
+    // Check for existing transaction using multiple methods
+    let existingTransaction = null
+    
+    // Method 1: Check by Plaid transaction ID (most reliable)
+    if (transaction.transaction_id) {
+      existingTransaction = existingByPlaidId.get(transaction.transaction_id)
+    }
+    
+    // Method 2: Check by fingerprint (fallback for duplicate detection)
+    if (!existingTransaction) {
+      existingTransaction = existingByFingerprint.get(fingerprint)
+    }
     
     if (existingTransaction) {
-      // Update existing transaction with more accurate data
-      const updateData: any = {}
-      
-      // Update amount if it's more precise
-      if (Math.abs(transaction.amount) !== existingTransaction.amount) {
-        updateData.amount = Math.abs(transaction.amount)
-      }
-      
-      // Update merchant info if available (but preserve categorization)
-      if (transaction.merchant_name && !existingTransaction.merchant_name) {
-        updateData.merchant_name = transaction.merchant_name
-      }
-      
-      if (transaction.logo_url && !existingTransaction.logo_url) {
-        updateData.logo_url = transaction.logo_url
-      }
-      
-      if (transaction.website && !existingTransaction.website) {
-        updateData.website = transaction.website
-      }
-      
-      // Update if we have new data
-      if (Object.keys(updateData).length > 0) {
-        console.log('Updating existing transaction:', existingTransaction.id, updateData)
-        const { error: updateError } = await supabase
+      // If existing transaction doesn't have Plaid ID, update it
+      if (!existingTransaction.plaid_transaction_id && transaction.transaction_id) {
+        console.log('Backfilling Plaid ID for existing transaction:', existingTransaction.id)
+        await supabase
           .from('transactions')
-          .update(updateData)
+          .update({ plaid_transaction_id: transaction.transaction_id })
           .eq('id', existingTransaction.id)
-        
-        if (!updateError) {
-          updatedCount++
-        }
+        updatedCount++
       } else {
-        console.log('Transaction already exists, skipping')
+        console.log('Transaction already exists, skipping:', existingTransaction.id)
       }
-      
       processedCount++
       continue
     }
