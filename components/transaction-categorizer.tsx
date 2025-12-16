@@ -200,7 +200,13 @@ export function TransactionCategorizer({
             </div>
           )}
 
-          <Select onValueChange={handleCategorySelect} onOpenChange={(open) => {
+          <Select onValueChange={(value) => {
+            if (value === '__create_new__') {
+              setShowNewCategory(true)
+            } else {
+              handleCategorySelect(value)
+            }
+          }} onOpenChange={(open) => {
             if (open) {
               setHasInteracted(true)
               if (!currentCategoryId && suggestions.length === 0) {
@@ -223,14 +229,17 @@ export function TransactionCategorizer({
                   </div>
                 </SelectItem>
               ))}
-              <Dialog open={showNewCategory} onOpenChange={setShowNewCategory}>
-                <DialogTrigger asChild>
-                  <div className="flex items-center gap-2 px-2 py-1.5 text-sm cursor-pointer hover:bg-accent rounded-sm">
-                    <Plus className="h-4 w-4" />
-                    Create new category
-                  </div>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md">
+              <SelectItem value="__create_new__">
+                <div className="flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create new category
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Dialog open={showNewCategory} onOpenChange={setShowNewCategory}>
+            <DialogContent className="sm:max-w-md" onClick={(e) => e.stopPropagation()}>
                   <DialogHeader>
                     <DialogTitle>Create New Category</DialogTitle>
                     <DialogDescription>
@@ -295,8 +304,6 @@ export function TransactionCategorizer({
                   </div>
                 </DialogContent>
               </Dialog>
-            </SelectContent>
-          </Select>
         </div>
       )}
     </div>
