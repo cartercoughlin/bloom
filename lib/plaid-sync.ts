@@ -84,7 +84,9 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
                                    account.subtype === 'checking' ? 'Checking' :
                                    account.type === 'credit' ? 'Credit Card' : 
                                    account.subtype || 'Account'
-          accountName = `${institutionId} ${accountTypeDisplay}`
+          // Clean up institution ID (remove ins_ prefix)
+          const cleanInstitutionId = institutionId?.replace('ins_', '') || 'Bank'
+          accountName = `${cleanInstitutionId} ${accountTypeDisplay}`
         }
 
         console.log('Syncing account:', accountName, 'Balance:', balance)
