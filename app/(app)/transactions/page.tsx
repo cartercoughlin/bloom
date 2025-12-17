@@ -60,6 +60,7 @@ export default function TransactionsPage() {
               )
             `)
             .eq("user_id", user.id)
+            .or("deleted.is.null,deleted.eq.false")
             .order("date", { ascending: false }),
 
           supabase

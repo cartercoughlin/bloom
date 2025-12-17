@@ -197,32 +197,6 @@ export function ConnectedAccounts() {
     loadAccounts()
   }
 
-  const syncAllBalances = async () => {
-    try {
-      toast.loading('Syncing account balances...')
-
-      const response = await fetch('/api/sync-balances', {
-        method: 'POST'
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to sync balances')
-      }
-
-      const result = await response.json()
-
-      if (result.success) {
-        toast.success(`Successfully synced ${result.syncedAccounts} accounts`)
-        loadAccounts() // Reload to show updated balances
-      } else {
-        toast.error(result.message || 'Some accounts failed to sync')
-      }
-    } catch (error) {
-      console.error('Error syncing balances:', error)
-      toast.error('Failed to sync account balances')
-    }
-  }
-
   if (loading) {
     return <div>Loading accounts...</div>
   }
@@ -322,20 +296,8 @@ export function ConnectedAccounts() {
           </div>
         )}
         
-        <div className="pt-4 border-t flex gap-2">
+        <div className="pt-4 border-t">
           <PlaidLink onSuccess={handlePlaidSuccess} />
-          {accounts.length > 0 && (
-            <Button
-              onClick={syncAllBalances}
-              variant="outline"
-              className="gap-2"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-              </svg>
-              Sync All Balances
-            </Button>
-          )}
         </div>
       </CardContent>
     </Card>

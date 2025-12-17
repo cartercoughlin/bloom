@@ -95,12 +95,14 @@ export default function DashboardPage() {
             `)
             .gte("date", firstDay)
             .lte("date", lastDay)
+            .or("deleted.is.null,deleted.eq.false")
             .order("date", { ascending: false }),
 
           supabase
             .from("transactions")
             .select("date, amount, transaction_type")
-            .gte("date", new Date(currentYear, currentMonth - 7, 1).toISOString().split("T")[0]),
+            .gte("date", new Date(currentYear, currentMonth - 7, 1).toISOString().split("T")[0])
+            .or("deleted.is.null,deleted.eq.false"),
 
           supabase
             .from("budgets")

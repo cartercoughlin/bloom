@@ -8,7 +8,8 @@ import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat } from "lucide-react"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { TransactionCategorizer } from "./transaction-categorizer"
 import Link from "next/link"
@@ -172,6 +173,27 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
     } catch (error) {
       console.error("Error toggling recurring status:", error)
       alert("Error updating recurring status")
+    }
+  }
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        // Remove transaction from the list
+        setTransactions(prev => prev.filter(tx => tx.id !== transactionId))
+        // Close the modal
+        setSelectedTransaction(null)
+      } else {
+        console.error("Failed to delete transaction")
+        alert("Failed to delete transaction")
+      }
+    } catch (error) {
+      console.error("Error deleting transaction:", error)
+      alert("Error deleting transaction")
     }
   }
 
@@ -554,6 +576,32 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                   {selectedTransaction.hidden ? "Show" : "Hide"}
                 </Button>
               </div>
+
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" size="sm" className="w-full">
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Transaction
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Transaction?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Are you sure you want to delete this transaction? This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleDeleteTransaction(selectedTransaction.id)}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
         </DialogContent>

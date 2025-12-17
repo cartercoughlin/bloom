@@ -254,6 +254,14 @@ function normalizeDescription(description: string): string {
     .trim()
 }
 
+// Helper function to extract merchant name (first part before location/extra info)
+function getMerchantPrefix(description: string): string {
+  const normalized = normalizeDescription(description)
+  // Take first 3 words as merchant identifier (handles most cases)
+  const words = normalized.split(' ')
+  return words.slice(0, Math.min(3, words.length)).join(' ')
+}
+
 async function syncTransactionsForAccounts(accessToken: string, accounts: any[], userId: string, syncedAccountsCount: number, institutionName: string): Promise<SyncResult> {
   const supabase = await createClient()
 
@@ -261,13 +269,15 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   const { data: categories } = await supabase.from('categories').select('id, name').eq('user_id', userId)
   const categoryMap = new Map(categories?.map(c => [c.name.toLowerCase(), c.id]) || [])
 
-  // Get existing transactions from last 35 days to avoid duplicates
+  // Get existing transactions from last 90 days to avoid duplicates
+  // Extended to 90 days to catch older categorized transactions
+  // Also fetch deleted transactions to prevent re-importing them
   const lookbackDate = new Date()
-  lookbackDate.setDate(lookbackDate.getDate() - 35)
+  lookbackDate.setDate(lookbackDate.getDate() - 90)
 
   const { data: existingTransactions } = await supabase
     .from('transactions')
-    .select('id, plaid_transaction_id, date, description, amount, bank')
+    .select('id, plaid_transaction_id, date, description, amount, bank, deleted')
     .eq('user_id', userId)
     .gte('date', lookbackDate.toISOString().split('T')[0])
 
@@ -275,6 +285,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   const existingByPlaidId = new Map<string, any>()
   const existingByFingerprint = new Map<string, any>()
   const existingByNormalizedFingerprint = new Map<string, any>()
+  const existingByMerchantPrefix = new Map<string, any>()
 
   existingTransactions?.forEach(t => {
     // Plaid ID lookup (primary)
@@ -289,6 +300,11 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     // Normalized fingerprint lookup (fallback #2) - handles variations in spacing and special characters
     const normalizedFingerprint = `${t.date}_${normalizeDescription(t.description)}_${t.amount}_${t.bank.toLowerCase().trim()}`
     existingByNormalizedFingerprint.set(normalizedFingerprint, t)
+
+    // Merchant prefix lookup (fallback #3) - handles pending→posted with location changes
+    // Uses first 3 words of merchant name to match despite different suffixes
+    const merchantFingerprint = `${t.date}_${getMerchantPrefix(t.description)}_${t.amount}_${t.bank.toLowerCase().trim()}`
+    existingByMerchantPrefix.set(merchantFingerprint, t)
   })
 
   let newCount = 0
@@ -344,9 +360,50 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     // Check for existing transaction using multiple methods
     let existingTransaction = null
 
+    // Method 0: Check by pending_transaction_id (OFFICIAL Plaid way for pending→posted)
+    // When a pending transaction posts, Plaid sends it with pending_transaction_id pointing to the original
+    if (transaction.pending_transaction_id) {
+      console.log(`Transaction has pending_transaction_id: ${transaction.pending_transaction_id}, will update existing pending transaction`)
+      existingTransaction = existingByPlaidId.get(transaction.pending_transaction_id)
+
+      // If not in cache, check database
+      if (!existingTransaction) {
+        const { data: dbMatch } = await supabase
+          .from('transactions')
+          .select('id, plaid_transaction_id, date, description, amount, bank')
+          .eq('user_id', userId)
+          .eq('plaid_transaction_id', transaction.pending_transaction_id)
+          .limit(1)
+          .single()
+
+        if (dbMatch) {
+          existingTransaction = dbMatch
+          console.log(`Found pending transaction ${transaction.pending_transaction_id}, will update to posted`)
+        }
+      }
+    }
+
     // Method 1: Check by Plaid transaction ID (most reliable)
-    if (transaction.transaction_id) {
+    if (!existingTransaction && transaction.transaction_id) {
       existingTransaction = existingByPlaidId.get(transaction.transaction_id)
+
+      // If not in cache, check database directly for plaid_transaction_id
+      // This catches transactions older than the lookback period
+      if (!existingTransaction) {
+        const { data: dbMatch } = await supabase
+          .from('transactions')
+          .select('id, plaid_transaction_id, date, description, amount, bank')
+          .eq('user_id', userId)
+          .eq('plaid_transaction_id', transaction.transaction_id)
+          .limit(1)
+          .single()
+
+        if (dbMatch) {
+          existingTransaction = dbMatch
+          // Add to cache for future lookups in this batch
+          existingByPlaidId.set(transaction.transaction_id, dbMatch)
+        }
+      }
     }
 
     // Method 2: Check by exact fingerprint (fallback for duplicate detection)
@@ -358,10 +415,37 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     if (!existingTransaction) {
       existingTransaction = existingByNormalizedFingerprint.get(normalizedFingerprint)
     }
-    
+
+    // Method 4: Check by merchant prefix (handles pending→posted with location/phone number changes)
+    if (!existingTransaction) {
+      const merchantFingerprint = `${transaction.date}_${getMerchantPrefix(transaction.name)}_${Math.abs(transaction.amount)}_${bankName.toLowerCase().trim()}`
+      existingTransaction = existingByMerchantPrefix.get(merchantFingerprint)
+    }
+
     if (existingTransaction) {
-      // If existing transaction doesn't have Plaid ID, update it
-      if (!existingTransaction.plaid_transaction_id && transaction.transaction_id) {
+      // Check if transaction was deleted by user - don't re-import it
+      if (existingTransaction.deleted) {
+        console.log('Transaction was deleted by user, skipping:', existingTransaction.id)
+        processedCount++
+        continue
+      }
+
+      // If this is a pending→posted update (has pending_transaction_id), update the existing transaction
+      if (transaction.pending_transaction_id) {
+        console.log(`Updating pending transaction ${transaction.pending_transaction_id} to posted with ID ${transaction.transaction_id}`)
+        await supabase
+          .from('transactions')
+          .update({
+            plaid_transaction_id: transaction.transaction_id, // Update to posted ID
+            description: transaction.original_description || transaction.name, // Update with final description
+            amount: Math.abs(transaction.amount), // Update with final amount
+            date: transaction.date, // Update with final date
+          })
+          .eq('id', existingTransaction.id)
+        updatedCount++
+      }
+      // If existing transaction doesn't have Plaid ID, backfill it
+      else if (!existingTransaction.plaid_transaction_id && transaction.transaction_id) {
         console.log('Backfilling Plaid ID for existing transaction:', existingTransaction.id)
         await supabase
           .from('transactions')
@@ -419,6 +503,10 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       }
       existingByFingerprint.set(fingerprint, newTransaction)
       existingByNormalizedFingerprint.set(normalizedFingerprint, newTransaction)
+
+      // Add merchant prefix fingerprint for pending→posted duplicate detection
+      const merchantFingerprint = `${transaction.date}_${getMerchantPrefix(transaction.name)}_${Math.abs(transaction.amount)}_${bankName.toLowerCase().trim()}`
+      existingByMerchantPrefix.set(merchantFingerprint, newTransaction)
     }
     processedCount++
   }
