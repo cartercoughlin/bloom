@@ -359,8 +359,31 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     // Check for existing transaction using multiple methods
     let existingTransaction = null
 
+    // Method 0: Check by pending_transaction_id (OFFICIAL Plaid way for pending→posted)
+    // When a pending transaction posts, Plaid sends it with pending_transaction_id pointing to the original
+    if (transaction.pending_transaction_id) {
+      console.log(`Transaction has pending_transaction_id: ${transaction.pending_transaction_id}, will update existing pending transaction`)
+      existingTransaction = existingByPlaidId.get(transaction.pending_transaction_id)
+
+      // If not in cache, check database
+      if (!existingTransaction) {
+        const { data: dbMatch } = await supabase
+          .from('transactions')
+          .select('id, plaid_transaction_id, date, description, amount, bank')
+          .eq('user_id', userId)
+          .eq('plaid_transaction_id', transaction.pending_transaction_id)
+          .limit(1)
+          .single()
+
+        if (dbMatch) {
+          existingTransaction = dbMatch
+          console.log(`Found pending transaction ${transaction.pending_transaction_id}, will update to posted`)
+        }
+      }
+    }
+
     // Method 1: Check by Plaid transaction ID (most reliable)
-    if (transaction.transaction_id) {
+    if (!existingTransaction && transaction.transaction_id) {
       existingTransaction = existingByPlaidId.get(transaction.transaction_id)
 
       // If not in cache, check database directly for plaid_transaction_id
@@ -399,8 +422,22 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     }
 
     if (existingTransaction) {
-      // If existing transaction doesn't have Plaid ID, update it
-      if (!existingTransaction.plaid_transaction_id && transaction.transaction_id) {
+      // If this is a pending→posted update (has pending_transaction_id), update the existing transaction
+      if (transaction.pending_transaction_id) {
+        console.log(`Updating pending transaction ${transaction.pending_transaction_id} to posted with ID ${transaction.transaction_id}`)
+        await supabase
+          .from('transactions')
+          .update({
+            plaid_transaction_id: transaction.transaction_id, // Update to posted ID
+            description: transaction.original_description || transaction.name, // Update with final description
+            amount: Math.abs(transaction.amount), // Update with final amount
+            date: transaction.date, // Update with final date
+          })
+          .eq('id', existingTransaction.id)
+        updatedCount++
+      }
+      // If existing transaction doesn't have Plaid ID, backfill it
+      else if (!existingTransaction.plaid_transaction_id && transaction.transaction_id) {
         console.log('Backfilling Plaid ID for existing transaction:', existingTransaction.id)
         await supabase
           .from('transactions')
