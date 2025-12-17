@@ -254,6 +254,14 @@ function normalizeDescription(description: string): string {
     .trim()
 }
 
+// Helper function to extract merchant name (first part before location/extra info)
+function getMerchantPrefix(description: string): string {
+  const normalized = normalizeDescription(description)
+  // Take first 3 words as merchant identifier (handles most cases)
+  const words = normalized.split(' ')
+  return words.slice(0, Math.min(3, words.length)).join(' ')
+}
+
 async function syncTransactionsForAccounts(accessToken: string, accounts: any[], userId: string, syncedAccountsCount: number, institutionName: string): Promise<SyncResult> {
   const supabase = await createClient()
 
@@ -276,6 +284,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   const existingByPlaidId = new Map<string, any>()
   const existingByFingerprint = new Map<string, any>()
   const existingByNormalizedFingerprint = new Map<string, any>()
+  const existingByMerchantPrefix = new Map<string, any>()
 
   existingTransactions?.forEach(t => {
     // Plaid ID lookup (primary)
@@ -290,6 +299,11 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     // Normalized fingerprint lookup (fallback #2) - handles variations in spacing and special characters
     const normalizedFingerprint = `${t.date}_${normalizeDescription(t.description)}_${t.amount}_${t.bank.toLowerCase().trim()}`
     existingByNormalizedFingerprint.set(normalizedFingerprint, t)
+
+    // Merchant prefix lookup (fallback #3) - handles pending→posted with location changes
+    // Uses first 3 words of merchant name to match despite different suffixes
+    const merchantFingerprint = `${t.date}_${getMerchantPrefix(t.description)}_${t.amount}_${t.bank.toLowerCase().trim()}`
+    existingByMerchantPrefix.set(merchantFingerprint, t)
   })
 
   let newCount = 0
@@ -377,7 +391,13 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     if (!existingTransaction) {
       existingTransaction = existingByNormalizedFingerprint.get(normalizedFingerprint)
     }
-    
+
+    // Method 4: Check by merchant prefix (handles pending→posted with location/phone number changes)
+    if (!existingTransaction) {
+      const merchantFingerprint = `${transaction.date}_${getMerchantPrefix(transaction.name)}_${Math.abs(transaction.amount)}_${bankName.toLowerCase().trim()}`
+      existingTransaction = existingByMerchantPrefix.get(merchantFingerprint)
+    }
+
     if (existingTransaction) {
       // If existing transaction doesn't have Plaid ID, update it
       if (!existingTransaction.plaid_transaction_id && transaction.transaction_id) {
@@ -438,6 +458,10 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       }
       existingByFingerprint.set(fingerprint, newTransaction)
       existingByNormalizedFingerprint.set(normalizedFingerprint, newTransaction)
+
+      // Add merchant prefix fingerprint for pending→posted duplicate detection
+      const merchantFingerprint = `${transaction.date}_${getMerchantPrefix(transaction.name)}_${Math.abs(transaction.amount)}_${bankName.toLowerCase().trim()}`
+      existingByMerchantPrefix.set(merchantFingerprint, newTransaction)
     }
     processedCount++
   }
