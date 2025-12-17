@@ -19,6 +19,10 @@ interface ConnectedAccount {
   sync_transactions: boolean
   sync_balances: boolean
   created_at: string
+  updated_at: string
+  total_balance: number
+  account_count: number
+  last_balance_update: string | null
 }
 
 export function ConnectedAccounts() {
@@ -27,13 +31,12 @@ export function ConnectedAccounts() {
 
   const loadAccounts = async () => {
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('plaid_items')
-        .select('id, item_id, account_name, institution_name, sync_transactions, sync_balances, created_at')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      // Use the API endpoint to fetch accounts with balance info
+      const response = await fetch('/api/connected-accounts')
+      if (!response.ok) {
+        throw new Error('Failed to fetch connected accounts')
+      }
+      const data = await response.json()
       setAccounts(data || [])
     } catch (error) {
       console.error('Error loading accounts:', error)
@@ -217,11 +220,21 @@ export function ConnectedAccounts() {
             {accounts.map((account) => (
               <div key={account.id} className="p-4 border rounded-lg space-y-3">
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium">{account.institution_name || account.account_name || 'Bank Account'}</p>
                     <p className="text-sm text-muted-foreground">
                       Connected {new Date(account.created_at).toLocaleDateString()}
                     </p>
+                    <div className="flex gap-4 mt-1 text-sm">
+                      <p className="text-muted-foreground">
+                        Last sync: {new Date(account.updated_at).toLocaleString()}
+                      </p>
+                      {account.account_count > 0 && (
+                        <p className="font-medium text-green-600">
+                          Total: ${account.total_balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({account.account_count} account{account.account_count !== 1 ? 's' : ''})
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
