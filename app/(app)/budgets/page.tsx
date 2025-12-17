@@ -74,6 +74,7 @@ export default function BudgetsPage() {
             .select("category_id, amount, transaction_type, recurring, hidden")
             .gte("date", firstDay)
             .lte("date", lastDay)
+            .or("deleted.is.null,deleted.eq.false")
         ])
 
         // Calculate net by category with recurring/variable breakdown

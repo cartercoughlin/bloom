@@ -40,10 +40,11 @@ export async function DELETE(
       )
     }
 
-    // Delete the transaction
+    // Soft delete the transaction (set deleted = true)
+    // This prevents the transaction from showing in UI and from being re-imported during Plaid syncs
     const { error: deleteError } = await supabase
       .from('transactions')
-      .delete()
+      .update({ deleted: true })
       .eq('id', transactionId)
       .eq('user_id', user.id)
 

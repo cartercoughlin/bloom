@@ -271,12 +271,13 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
 
   // Get existing transactions from last 90 days to avoid duplicates
   // Extended to 90 days to catch older categorized transactions
+  // Also fetch deleted transactions to prevent re-importing them
   const lookbackDate = new Date()
   lookbackDate.setDate(lookbackDate.getDate() - 90)
 
   const { data: existingTransactions } = await supabase
     .from('transactions')
-    .select('id, plaid_transaction_id, date, description, amount, bank')
+    .select('id, plaid_transaction_id, date, description, amount, bank, deleted')
     .eq('user_id', userId)
     .gte('date', lookbackDate.toISOString().split('T')[0])
 
@@ -422,6 +423,13 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     }
 
     if (existingTransaction) {
+      // Check if transaction was deleted by user - don't re-import it
+      if (existingTransaction.deleted) {
+        console.log('Transaction was deleted by user, skipping:', existingTransaction.id)
+        processedCount++
+        continue
+      }
+
       // If this is a pending→posted update (has pending_transaction_id), update the existing transaction
       if (transaction.pending_transaction_id) {
         console.log(`Updating pending transaction ${transaction.pending_transaction_id} to posted with ID ${transaction.transaction_id}`)
