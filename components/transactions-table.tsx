@@ -595,7 +595,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
                       onClick={() => handleDeleteTransaction(selectedTransaction.id)}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      className="bg-destructive text-white hover:bg-destructive/90"
                     >
                       Delete
                     </AlertDialogAction>
