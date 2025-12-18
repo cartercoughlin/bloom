@@ -5,6 +5,7 @@ import { Analytics } from "@vercel/analytics/next"
 import { RegisterServiceWorker } from "./register-sw"
 import { PWAUpdatePrompt } from "@/components/pwa-update-prompt"
 import { ThemeProvider } from "@/components/theme-provider"
+import { PrivacyProvider } from "@/contexts/privacy-context"
 import "./globals.css"
 
 const _geist = Geist({ subsets: ["latin"] })
@@ -79,7 +80,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
+          <PrivacyProvider>
+            {children}
+          </PrivacyProvider>
         </ThemeProvider>
         <Analytics />
         <RegisterServiceWorker />

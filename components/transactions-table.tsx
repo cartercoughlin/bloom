@@ -13,6 +13,7 @@ import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat, Trash2 } from "lu
 import { format } from "date-fns"
 import { TransactionCategorizer } from "./transaction-categorizer"
 import Link from "next/link"
+import { PrivateAmount } from "./private-amount"
 
 interface Transaction {
   id: string
@@ -449,11 +450,13 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                               </Badge>
                             )}
                           </div>
-                          <span className={`text-sm md:text-base font-semibold flex-shrink-0 ${
-                            tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
-                          }`}>
-                            {tx.transaction_type === "credit" ? "+" : "-"}${tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
+                          <PrivateAmount
+                            amount={tx.amount}
+                            type={tx.transaction_type}
+                            className={`text-sm md:text-base font-semibold flex-shrink-0 ${
+                              tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                            }`}
+                          />
                         </div>
                         
                         {/* Category */}
@@ -521,11 +524,13 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                   )}
                   <p className="text-sm text-muted-foreground">{selectedTransaction.bank}</p>
                 </div>
-                <div className={`text-lg font-semibold ${
-                  selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
-                }`}>
-                  {selectedTransaction.transaction_type === "credit" ? "+" : "-"}${selectedTransaction.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
+                <PrivateAmount
+                  amount={selectedTransaction.amount}
+                  type={selectedTransaction.transaction_type}
+                  className={`text-lg font-semibold ${
+                    selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                  }`}
+                />
               </div>
 
               <div>

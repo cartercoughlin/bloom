@@ -3,8 +3,11 @@
 import { useState, useEffect } from 'react'
 import { ConnectedAccounts } from '@/components/connected-accounts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
-import { TrendingUp, TrendingDown } from 'lucide-react'
+import { TrendingUp, TrendingDown, EyeOff, Eye } from 'lucide-react'
+import { usePrivacy } from '@/contexts/privacy-context'
+import { PrivateAmount } from '@/components/private-amount'
 
 interface AccountBalance {
   account_name: string
@@ -15,6 +18,7 @@ interface AccountBalance {
 export default function AccountsPage() {
   const [balances, setBalances] = useState<AccountBalance[]>([])
   const [loading, setLoading] = useState(true)
+  const { privacyMode, togglePrivacyMode } = usePrivacy()
 
   useEffect(() => {
     const loadBalances = async () => {
@@ -46,7 +50,18 @@ export default function AccountsPage() {
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-7xl pb-20 md:pb-6">
       <div className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">Accounts</h1>
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-2xl md:text-3xl font-bold">Accounts</h1>
+          <Button
+            variant={privacyMode ? "default" : "outline"}
+            size="sm"
+            onClick={togglePrivacyMode}
+            className="gap-2"
+          >
+            {privacyMode ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            <span className="hidden sm:inline">{privacyMode ? "Show Numbers" : "Hide Numbers"}</span>
+          </Button>
+        </div>
         <p className="text-muted-foreground">
           Manage your connected bank accounts and view your net worth
         </p>
@@ -66,9 +81,10 @@ export default function AccountsPage() {
                 ) : (
                   <TrendingDown className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
                 )}
-                <span className={`text-lg md:text-2xl font-bold ${totalNetWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  ${totalNetWorth.toLocaleString()}
-                </span>
+                <PrivateAmount
+                  amount={totalNetWorth}
+                  className={`text-lg md:text-2xl font-bold ${totalNetWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                />
               </div>
             </CardContent>
           </Card>
@@ -78,9 +94,10 @@ export default function AccountsPage() {
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Assets</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 pb-2 md:pb-6">
-              <div className="text-lg md:text-2xl font-bold text-green-600">
-                ${assets.toLocaleString()}
-              </div>
+              <PrivateAmount
+                amount={assets}
+                className="text-lg md:text-2xl font-bold text-green-600"
+              />
             </CardContent>
           </Card>
 
@@ -89,9 +106,10 @@ export default function AccountsPage() {
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Liabilities</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 pb-2 md:pb-6">
-              <div className="text-lg md:text-2xl font-bold text-red-600">
-                ${liabilities.toLocaleString()}
-              </div>
+              <PrivateAmount
+                amount={liabilities}
+                className="text-lg md:text-2xl font-bold text-red-600"
+              />
             </CardContent>
           </Card>
         </div>

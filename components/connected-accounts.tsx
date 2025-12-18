@@ -10,6 +10,7 @@ import { CreditCard, Plus, Trash2 } from 'lucide-react'
 import { PlaidLink } from './plaid-link'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { PrivateAmount } from './private-amount'
 
 interface ConnectedAccount {
   id: string
@@ -231,7 +232,7 @@ export function ConnectedAccounts() {
                       </p>
                       {account.account_count > 0 && (
                         <p className="font-medium text-green-600">
-                          Total: ${account.total_balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ({account.account_count} account{account.account_count !== 1 ? 's' : ''})
+                          Total: <PrivateAmount amount={account.total_balance} className="inline" /> ({account.account_count} account{account.account_count !== 1 ? 's' : ''})
                         </p>
                       )}
                     </div>
