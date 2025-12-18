@@ -1,6 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PrivateAmount } from "./private-amount"
 
 interface Transaction {
   id: string
@@ -69,7 +70,7 @@ export function TopTransactions({ transactions }: TopTransactionsProps) {
                 </div>
               </div>
               <div className="text-right ml-2">
-                <p className="font-semibold text-red-600 text-xs md:text-sm whitespace-nowrap">${Number(tx.amount).toFixed(2)}</p>
+                <PrivateAmount amount={Number(tx.amount)} className="font-semibold text-red-600 text-xs md:text-sm whitespace-nowrap" />
               </div>
             </div>
           ))}

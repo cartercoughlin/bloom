@@ -1,6 +1,7 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { PrivateAmount } from "./private-amount"
 
 interface Transaction {
   amount: number
@@ -80,13 +81,15 @@ export function CategorySummary({ transactions }: CategorySummaryProps) {
                     {item.icon} {item.name}
                   </span>
                 </div>
-                <span className={`font-bold text-sm ${item.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {item.net >= 0 ? '+' : '-'}${Math.abs(item.net).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
+                <PrivateAmount
+                  amount={Math.abs(item.net)}
+                  prefix={item.net >= 0 ? '+$' : '-$'}
+                  className={`font-bold text-sm ${item.net >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                />
               </div>
               <div className="flex justify-between text-xs text-muted-foreground pl-5">
-                <span>Income: ${item.income.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                <span>Expenses: ${item.expenses.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span>Income: <PrivateAmount amount={item.income} className="inline" /></span>
+                <span>Expenses: <PrivateAmount amount={item.expenses} className="inline" /></span>
               </div>
             </div>
           ))}

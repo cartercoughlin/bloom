@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Plus, Edit, Trash2, Loader2, Target } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { PrivateAmount } from "./private-amount"
 
 interface Budget {
   id: string
@@ -315,15 +316,15 @@ export function BudgetList({
                         <CardDescription className="text-xs md:text-sm">
                           {isIncomeCategory ? (
                             <>
-                              Income: ${income.toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                              {expenses > 0 && <span className="text-muted-foreground ml-2">• Expenses: ${expenses.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>}
+                              Income: <PrivateAmount amount={income} className="inline" />
+                              {expenses > 0 && <span className="text-muted-foreground ml-2">• Expenses: <PrivateAmount amount={expenses} className="inline" /></span>}
                             </>
                           ) : (
                             <>
-                              Net Spending: ${netSpending.toLocaleString('en-US', { maximumFractionDigits: 0 })} of ${Number(budget.amount).toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                              Net Spending: <PrivateAmount amount={netSpending} className="inline" /> of <PrivateAmount amount={Number(budget.amount)} className="inline" />
                               {income > 0 && (
                                 <span className="text-green-600 ml-2">
-                                  • Income offset: ${income.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                                  • Income offset: <PrivateAmount amount={income} className="inline" />
                                 </span>
                               )}
                             </>
@@ -332,9 +333,11 @@ export function BudgetList({
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <span className={`text-sm md:text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {net >= 0 ? '+' : '-'}${Math.abs(net).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-                      </span>
+                      <PrivateAmount
+                        amount={Math.abs(net)}
+                        prefix={net >= 0 ? '+$' : '-$'}
+                        className={`text-sm md:text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                      />
                       <div className="flex items-center gap-1 md:gap-2">
                         <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
                           <Edit className="h-3 w-3 md:h-4 md:w-4" />
@@ -367,8 +370,8 @@ export function BudgetList({
                     </span>
                     <span className={isOverBudget ? "text-red-600 font-medium" : "text-green-600"}>
                       {isIncomeCategory
-                        ? `Net: +$${Math.abs(net).toLocaleString('en-US', { maximumFractionDigits: 0 })}`
-                        : `$${Math.abs(Number(budget.amount) - netSpending).toLocaleString('en-US', { maximumFractionDigits: 0 })} ${isOverBudget ? "over budget" : "remaining"}`
+                        ? (<>Net: <PrivateAmount amount={Math.abs(net)} prefix="+$" className="inline" /></>)
+                        : (<><PrivateAmount amount={Math.abs(Number(budget.amount) - netSpending)} className="inline" /> {isOverBudget ? "over budget" : "remaining"}</>)
                       }
                     </span>
                   </div>
