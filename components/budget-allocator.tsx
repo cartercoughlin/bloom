@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
+import { PrivateAmount } from "./private-amount"
+import { usePrivacy } from "@/contexts/privacy-context"
 
 interface Budget {
   id: string
@@ -22,6 +24,7 @@ interface BudgetAllocatorProps {
 }
 
 export function BudgetAllocator({ budgets, availableToAllocate, onAllocate }: BudgetAllocatorProps) {
+  const { privacyMode } = usePrivacy()
   const [allocations, setAllocations] = useState<Record<string, string>>({})
   const [totalAllocated, setTotalAllocated] = useState(0)
 
@@ -65,16 +68,16 @@ export function BudgetAllocator({ budgets, availableToAllocate, onAllocate }: Bu
         <div className="p-4 bg-muted rounded-lg">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium">Available to Allocate</span>
-            <span className="text-lg font-bold">${availableToAllocate.toFixed(2)}</span>
+            <span className="text-lg font-bold"><PrivateAmount amount={availableToAllocate} /></span>
           </div>
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm text-muted-foreground">Currently Allocating</span>
-            <span className="text-sm">${totalAllocated.toFixed(2)}</span>
+            <span className="text-sm"><PrivateAmount amount={totalAllocated} /></span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-sm font-medium">Remaining</span>
             <span className={`text-sm font-bold ${remainingToAllocate < 0 ? 'text-red-500' : 'text-green-600'}`}>
-              ${remainingToAllocate.toFixed(2)}
+              <PrivateAmount amount={remainingToAllocate} />
             </span>
           </div>
           <Progress 
@@ -91,8 +94,8 @@ export function BudgetAllocator({ budgets, availableToAllocate, onAllocate }: Bu
                 <div>
                   <h4 className="font-medium">{budget.name}</h4>
                   <p className="text-sm text-muted-foreground">
-                    Allocated: ${budget.allocated_amount.toFixed(2)} |
-                    Available: ${budget.available_amount.toFixed(2)}
+                    Allocated: <PrivateAmount amount={budget.allocated_amount} /> |
+                    Available: <PrivateAmount amount={budget.available_amount} />
                   </p>
                 </div>
               </div>
@@ -106,7 +109,7 @@ export function BudgetAllocator({ budgets, availableToAllocate, onAllocate }: Bu
                     id={`allocation-${budget.id}`}
                     type="number"
                     step="0.01"
-                    placeholder={budget.allocated_amount > 0 ? budget.allocated_amount.toFixed(2) : "0.00"}
+                    placeholder={privacyMode ? '••••' : (budget.allocated_amount > 0 ? budget.allocated_amount.toFixed(2) : "0.00")}
                     value={allocations[budget.id] || ''}
                     onChange={(e) => handleAllocationChange(budget.id, e.target.value)}
                   />

@@ -3,6 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts"
+import { usePrivacy } from "@/contexts/privacy-context"
 
 interface Transaction {
   date: string
@@ -15,6 +16,8 @@ interface MonthlyTrendProps {
 }
 
 export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
+  const { privacyMode } = usePrivacy()
+
   // Group by month
   const monthlyData: Record<
     string,
@@ -87,11 +90,11 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis dataKey="month" className="text-[10px] md:text-xs" />
-              <YAxis className="text-[10px] md:text-xs" tickFormatter={(value) => `$${value.toLocaleString('en-US')}`} />
+              <YAxis className="text-[10px] md:text-xs" tickFormatter={(value) => privacyMode ? '••••' : `$${value.toLocaleString('en-US')}`} />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
-                    formatter={(value) => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    formatter={(value) => privacyMode ? '••••' : `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                     labelFormatter={(label) => label}
                   />
                 }

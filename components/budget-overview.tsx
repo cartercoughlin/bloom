@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { TrendingDown, TrendingUp, DollarSign, Target } from "lucide-react"
 import { PrivateAmount } from "./private-amount"
+import { usePrivacy } from "@/contexts/privacy-context"
 
 interface Budget {
   id: string
@@ -30,6 +31,7 @@ interface BudgetOverviewProps {
 }
 
 export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOverviewProps) {
+  const { privacyMode } = usePrivacy()
   const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
   
   // Calculate recurring and variable spending separately
@@ -147,7 +149,7 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
               <div
                 className="absolute left-0 top-0 h-full bg-gray-400 transition-all duration-300"
                 style={{ width: `${Math.min(recurringPercentage, 100)}%` }}
-                title={`Recurring: $${totalRecurring.toFixed(2)}`}
+                title={privacyMode ? 'Recurring: ••••' : `Recurring: $${totalRecurring.toFixed(2)}`}
               />
 
               {/* Variable expenses progress */}
@@ -158,7 +160,7 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
                   width: `${Math.min(variablePercentage, 100 - recurringPercentage)}%`,
                   background: 'linear-gradient(to right, #9ca3af, #22c55e)'
                 }}
-                title={`Variable: $${totalVariable.toFixed(2)}`}
+                title={privacyMode ? 'Variable: ••••' : `Variable: $${totalVariable.toFixed(2)}`}
               />
             </div>
 
@@ -169,14 +171,14 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
                 style={{
                   left: `${Math.min(recurringPercentage + ((100 - recurringPercentage) * (percentageThroughMonth / 100)), 100)}%`
                 }}
-                title={`Expected variable: $${((totalBudget - totalRecurring) * (percentageThroughMonth / 100)).toFixed(2)}`}
+                title={privacyMode ? 'Expected variable: ••••' : `Expected variable: $${((totalBudget - totalRecurring) * (percentageThroughMonth / 100)).toFixed(2)}`}
               />
             )}
           </div>
           
           <div className="flex justify-between text-xs md:text-sm text-muted-foreground mt-2">
-            <span>Recurring: ${totalRecurring.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
-            <span className="text-green-600">Variable: ${totalVariable.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+            <span>Recurring: <PrivateAmount amount={totalRecurring} prefix="$" /></span>
+            <span className="text-green-600">Variable: <PrivateAmount amount={totalVariable} prefix="$" /></span>
           </div>
         </CardContent>
       </Card>
