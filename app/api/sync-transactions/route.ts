@@ -68,11 +68,13 @@ export async function POST() {
     const errors: string[] = []
 
     // Sync transactions for each connected account
+    // Note: Balance sync is disabled here to avoid Plaid API costs ($0.10/call)
+    // Use the dedicated "Refresh Balances" button instead
     for (const item of plaidItems) {
       try {
         const result = await syncPlaidTransactions(item.access_token, {
           syncTransactions: item.sync_transactions,
-          syncBalances: item.sync_balances
+          syncBalances: false // Never sync balances during transaction sync
         })
 
         // Always collect account IDs, even if sync failed

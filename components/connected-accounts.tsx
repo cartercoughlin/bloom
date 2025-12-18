@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
-import { CreditCard, Plus, Trash2 } from 'lucide-react'
+import { CreditCard, Plus, Trash2, RefreshCw } from 'lucide-react'
 import { PlaidLink } from './plaid-link'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -29,6 +29,7 @@ interface ConnectedAccount {
 export function ConnectedAccounts() {
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshingBalances, setRefreshingBalances] = useState(false)
 
   const loadAccounts = async () => {
     try {
@@ -189,6 +190,34 @@ export function ConnectedAccounts() {
     }
   }
 
+  const refreshBalances = async () => {
+    setRefreshingBalances(true)
+    try {
+      const response = await fetch('/api/sync-balances', {
+        method: 'POST',
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh balances')
+      }
+
+      const result = await response.json()
+
+      if (result.success) {
+        toast.success(`Successfully refreshed ${result.syncedAccounts} account${result.syncedAccounts !== 1 ? 's' : ''}`)
+        // Reload accounts to show updated balances
+        loadAccounts()
+      } else {
+        throw new Error(result.message || 'Failed to refresh balances')
+      }
+    } catch (error) {
+      console.error('Error refreshing balances:', error)
+      toast.error('Failed to refresh balances')
+    } finally {
+      setRefreshingBalances(false)
+    }
+  }
+
   useEffect(() => {
     loadAccounts()
   }, [])
@@ -296,9 +325,20 @@ export function ConnectedAccounts() {
             ))}
           </div>
         )}
-        
+
         <div className="pt-4 border-t">
-          <PlaidLink onSuccess={handlePlaidSuccess} />
+          <div className="flex flex-col sm:flex-row gap-2">
+            <PlaidLink onSuccess={handlePlaidSuccess} />
+            <Button
+              onClick={refreshBalances}
+              disabled={refreshingBalances || accounts.length === 0}
+              variant="outline"
+              className="w-full sm:w-auto"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshingBalances ? 'animate-spin' : ''}`} />
+              {refreshingBalances ? 'Refreshing...' : 'Refresh Balances'}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
