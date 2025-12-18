@@ -326,7 +326,7 @@ export function ConnectedAccounts() {
           </div>
         )}
 
-        <div className="pt-4 border-t space-y-2">
+        <div className="pt-4 border-t">
           <div className="flex flex-col sm:flex-row gap-2">
             <PlaidLink onSuccess={handlePlaidSuccess} />
             <Button
@@ -339,9 +339,6 @@ export function ConnectedAccounts() {
               {refreshingBalances ? 'Refreshing...' : 'Refresh Balances'}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Note: Refreshing balances costs $0.10 per account via Plaid API. Only refresh when needed.
-          </p>
         </div>
       </CardContent>
     </Card>
