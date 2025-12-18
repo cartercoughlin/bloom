@@ -3,6 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { TrendingDown, TrendingUp, DollarSign, Target } from "lucide-react"
+import { PrivateAmount } from "./private-amount"
 
 interface Budget {
   id: string
@@ -82,7 +83,7 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
           <Target className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
-          <div className="text-xl md:text-3xl font-bold">${totalBudget.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          <PrivateAmount amount={totalBudget} className="text-xl md:text-3xl font-bold" />
           <p className="text-xs md:text-sm text-muted-foreground">This month</p>
         </CardContent>
       </Card>
@@ -93,7 +94,7 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
           <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-muted-foreground" />
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
-          <div className="text-xl md:text-3xl font-bold text-red-600">${totalSpent.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
+          <PrivateAmount amount={totalSpent} className="text-xl md:text-3xl font-bold text-red-600" />
           <p className="text-xs md:text-sm text-muted-foreground">{percentageUsed.toFixed(1)}% of budget</p>
         </CardContent>
       </Card>
@@ -108,9 +109,10 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
           )}
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
-          <div className={`text-xl md:text-3xl font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}>
-            ${Math.abs(remaining).toLocaleString('en-US', { maximumFractionDigits: 0 })}
-          </div>
+          <PrivateAmount
+            amount={Math.abs(remaining)}
+            className={`text-xl md:text-3xl font-bold ${remaining >= 0 ? "text-green-600" : "text-red-600"}`}
+          />
           <p className="text-xs md:text-sm text-muted-foreground">{remaining >= 0 ? "Under budget" : "Over budget"}</p>
         </CardContent>
       </Card>
