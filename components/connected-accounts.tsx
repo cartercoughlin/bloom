@@ -11,6 +11,8 @@ import { PlaidLink } from './plaid-link'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { PrivateAmount } from './private-amount'
+import { useRouter } from 'next/navigation'
+import { cache } from '@/lib/capacitor'
 
 interface ConnectedAccount {
   id: string
@@ -30,6 +32,7 @@ export function ConnectedAccounts() {
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshingBalances, setRefreshingBalances] = useState(false)
+  const router = useRouter()
 
   const loadAccounts = async () => {
     try {
@@ -205,8 +208,17 @@ export function ConnectedAccounts() {
 
       if (result.success) {
         toast.success(`Successfully refreshed ${result.syncedAccounts} account${result.syncedAccounts !== 1 ? 's' : ''}`)
+
+        // Clear cached data to ensure net worth page updates
+        await cache.remove('dashboard-data')
+        await cache.remove('account-balances')
+        await cache.remove('net-worth-data')
+
         // Reload accounts to show updated balances
         loadAccounts()
+
+        // Trigger router refresh to update server-rendered pages
+        router.refresh()
       } else {
         throw new Error(result.message || 'Failed to refresh balances')
       }
