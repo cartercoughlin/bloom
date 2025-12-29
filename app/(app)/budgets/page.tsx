@@ -7,6 +7,8 @@ import { BudgetList } from "@/components/budget-list"
 import { BudgetOverview } from "@/components/budget-overview"
 import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 
 export default function BudgetsPage() {
   const router = useRouter()
@@ -15,10 +17,135 @@ export default function BudgetsPage() {
   const [categories, setCategories] = useState<any[]>([])
   const [netByCategory, setNetByCategory] = useState<any>({})
   const [spendingByCategory, setSpendingByCategory] = useState<any>({})
-  const [currentDate] = useState(new Date())
+  const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
 
-  const currentMonth = currentDate.getMonth() + 1
-  const currentYear = currentDate.getFullYear()
+  // Selected month/year for viewing (can be different from current month)
+  const today = new Date()
+  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1)
+  const [selectedYear, setSelectedYear] = useState(today.getFullYear())
+
+  const currentMonth = today.getMonth() + 1
+  const currentYear = today.getFullYear()
+
+  // Navigate to previous month
+  const goToPreviousMonth = () => {
+    if (selectedMonth === 1) {
+      setSelectedMonth(12)
+      setSelectedYear(selectedYear - 1)
+    } else {
+      setSelectedMonth(selectedMonth - 1)
+    }
+  }
+
+  // Navigate to next month
+  const goToNextMonth = () => {
+    if (selectedMonth === 12) {
+      setSelectedMonth(1)
+      setSelectedYear(selectedYear + 1)
+    } else {
+      setSelectedMonth(selectedMonth + 1)
+    }
+  }
+
+  // Auto-create budgets for new month from previous month
+  const autoCreateBudgetsFromPreviousMonth = async (supabase: any, userId: string) => {
+    // Get previous month
+    const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
+    const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
+
+    // Check if budgets exist for selected month
+    const { data: existingBudgets } = await supabase
+      .from("budgets")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("month", selectedMonth)
+      .eq("year", selectedYear)
+
+    // If budgets already exist, don't create
+    if (existingBudgets && existingBudgets.length > 0) {
+      return
+    }
+
+    // Get previous month's budgets
+    const { data: prevBudgets } = await supabase
+      .from("budgets")
+      .select("category_id, amount")
+      .eq("user_id", userId)
+      .eq("month", prevMonth)
+      .eq("year", prevYear)
+
+    if (!prevBudgets || prevBudgets.length === 0) {
+      return
+    }
+
+    // Create budgets for current month
+    const newBudgets = prevBudgets.map((budget: any) => ({
+      user_id: userId,
+      category_id: budget.category_id,
+      amount: budget.amount,
+      month: selectedMonth,
+      year: selectedYear
+    }))
+
+    await supabase.from("budgets").insert(newBudgets)
+    console.log(`Auto-created ${newBudgets.length} budgets for ${selectedYear}-${selectedMonth}`)
+  }
+
+  // Calculate rollover from previous month
+  const calculateRollover = async (supabase: any, userId: string) => {
+    const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
+    const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
+
+    // Get previous month's budgets
+    const { data: prevBudgets } = await supabase
+      .from("budgets")
+      .select("category_id, amount")
+      .eq("user_id", userId)
+      .eq("month", prevMonth)
+      .eq("year", prevYear)
+
+    if (!prevBudgets || prevBudgets.length === 0) {
+      return {}
+    }
+
+    // Get previous month's transactions
+    const prevFirstDay = new Date(prevYear, prevMonth - 1, 1).toISOString().split("T")[0]
+    const prevLastDay = new Date(prevYear, prevMonth, 0).toISOString().split("T")[0]
+
+    const { data: prevTransactions } = await supabase
+      .from("transactions")
+      .select("category_id, amount, transaction_type, hidden")
+      .eq("user_id", userId)
+      .gte("date", prevFirstDay)
+      .lte("date", prevLastDay)
+      .or("deleted.is.null,deleted.eq.false")
+
+    // Calculate spending by category
+    const prevSpending: Record<string, number> = {}
+    prevTransactions?.forEach((tx: any) => {
+      if (tx.hidden) return
+      if (tx.category_id) {
+        if (!prevSpending[tx.category_id]) {
+          prevSpending[tx.category_id] = 0
+        }
+        if (tx.transaction_type === 'debit') {
+          prevSpending[tx.category_id] += Number(tx.amount)
+        }
+      }
+    })
+
+    // Calculate rollover (budget - spending)
+    const rollover: Record<string, number> = {}
+    prevBudgets.forEach((budget: any) => {
+      const spent = prevSpending[budget.category_id] || 0
+      const remaining = Number(budget.amount) - spent
+      if (remaining > 0) {
+        rollover[budget.category_id] = remaining
+      }
+    })
+
+    return rollover
+  }
 
   useEffect(() => {
     async function loadData() {
@@ -33,19 +160,26 @@ export default function BudgetsPage() {
         }
 
         // Try to load from cache first for instant display
-        const cacheKey = `budgets-${currentYear}-${currentMonth}`
+        const cacheKey = `budgets-${selectedYear}-${selectedMonth}`
         const cachedData = await cache.getJSON<any>(cacheKey)
         if (cachedData) {
           setBudgets(cachedData.budgets || [])
           setCategories(cachedData.categories || [])
           setNetByCategory(cachedData.netByCategory || {})
           setSpendingByCategory(cachedData.spendingByCategory || {})
+          setRolloverByCategory(cachedData.rolloverByCategory || {})
           setLoading(false)
         }
 
-        // Get transactions for current month
-        const firstDay = new Date(currentYear, currentMonth - 1, 1).toISOString().split("T")[0]
-        const lastDay = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0]
+        // Auto-create budgets from previous month if needed
+        await autoCreateBudgetsFromPreviousMonth(supabase, user.id)
+
+        // Calculate rollover from previous month
+        const rollover = await calculateRollover(supabase, user.id)
+
+        // Get transactions for selected month
+        const firstDay = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split("T")[0]
+        const lastDay = new Date(selectedYear, selectedMonth, 0).toISOString().split("T")[0]
 
         // Fetch fresh data
         const [budgetsResult, categoriesResult, transactionsResult] = await Promise.all([
@@ -60,8 +194,9 @@ export default function BudgetsPage() {
                 icon
               )
             `)
-            .eq("month", currentMonth)
-            .eq("year", currentYear),
+            .eq("user_id", user.id)
+            .eq("month", selectedMonth)
+            .eq("year", selectedYear),
 
           supabase
             .from("categories")
@@ -72,6 +207,7 @@ export default function BudgetsPage() {
           supabase
             .from("transactions")
             .select("category_id, amount, transaction_type, recurring, hidden")
+            .eq("user_id", user.id)
             .gte("date", firstDay)
             .lte("date", lastDay)
             .or("deleted.is.null,deleted.eq.false")
@@ -131,7 +267,8 @@ export default function BudgetsPage() {
           budgets: budgetsResult.data || [],
           categories: categoriesResult.data || [],
           netByCategory: categoryTotals,
-          spendingByCategory: spending
+          spendingByCategory: spending,
+          rolloverByCategory: rollover
         }
 
         // Update state
@@ -139,11 +276,13 @@ export default function BudgetsPage() {
         setCategories(newData.categories)
         setNetByCategory(newData.netByCategory)
         setSpendingByCategory(newData.spendingByCategory)
+        setRolloverByCategory(newData.rolloverByCategory)
 
         console.log('Budgets page data loaded:', {
           budgets: newData.budgets.length,
           categories: newData.categories.length,
-          transactions: transactionsResult.data?.length
+          transactions: transactionsResult.data?.length,
+          rollover: Object.keys(rollover).length
         })
 
         setLoading(false)
@@ -157,7 +296,7 @@ export default function BudgetsPage() {
     }
 
     loadData()
-  }, [router, currentDate])
+  }, [router, selectedMonth, selectedYear])
 
   if (loading && budgets.length === 0) {
     return (
@@ -174,19 +313,52 @@ export default function BudgetsPage() {
     )
   }
 
+  const monthName = new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' })
+  const isCurrentMonth = selectedMonth === currentMonth && selectedYear === currentYear
+
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
       <div className="mb-4 md:mb-8">
-        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Budget</h1>
-        <p className="text-muted-foreground text-xs md:text-sm">Set spending limits and track progress by category</p>
+        <div className="flex items-center justify-between mb-1 md:mb-2">
+          <h1 className="text-xl md:text-3xl font-bold text-green-600">Budget</h1>
+
+          {/* Month Navigation */}
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToPreviousMonth}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="text-sm md:text-base font-medium min-w-[120px] md:min-w-[140px] text-center">
+              {monthName} {selectedYear}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToNextMonth}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        <p className="text-muted-foreground text-xs md:text-sm">
+          {isCurrentMonth ? 'Set spending limits and track progress by category' : 'Review past budgets and spending'}
+        </p>
       </div>
 
       <div className="space-y-6">
         <BudgetOverview
           budgets={budgets || []}
           netByCategory={netByCategory}
-          month={currentMonth}
-          year={currentYear}
+          rolloverByCategory={rolloverByCategory}
+          month={selectedMonth}
+          year={selectedYear}
         />
 
         <BudgetList
@@ -194,8 +366,9 @@ export default function BudgetsPage() {
           categories={categories || []}
           netByCategory={netByCategory}
           spending={spendingByCategory}
-          month={currentMonth}
-          year={currentYear}
+          rolloverByCategory={rolloverByCategory}
+          month={selectedMonth}
+          year={selectedYear}
         />
       </div>
     </div>

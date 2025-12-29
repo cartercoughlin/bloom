@@ -23,7 +23,11 @@ export default function CategoriesPage() {
         return
       }
 
-      const { data } = await supabase.from("categories").select("*").order("name")
+      const { data } = await supabase
+        .from("categories")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name")
       setCategories(data || [])
       setLoading(false)
     }
