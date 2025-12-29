@@ -51,6 +51,7 @@ interface BudgetListProps {
     variableExpenses: number
   }>
   spending: Record<string, number>
+  rolloverByCategory?: Record<string, number>
   month: number
   year: number
 }
@@ -60,6 +61,7 @@ export function BudgetList({
   categories: initialCategories,
   netByCategory,
   spending,
+  rolloverByCategory = {},
   month,
   year
 }: BudgetListProps) {
@@ -92,7 +94,14 @@ export function BudgetList({
 
   const fetchLatestCategories = async () => {
     const supabase = createClient()
-    const { data } = await supabase.from("categories").select("*").order("name")
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data } = await supabase
+      .from("categories")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("name")
     if (data) {
       setCategories(data)
     }
@@ -261,11 +270,18 @@ export function BudgetList({
             const recurringExpenses = categoryData.recurringExpenses
             const variableExpenses = categoryData.variableExpenses
 
+            // Get rollover for this category
+            const rollover = rolloverByCategory[budget.category_id] || 0
+
+            // Budget amount including rollover
+            const baseBudget = Number(budget.amount)
+            const totalBudget = baseBudget + rollover
+
             // For income categories (income > expenses), net is negative, so don't show budget usage
             // For expense categories, show net spending (expenses - income) against budget
             const netSpending = Math.max(0, expenses - income) // Don't go negative
-            const percentage = (netSpending / Number(budget.amount)) * 100
-            const isOverBudget = netSpending > Number(budget.amount)
+            const percentage = (netSpending / totalBudget) * 100
+            const isOverBudget = netSpending > totalBudget
             const isIncomeCategory = income > expenses
 
             // Calculate expected spending considering recurring vs variable expenses
@@ -273,26 +289,14 @@ export function BudgetList({
             const calculateExpectedSpending = () => {
               if (percentageThroughMonth === null) return 0
 
-              // Expected spending should be based on budget, not historical spending
+              // Expected spending should be based on budget (including rollover), not historical spending
               // Recurring expenses are expected immediately, remaining budget scales with time
               const netRecurringExpenses = Math.max(0, recurringExpenses - income)
-              const remainingBudgetAfterRecurring = Math.max(0, Number(budget.amount) - netRecurringExpenses)
-              
+              const remainingBudgetAfterRecurring = Math.max(0, totalBudget - netRecurringExpenses)
+
               // Expected = recurring (immediate) + remaining budget (scaled by time)
               const expected = netRecurringExpenses + (remainingBudgetAfterRecurring * (percentageThroughMonth / 100))
-              
-              // Debug for wants category
-              if (budget.categories?.name === 'Wants') {
-                console.log('Wants category debug (fixed):', {
-                  percentageThroughMonth,
-                  budgetAmount: Number(budget.amount),
-                  netRecurringExpenses,
-                  remainingBudgetAfterRecurring,
-                  expected,
-                  expectedPercentage: (expected / Number(budget.amount)) * 100
-                })
-              }
-              
+
               return expected
             }
 
@@ -321,7 +325,12 @@ export function BudgetList({
                             </>
                           ) : (
                             <>
-                              Net Spending: <PrivateAmount amount={netSpending} className="inline" /> of <PrivateAmount amount={Number(budget.amount)} className="inline" />
+                              Net Spending: <PrivateAmount amount={netSpending} className="inline" /> of <PrivateAmount amount={totalBudget} className="inline" />
+                              {rollover > 0 && (
+                                <span className="text-green-600 ml-2">
+                                  • <PrivateAmount amount={rollover} prefix="$" className="inline" /> rollover
+                                </span>
+                              )}
                               {income > 0 && (
                                 <span className="text-green-600 ml-2">
                                   • Income offset: <PrivateAmount amount={income} className="inline" />
@@ -359,7 +368,7 @@ export function BudgetList({
                     {percentageThroughMonth !== null && !isIncomeCategory && (
                       <div
                         className="absolute -top-1 -bottom-1 w-1 bg-blue-600 dark:bg-blue-400 z-10 shadow-lg"
-                        style={{ left: `${Math.min((expectedSpending / Number(budget.amount)) * 100, 100)}%` }}
+                        style={{ left: `${Math.min((expectedSpending / totalBudget) * 100, 100)}%` }}
                         title={`Expected: $${expectedSpending.toFixed(2)} (${recurringExpenses > 0 ? `$${recurringExpenses.toFixed(2)} recurring + ` : ''}$${(variableExpenses * (percentageThroughMonth / 100)).toFixed(2)} variable)`}
                       />
                     )}
@@ -371,7 +380,7 @@ export function BudgetList({
                     <span className={isOverBudget ? "text-red-600 font-medium" : "text-green-600"}>
                       {isIncomeCategory
                         ? (<>Net: <PrivateAmount amount={Math.abs(net)} prefix="+$" className="inline" /></>)
-                        : (<><PrivateAmount amount={Math.abs(Number(budget.amount) - netSpending)} className="inline" /> {isOverBudget ? "over budget" : "remaining"}</>)
+                        : (<><PrivateAmount amount={Math.abs(totalBudget - netSpending)} className="inline" /> {isOverBudget ? "over budget" : "remaining"}</>)
                       }
                     </span>
                   </div>

@@ -26,13 +26,22 @@ interface BudgetOverviewProps {
     recurringExpenses: number
     variableExpenses: number
   }>
+  rolloverByCategory?: Record<string, number>
   month: number
   year: number
 }
 
-export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOverviewProps) {
+export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, month, year }: BudgetOverviewProps) {
   const { privacyMode } = usePrivacy()
-  const totalBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
+
+  // Calculate total rollover from previous month
+  const totalRollover = Object.values(rolloverByCategory).reduce((sum, amount) => sum + amount, 0)
+
+  // Base budget (before rollover)
+  const baseBudget = budgets.reduce((sum, b) => sum + Number(b.amount), 0)
+
+  // Total budget including rollover
+  const totalBudget = baseBudget + totalRollover
   
   // Calculate recurring and variable spending separately
   const { totalRecurring, totalVariable } = budgets.reduce((acc, budget) => {
@@ -86,7 +95,13 @@ export function BudgetOverview({ budgets, netByCategory, month, year }: BudgetOv
         </CardHeader>
         <CardContent className="pb-2 md:pb-6">
           <PrivateAmount amount={totalBudget} className="text-xl md:text-3xl font-bold" />
-          <p className="text-xs md:text-sm text-muted-foreground">This month</p>
+          {totalRollover > 0 ? (
+            <p className="text-xs md:text-sm text-muted-foreground">
+              <PrivateAmount amount={baseBudget} prefix="$" /> + <PrivateAmount amount={totalRollover} prefix="$" className="text-green-600" /> rollover
+            </p>
+          ) : (
+            <p className="text-xs md:text-sm text-muted-foreground">This month</p>
+          )}
         </CardContent>
       </Card>
 
