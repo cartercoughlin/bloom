@@ -60,6 +60,7 @@ export default function BudgetsPage() {
                 icon
               )
             `)
+            .eq("user_id", user.id)
             .eq("month", currentMonth)
             .eq("year", currentYear),
 
@@ -72,6 +73,7 @@ export default function BudgetsPage() {
           supabase
             .from("transactions")
             .select("category_id, amount, transaction_type, recurring, hidden")
+            .eq("user_id", user.id)
             .gte("date", firstDay)
             .lte("date", lastDay)
             .or("deleted.is.null,deleted.eq.false")

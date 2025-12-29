@@ -14,7 +14,12 @@ export default async function EditCategoryPage({ params }: { params: Promise<{ i
     redirect("/auth/login")
   }
 
-  const { data: category, error } = await supabase.from("categories").select("*").eq("id", id).single()
+  const { data: category, error } = await supabase
+    .from("categories")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .single()
 
   if (error || !category) {
     notFound()

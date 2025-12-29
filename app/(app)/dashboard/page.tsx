@@ -93,6 +93,7 @@ export default function DashboardPage() {
                 icon
               )
             `)
+            .eq("user_id", user.id)
             .gte("date", firstDay)
             .lte("date", lastDay)
             .or("deleted.is.null,deleted.eq.false")
@@ -101,6 +102,7 @@ export default function DashboardPage() {
           supabase
             .from("transactions")
             .select("date, amount, transaction_type")
+            .eq("user_id", user.id)
             .gte("date", new Date(currentYear, currentMonth - 7, 1).toISOString().split("T")[0])
             .or("deleted.is.null,deleted.eq.false"),
 
@@ -118,6 +120,7 @@ export default function DashboardPage() {
                 icon
               )
             `)
+            .eq("user_id", user.id)
             .eq("month", currentMonth)
             .eq("year", currentYear),
 
