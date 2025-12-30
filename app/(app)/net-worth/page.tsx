@@ -16,15 +16,11 @@ export default async function NetWorthPage() {
     redirect("/auth/login")
   }
 
-  console.log('[net-worth] Current user:', user.id, user.email)
-
   // Get all account balances from database
   const { data: allAccounts } = await supabase
     .from("account_balances")
     .select("account_name, account_type, balance, plaid_account_id")
     .eq("user_id", user.id)
-
-  console.log('[net-worth] Found accounts:', allAccounts?.length, 'for user:', user.id)
 
   // Filter accounts based on sync settings (same logic as API endpoint)
   let accounts: Array<{ account_name: string; account_type: string; balance: number }> = []

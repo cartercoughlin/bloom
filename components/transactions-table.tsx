@@ -49,11 +49,6 @@ interface TransactionsTableProps {
 }
 
 export function TransactionsTable({ transactions: initialTransactions, categories: initialCategories }: TransactionsTableProps) {
-  // Debug: Log initial transactions on mount
-  console.log('TransactionsTable - Initial transactions:', initialTransactions)
-  console.log('TransactionsTable - First transaction ID:', initialTransactions?.[0]?.id)
-  console.log('TransactionsTable - First transaction ID type:', typeof initialTransactions?.[0]?.id)
-
   const [transactions, setTransactions] = useState(initialTransactions)
   const [categories, setCategories] = useState(initialCategories)
   const [searchTerm, setSearchTerm] = useState("")
@@ -70,11 +65,6 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      // Debug: Log transaction ID
-      if (!tx.id) {
-        console.error('Transaction missing ID:', tx)
-      }
-
       // Hidden filter - skip hidden transactions unless showHidden is true
       if (tx.hidden && !showHidden) {
         return false
@@ -410,7 +400,6 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
               <div className="space-y-2">
                 {dayTransactions.map((tx) => {
                   const txId = tx.id
-                  console.log('Captured transaction ID:', txId)
 
                   return (
                     <div

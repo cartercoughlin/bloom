@@ -49,8 +49,6 @@ export function ConnectedAccounts() {
         throw new Error('Failed to fetch connected accounts')
       }
       const data = await response.json()
-      console.log('[ConnectedAccounts] Loaded accounts:', data?.length, 'accounts')
-      console.log('[ConnectedAccounts] Account details:', data)
       setAccounts(data || [])
     } catch (error) {
       console.error('Error loading accounts:', error)
