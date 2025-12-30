@@ -77,7 +77,7 @@ export function CategorySummary({ transactions }: CategorySummaryProps) {
         <CardTitle className="text-base md:text-lg">Category Summary</CardTitle>
         <CardDescription className="text-xs md:text-sm">Net amounts by category (Income - Expenses)</CardDescription>
       </CardHeader>
-      <CardContent className="px-3 sm:px-6 pb-4 md:pb-6">
+      <CardContent className="px-3 sm:px-6 pb-0">
         <div className="space-y-2">
           {chartData.map((item) => (
             <div key={item.name} className="border rounded-lg p-3">
@@ -102,7 +102,7 @@ export function CategorySummary({ transactions }: CategorySummaryProps) {
           ))}
         </div>
         {hasMore && (
-          <div className="mt-4 flex justify-center">
+          <div className="mt-4 mb-4 md:mb-6 flex justify-center">
             <Button
               variant="ghost"
               size="sm"
