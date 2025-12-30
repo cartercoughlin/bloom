@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client"
 import { CategoryList } from "@/components/category-list"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { Plus, Settings } from "lucide-react"
+import { Plus } from "lucide-react"
 
 export default function CategoriesPage() {
   const router = useRouter()
@@ -47,12 +47,6 @@ export default function CategoriesPage() {
           <p className="text-muted-foreground text-xs md:text-sm">Manage your spending categories</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/categories/rules">
-            <Button variant="outline" className="text-xs md:text-sm h-8 md:h-10 px-2 md:px-4">
-              <Settings className="mr-0 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
-              <span className="hidden md:inline">Rules</span>
-            </Button>
-          </Link>
           <Link href="/categories/new">
             <Button className="text-xs md:text-sm h-8 md:h-10 px-2 md:px-4">
               <Plus className="mr-0 md:mr-2 h-3 w-3 md:h-4 md:w-4" />

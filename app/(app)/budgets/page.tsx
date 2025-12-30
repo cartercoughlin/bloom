@@ -2,11 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { BudgetList } from "@/components/budget-list"
 import { BudgetOverview } from "@/components/budget-overview"
 import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { FolderKanban } from "lucide-react"
 import { useMonth } from "@/contexts/month-context"
 
 export default function BudgetsPage() {
@@ -291,11 +294,20 @@ export default function BudgetsPage() {
 
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
-      <div className="mb-4 md:mb-8">
-        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Budget</h1>
-        <p className="text-muted-foreground text-xs md:text-sm">
-          {isCurrentMonth() ? 'Set spending limits and track progress by category' : 'Review past budgets and spending'}
-        </p>
+      <div className="flex items-center justify-between mb-4 md:mb-8">
+        <div>
+          <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Budget</h1>
+          <p className="text-muted-foreground text-xs md:text-sm">
+            {isCurrentMonth() ? 'Set spending limits and track progress by category' : 'Review past budgets and spending'}
+          </p>
+        </div>
+        <Link href="/categories">
+          <Button variant="outline" className="text-xs md:text-sm h-8 md:h-10 px-2 md:px-4">
+            <FolderKanban className="mr-0 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
+            <span className="hidden md:inline">Manage Categories</span>
+            <span className="md:hidden">Categories</span>
+          </Button>
+        </Link>
       </div>
 
       <div className="space-y-6">

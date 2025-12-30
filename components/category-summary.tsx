@@ -1,7 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { PrivateAmount } from "./private-amount"
+import { ChevronDown, ChevronUp } from "lucide-react"
 
 interface Transaction {
   amount: number
@@ -19,6 +22,8 @@ interface CategorySummaryProps {
 }
 
 export function CategorySummary({ transactions }: CategorySummaryProps) {
+  const [showAll, setShowAll] = useState(false)
+
   // Calculate net amount (income - expense) by category
   const categoryData: Record<string, { name: string; income: number; expenses: number; net: number; color: string; icon: string | null }> = {}
 
@@ -46,9 +51,11 @@ export function CategorySummary({ transactions }: CategorySummaryProps) {
     }
   })
 
-  const chartData = Object.values(categoryData)
+  const allCategories = Object.values(categoryData)
     .sort((a, b) => Math.abs(b.net) - Math.abs(a.net)) // Sort by absolute value of net
-    .slice(0, 10) // Top 10 categories
+
+  const chartData = showAll ? allCategories : allCategories.slice(0, 5) // Top 5 or all categories
+  const hasMore = allCategories.length > 5
 
   if (chartData.length === 0) {
     return (
@@ -94,6 +101,28 @@ export function CategorySummary({ transactions }: CategorySummaryProps) {
             </div>
           ))}
         </div>
+        {hasMore && (
+          <div className="mt-4 flex justify-center">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAll(!showAll)}
+              className="text-xs"
+            >
+              {showAll ? (
+                <>
+                  <ChevronUp className="h-4 w-4 mr-1" />
+                  Show Less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4 mr-1" />
+                  Show More ({allCategories.length - 5} more)
+                </>
+              )}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
