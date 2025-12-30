@@ -83,6 +83,8 @@ export async function POST(request: Request) {
         access_token: accessToken,
         account_name: accountNames,
         institution_name: institutionName,
+        sync_transactions: true, // Enable transaction sync by default
+        sync_balances: true, // Enable balance sync by default
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }, {
@@ -94,9 +96,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to store access token' }, { status: 500 })
     }
 
-    return NextResponse.json({ 
+    console.log('Account stored successfully, triggering initial sync...')
+
+    // Trigger initial sync of transactions and balances for the newly connected account
+    try {
+      const { syncPlaidTransactions } = await import('@/lib/plaid-sync')
+
+      const syncResult = await syncPlaidTransactions(accessToken, {
+        syncTransactions: true,
+        syncBalances: true
+      })
+
+      console.log('Initial sync completed:', {
+        success: syncResult.success,
+        newTransactions: syncResult.newTransactions,
+        totalProcessed: syncResult.totalProcessed,
+        syncedAccounts: syncResult.syncedAccounts
+      })
+
+      if (!syncResult.success) {
+        console.error('Initial sync failed:', syncResult.error)
+        // Don't fail the connection if sync fails - user can manually sync later
+      }
+    } catch (syncError) {
+      console.error('Error during initial sync:', syncError)
+      // Don't fail the connection if sync fails - user can manually sync later
+    }
+
+    return NextResponse.json({
       success: true,
-      item_id: itemId 
+      item_id: itemId
     })
 
   } catch (error: any) {
