@@ -274,16 +274,11 @@ export function ConnectedAccounts() {
                     <p className="text-sm text-muted-foreground">
                       Connected {new Date(account.created_at).toLocaleDateString()}
                     </p>
-                    <div className="flex gap-4 mt-1 text-sm">
-                      <p className="text-muted-foreground">
-                        Last sync: {new Date(account.updated_at).toLocaleString()}
+                    {account.account_count > 0 && (
+                      <p className="mt-1 text-sm font-medium text-green-600">
+                        Total: <PrivateAmount amount={account.total_balance} className="inline" /> ({account.account_count} account{account.account_count !== 1 ? 's' : ''})
                       </p>
-                      {account.account_count > 0 && (
-                        <p className="font-medium text-green-600">
-                          Total: <PrivateAmount amount={account.total_balance} className="inline" /> ({account.account_count} account{account.account_count !== 1 ? 's' : ''})
-                        </p>
-                      )}
-                    </div>
+                    )}
                   </div>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
