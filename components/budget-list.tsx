@@ -72,6 +72,10 @@ export function BudgetList({
   const [selectedCategoryId, setSelectedCategoryId] = useState("")
   const [amount, setAmount] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [showTransactions, setShowTransactions] = useState(false)
+  const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null)
+  const [categoryTransactions, setCategoryTransactions] = useState<any[]>([])
+  const [loadingTransactions, setLoadingTransactions] = useState(false)
   const router = useRouter()
 
   // Calculate percentage through the month
@@ -185,6 +189,42 @@ export function BudgetList({
       router.refresh()
     } catch (error) {
       console.error("Error deleting budget:", error)
+    }
+  }
+
+  const handleShowTransactions = async (budget: Budget) => {
+    setSelectedBudget(budget)
+    setShowTransactions(true)
+    setLoadingTransactions(true)
+
+    const supabase = createClient()
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Not authenticated")
+
+      // Get transactions for this category and month
+      const firstDay = new Date(year, month - 1, 1).toISOString().split("T")[0]
+      const lastDay = new Date(year, month, 0).toISOString().split("T")[0]
+
+      const { data, error } = await supabase
+        .from("transactions")
+        .select("id, date, description, amount, transaction_type, merchant_name, logo_url, hidden, recurring")
+        .eq("user_id", user.id)
+        .eq("category_id", budget.category_id)
+        .gte("date", firstDay)
+        .lte("date", lastDay)
+        .or("deleted.is.null,deleted.eq.false")
+        .order("date", { ascending: false })
+
+      if (error) throw error
+
+      setCategoryTransactions(data || [])
+    } catch (error) {
+      console.error("Error loading transactions:", error)
+      setCategoryTransactions([])
+    } finally {
+      setLoadingTransactions(false)
     }
   }
 
@@ -312,7 +352,11 @@ export function BudgetList({
             const pacingDifference = percentageThroughMonth !== null ? netSpending - expectedSpending : 0
 
             return (
-              <Card key={budget.id}>
+              <Card
+                key={budget.id}
+                className="cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => handleShowTransactions(budget)}
+              >
                 <CardHeader className="pb-3 md:pb-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2 md:gap-3">
@@ -351,10 +395,26 @@ export function BudgetList({
                       </div>
                     </div>
                     <div className="flex items-center gap-1 md:gap-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleOpenDialog(budget)
+                        }}
+                        className="h-7 w-7 md:h-9 md:w-9"
+                      >
                         <Edit className="h-3 w-3 md:h-4 md:w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(budget.id)} className="h-7 w-7 md:h-9 md:w-9">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDelete(budget.id)
+                        }}
+                        className="h-7 w-7 md:h-9 md:w-9"
+                      >
                         <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
                       </Button>
                     </div>
@@ -406,6 +466,96 @@ export function BudgetList({
           </CardContent>
         </Card>
       )}
+
+      {/* Transactions Modal */}
+      <Dialog open={showTransactions} onOpenChange={setShowTransactions}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedBudget?.categories && (
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-lg"
+                  style={{ backgroundColor: `${selectedBudget.categories.color}20` }}
+                >
+                  {selectedBudget.categories.icon}
+                </div>
+              )}
+              {selectedBudget?.categories?.name} Transactions
+            </DialogTitle>
+            <DialogDescription>
+              {new Date(year, month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })} •{' '}
+              {categoryTransactions.length} transaction{categoryTransactions.length !== 1 ? 's' : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="overflow-y-auto max-h-[60vh] pr-2">
+            {loadingTransactions ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : categoryTransactions.length > 0 ? (
+              <div className="space-y-2">
+                {categoryTransactions.map((tx) => (
+                  <div
+                    key={tx.id}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                      tx.hidden ? 'opacity-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {tx.logo_url && (
+                        <img
+                          src={tx.logo_url}
+                          alt={tx.merchant_name || tx.description}
+                          className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium truncate">
+                            {tx.merchant_name || tx.description}
+                          </span>
+                          {tx.recurring && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                              Recurring
+                            </span>
+                          )}
+                          {tx.hidden && (
+                            <span className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded flex-shrink-0">
+                              Hidden
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(tx.date).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    <PrivateAmount
+                      amount={tx.amount}
+                      type={tx.transaction_type}
+                      className={`font-semibold flex-shrink-0 ${
+                        tx.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
+                      }`}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="text-muted-foreground">No transactions in this category for this month</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

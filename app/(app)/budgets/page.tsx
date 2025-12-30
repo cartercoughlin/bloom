@@ -45,7 +45,7 @@ export default function BudgetsPage() {
       return
     }
 
-    // Get previous month's budgets
+    // Get previous month's budgets (including rollover categories)
     const { data: prevBudgets } = await supabase
       .from("budgets")
       .select("category_id, amount")
@@ -57,7 +57,7 @@ export default function BudgetsPage() {
       return
     }
 
-    // Create budgets for current month
+    // Create budgets for current month (including rollover/savings goal categories)
     const newBudgets = prevBudgets.map((budget: any) => ({
       user_id: userId,
       category_id: budget.category_id,
@@ -170,7 +170,9 @@ export default function BudgetsPage() {
                 id,
                 name,
                 color,
-                icon
+                icon,
+                is_rollover,
+                target_amount
               )
             `)
             .eq("user_id", user.id)
@@ -242,8 +244,13 @@ export default function BudgetsPage() {
           spending[categoryId] = Math.max(0, data.expenses - data.income)
         })
 
+        // Filter out rollover/savings goal budgets - they don't count toward budget totals
+        const regularBudgets = (budgetsResult.data || []).filter(
+          (budget: any) => !budget.categories?.is_rollover
+        )
+
         const newData = {
-          budgets: budgetsResult.data || [],
+          budgets: regularBudgets,
           categories: categoriesResult.data || [],
           netByCategory: categoryTotals,
           spendingByCategory: spending,

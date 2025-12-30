@@ -49,11 +49,6 @@ interface TransactionsTableProps {
 }
 
 export function TransactionsTable({ transactions: initialTransactions, categories: initialCategories }: TransactionsTableProps) {
-  // Debug: Log initial transactions on mount
-  console.log('TransactionsTable - Initial transactions:', initialTransactions)
-  console.log('TransactionsTable - First transaction ID:', initialTransactions?.[0]?.id)
-  console.log('TransactionsTable - First transaction ID type:', typeof initialTransactions?.[0]?.id)
-
   const [transactions, setTransactions] = useState(initialTransactions)
   const [categories, setCategories] = useState(initialCategories)
   const [searchTerm, setSearchTerm] = useState("")
@@ -70,11 +65,6 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
-      // Debug: Log transaction ID
-      if (!tx.id) {
-        console.error('Transaction missing ID:', tx)
-      }
-
       // Hidden filter - skip hidden transactions unless showHidden is true
       if (tx.hidden && !showHidden) {
         return false
@@ -108,18 +98,26 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
     })
   }, [transactions, searchTerm, categoryFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax, showHidden])
 
-  // Group transactions by date
+  // Get uncategorized transactions for special section
+  const uncategorizedTransactions = useMemo(() => {
+    return filteredTransactions.filter(tx => !tx.category_id && !tx.hidden)
+  }, [filteredTransactions])
+
+  // Group transactions by date (excluding uncategorized from main list)
   const groupedTransactions = useMemo(() => {
     const groups: Record<string, Transaction[]> = {}
-    
-    filteredTransactions.forEach(tx => {
+
+    // Filter out uncategorized transactions as they'll be shown separately
+    const categorizedTransactions = filteredTransactions.filter(tx => tx.category_id || tx.hidden)
+
+    categorizedTransactions.forEach(tx => {
       const dateKey = tx.date
       if (!groups[dateKey]) {
         groups[dateKey] = []
       }
       groups[dateKey].push(tx)
     })
-    
+
     // Sort dates descending and sort transactions within each date
     return Object.keys(groups)
       .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
@@ -281,7 +279,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
         {/* Collapsible Filters */}
         {showFilters && (
-          <div className="space-y-3 mt-4 p-4 bg-green-50 rounded-lg">
+          <div className="space-y-3 mt-4 p-4 bg-muted rounded-lg border">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
           <Input
             placeholder="Search transactions..."
@@ -390,6 +388,92 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
       </div>
 
       <div className="sm:p-4 p-0">
+        {/* Uncategorized Transactions Section */}
+        {uncategorizedTransactions.length > 0 && (
+          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-100">
+                Needs Categorization ({uncategorizedTransactions.length})
+              </h3>
+            </div>
+            <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+              These transactions haven't been categorized yet. Assign categories to include them in your budget tracking.
+            </p>
+            <div className="space-y-2">
+              {uncategorizedTransactions.map((tx) => {
+                const txId = tx.id
+
+                return (
+                  <div
+                    key={txId}
+                    className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                    onClick={() => {
+                      if (categoryJustChanged !== txId) {
+                        setSelectedTransaction(tx)
+                      }
+                    }}
+                  >
+                    {/* Logo - Desktop only */}
+                    {tx.logo_url && (
+                      <img
+                        src={tx.logo_url}
+                        alt={tx.merchant_name || tx.description}
+                        className="hidden md:block w-8 h-8 rounded-full object-cover flex-shrink-0"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none'
+                        }}
+                      />
+                    )}
+
+                    {/* Transaction Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span
+                            className="font-medium text-sm md:text-base truncate"
+                            title={tx.merchant_name && tx.description !== tx.merchant_name ? tx.description : undefined}
+                          >
+                            {tx.merchant_name || tx.description}
+                          </span>
+                          <span className="text-xs text-muted-foreground flex-shrink-0">
+                            {new Date(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                        <PrivateAmount
+                          amount={tx.amount}
+                          type={tx.transaction_type}
+                          className={`text-sm md:text-base font-semibold flex-shrink-0 ${
+                            tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                          }`}
+                        />
+                      </div>
+
+                      {/* Category */}
+                      <div className="mt-2">
+                        {txId ? (
+                          <TransactionCategorizer
+                            transactionId={txId}
+                            description={tx.description}
+                            amount={tx.amount}
+                            currentCategoryId={tx.category_id}
+                            categories={categories}
+                            onCategoryChange={(categoryId, newCategory) => {
+                              handleCategoryChange(txId, categoryId, newCategory)
+                            }}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground text-xs">No ID</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         <div className="w-full space-y-4">
           {groupedTransactions.map(({ date, transactions: dayTransactions }) => (
             <div key={date}>
@@ -410,7 +494,6 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
               <div className="space-y-2">
                 {dayTransactions.map((tx) => {
                   const txId = tx.id
-                  console.log('Captured transaction ID:', txId)
 
                   return (
                     <div

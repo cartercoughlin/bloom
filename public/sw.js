@@ -1,5 +1,5 @@
 // Service Worker for Bloom Budget PWA
-const CACHE_NAME = 'bloom-budget-v6';
+const CACHE_NAME = 'bloom-budget-v7';
 const urlsToCache = [
   '/',
   '/dashboard',
@@ -47,44 +47,43 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+  const requestUrl = event.request.url;
+
   // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
+  if (!requestUrl.startsWith(self.location.origin)) {
     return;
   }
 
-  // Skip auth routes and API routes - always fetch fresh
-  const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/auth/') ||
-      url.pathname.startsWith('/api/') ||
-      url.pathname.startsWith('/_next/')) {
-    event.respondWith(fetch(event.request));
-    return;
+  // Quick check: Skip auth/API routes using string matching (faster than URL parsing)
+  if (requestUrl.includes('/auth/') ||
+      requestUrl.includes('/api/') ||
+      requestUrl.includes('/_next/')) {
+    return; // Let browser handle these normally
   }
 
+  // Cache-first strategy for better performance
   event.respondWith(
     caches.match(event.request)
-      .then((response) => {
-        // Return cached version or fetch from network
-        if (response) {
-          return response;
+      .then((cachedResponse) => {
+        // Return cached version immediately if available
+        if (cachedResponse) {
+          return cachedResponse;
         }
 
+        // Not in cache, fetch from network
         return fetch(event.request).then((response) => {
-          // Don't cache if not a success response or if it's a redirect
-          if (!response ||
-              response.status !== 200 ||
-              response.type !== 'basic' ||
-              response.redirected) {
-            return response;
-          }
+          // Only cache successful, non-redirect responses
+          if (response &&
+              response.status === 200 &&
+              response.type === 'basic' &&
+              !response.redirected) {
 
-          // Clone the response
-          const responseToCache = response.clone();
-
-          caches.open(CACHE_NAME)
-            .then((cache) => {
+            // Clone and cache in background (don't block response)
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME).then((cache) => {
               cache.put(event.request, responseToCache);
             });
+          }
 
           return response;
         });
