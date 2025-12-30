@@ -413,11 +413,11 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                   console.log('Captured transaction ID:', txId)
 
                   return (
-                    <div 
-                      key={txId} 
-                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer md:cursor-default"
+                    <div
+                      key={txId}
+                      className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer"
                       onClick={() => {
-                        if (window.innerWidth < 768 && categoryJustChanged !== txId) {
+                        if (categoryJustChanged !== txId) {
                           setSelectedTransaction(tx)
                         }
                       }}
@@ -498,7 +498,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
         </div>
       </div>
 
-      {/* Mobile Transaction Detail Modal */}
+      {/* Transaction Detail Modal */}
       <Dialog open={!!selectedTransaction} onOpenChange={() => setSelectedTransaction(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
