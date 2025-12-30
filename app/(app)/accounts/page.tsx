@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ConnectedAccounts } from '@/components/connected-accounts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { createClient } from '@/lib/supabase/client'
 import { TrendingUp, TrendingDown, EyeOff, Eye } from 'lucide-react'
 import { usePrivacy } from '@/contexts/privacy-context'
@@ -71,15 +72,30 @@ export default function AccountsPage() {
               {privacyMode ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
               <span className="hidden sm:inline">{privacyMode ? "Show Numbers" : "Hide Numbers"}</span>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="gap-2"
-            >
-              <span>🚪</span>
-              <span className="hidden sm:inline">Logout</span>
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  <span>🚪</span>
+                  <span className="hidden sm:inline">Logout</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Logout?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to logout? You'll need to sign in again to access your account.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleLogout}>Logout</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
         <p className="text-muted-foreground">
