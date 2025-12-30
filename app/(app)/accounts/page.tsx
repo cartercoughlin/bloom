@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { ConnectedAccounts } from '@/components/connected-accounts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,9 +17,17 @@ interface AccountBalance {
 }
 
 export default function AccountsPage() {
+  const router = useRouter()
   const [balances, setBalances] = useState<AccountBalance[]>([])
   const [loading, setLoading] = useState(true)
   const { privacyMode, togglePrivacyMode } = usePrivacy()
+
+  const handleLogout = async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+    router.refresh()
+  }
 
   useEffect(() => {
     const loadBalances = async () => {
@@ -52,15 +61,26 @@ export default function AccountsPage() {
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl md:text-3xl font-bold">Accounts</h1>
-          <Button
-            variant={privacyMode ? "default" : "outline"}
-            size="sm"
-            onClick={togglePrivacyMode}
-            className="gap-2"
-          >
-            {privacyMode ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-            <span className="hidden sm:inline">{privacyMode ? "Show Numbers" : "Hide Numbers"}</span>
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant={privacyMode ? "default" : "outline"}
+              size="sm"
+              onClick={togglePrivacyMode}
+              className="gap-2"
+            >
+              {privacyMode ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              <span className="hidden sm:inline">{privacyMode ? "Show Numbers" : "Hide Numbers"}</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLogout}
+              className="gap-2"
+            >
+              <span>🚪</span>
+              <span className="hidden sm:inline">Logout</span>
+            </Button>
+          </div>
         </div>
         <p className="text-muted-foreground">
           Manage your connected bank accounts and view your net worth
