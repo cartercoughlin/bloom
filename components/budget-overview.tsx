@@ -1,10 +1,18 @@
 "use client"
 
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { TrendingDown, TrendingUp, DollarSign, Target } from "lucide-react"
 import { PrivateAmount } from "./private-amount"
 import { usePrivacy } from "@/contexts/privacy-context"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface Budget {
   id: string
@@ -33,6 +41,7 @@ interface BudgetOverviewProps {
 
 export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, month, year }: BudgetOverviewProps) {
   const { privacyMode } = usePrivacy()
+  const [showDetailModal, setShowDetailModal] = useState(false)
 
   // Calculate total rollover from previous month
   const totalRollover = Object.values(rolloverByCategory).reduce((sum, amount) => sum + amount, 0)
@@ -86,8 +95,21 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
 
   const percentageThroughMonth = getPercentageThroughMonth()
 
+  // Calculate expected spending
+  const expectedSpending = percentageThroughMonth !== null
+    ? totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))
+    : 0
+
+  const difference = totalBudget - totalSpent
+  const differencePercent = totalBudget > 0 ? (difference / totalBudget) * 100 : 0
+  const pacingDifference = percentageThroughMonth !== null ? totalSpent - expectedSpending : 0
+  const pacingPercent = totalBudget > 0 && percentageThroughMonth !== null
+    ? (pacingDifference / totalBudget) * 100
+    : 0
+
   return (
-    <div className="grid gap-2 grid-cols-2 md:gap-4 lg:grid-cols-4">
+    <>
+      <div className="grid gap-2 grid-cols-2 md:gap-4 lg:grid-cols-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
           <CardTitle className="text-sm md:text-base font-medium">Total Budget</CardTitle>
@@ -134,13 +156,13 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => setShowDetailModal(true)}>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 md:pb-2">
           <div>
             <CardTitle className="text-sm md:text-base font-medium">Progress</CardTitle>
             {percentageThroughMonth !== null && (
               <div className="flex items-center gap-1 mt-1">
-                {totalSpent <= (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))) ? (
+                {totalSpent <= expectedSpending ? (
                   <>
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     <span className="text-xs md:text-sm text-green-600 font-medium">On Track</span>
@@ -149,7 +171,7 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
                   <>
                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span className="text-xs md:text-sm text-red-600 font-medium">
-                      {(((totalSpent - (totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100)))) / totalBudget) * 100).toFixed(0)}% over pace
+                      {Math.abs(pacingPercent).toFixed(0)}% over pace
                     </span>
                   </>
                 )}
@@ -198,5 +220,109 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
         </CardContent>
       </Card>
     </div>
+
+    {/* Detailed Budget Breakdown Modal */}
+    <Dialog open={showDetailModal} onOpenChange={setShowDetailModal}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Budget Breakdown</DialogTitle>
+          <DialogDescription>
+            Detailed overview of your spending progress
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Budget vs Spending */}
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm">Budget vs Spending</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Total Budget</p>
+                <PrivateAmount amount={totalBudget} className="text-lg font-bold" />
+                {totalRollover > 0 && (
+                  <p className="text-xs text-green-600">
+                    +<PrivateAmount amount={totalRollover} prefix="$" className="inline" /> rollover
+                  </p>
+                )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground">Total Spent</p>
+                <PrivateAmount amount={totalSpent} className="text-lg font-bold text-red-600" />
+                <p className="text-xs text-muted-foreground">{percentageUsed.toFixed(1)}% used</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Spending Breakdown */}
+          <div className="space-y-2">
+            <h3 className="font-semibold text-sm">Spending Breakdown</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Recurring</span>
+                <PrivateAmount amount={totalRecurring} className="text-sm font-medium" />
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Variable</span>
+                <PrivateAmount amount={totalVariable} className="text-sm font-medium" />
+              </div>
+            </div>
+          </div>
+
+          {/* Pacing Analysis */}
+          {percentageThroughMonth !== null && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Pacing Analysis</h3>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Days through month</span>
+                  <span className="text-sm font-medium">{percentageThroughMonth.toFixed(0)}%</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Expected spending</span>
+                  <PrivateAmount amount={expectedSpending} className="text-sm font-medium" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Actual spending</span>
+                  <PrivateAmount amount={totalSpent} className="text-sm font-medium" />
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <span className="text-sm font-semibold">Pacing difference</span>
+                  <div className="text-right">
+                    <PrivateAmount
+                      amount={Math.abs(pacingDifference)}
+                      prefix={pacingDifference >= 0 ? '+$' : '-$'}
+                      className={`text-sm font-bold ${pacingDifference <= 0 ? 'text-green-600' : 'text-red-600'}`}
+                    />
+                    <p className={`text-xs ${pacingDifference <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {Math.abs(pacingPercent).toFixed(1)}% {pacingDifference <= 0 ? 'ahead' : 'behind'} pace
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Overall Status */}
+          <div className="space-y-2 pt-4 border-t">
+            <h3 className="font-semibold text-sm">Overall Budget Status</h3>
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-semibold">
+                {difference >= 0 ? 'Remaining' : 'Over Budget'}
+              </span>
+              <div className="text-right">
+                <PrivateAmount
+                  amount={Math.abs(difference)}
+                  className={`text-lg font-bold ${difference >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                />
+                <p className={`text-xs ${difference >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {Math.abs(differencePercent).toFixed(1)}% {difference >= 0 ? 'under' : 'over'} budget
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  </>
   )
 }
