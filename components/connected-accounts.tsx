@@ -310,36 +310,38 @@ export function ConnectedAccounts() {
                     </AlertDialogContent>
                   </AlertDialog>
                 </div>
-                
-                <div className="flex gap-6 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id={`transactions-${account.id}`}
-                      checked={account.sync_transactions}
-                      onCheckedChange={(checked) => updateSyncPreference(
-                        account.id, 
-                        'sync_transactions', 
-                        checked, 
-                        account.institution_name || account.account_name || 'Bank Account'
-                      )}
-                    />
-                    <Label htmlFor={`transactions-${account.id}`}>Sync Transactions</Label>
+
+                {showManualControls && (
+                  <div className="flex gap-6 text-sm">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id={`transactions-${account.id}`}
+                        checked={account.sync_transactions}
+                        onCheckedChange={(checked) => updateSyncPreference(
+                          account.id,
+                          'sync_transactions',
+                          checked,
+                          account.institution_name || account.account_name || 'Bank Account'
+                        )}
+                      />
+                      <Label htmlFor={`transactions-${account.id}`}>Sync Transactions</Label>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id={`balances-${account.id}`}
+                        checked={account.sync_balances}
+                        onCheckedChange={(checked) => updateSyncPreference(
+                          account.id,
+                          'sync_balances',
+                          checked,
+                          account.institution_name || account.account_name || 'Bank Account'
+                        )}
+                      />
+                      <Label htmlFor={`balances-${account.id}`}>Sync Balances</Label>
+                    </div>
                   </div>
-                  
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id={`balances-${account.id}`}
-                      checked={account.sync_balances}
-                      onCheckedChange={(checked) => updateSyncPreference(
-                        account.id, 
-                        'sync_balances', 
-                        checked,
-                        account.institution_name || account.account_name || 'Bank Account'
-                      )}
-                    />
-                    <Label htmlFor={`balances-${account.id}`}>Sync Balances</Label>
-                  </div>
-                </div>
+                )}
               </div>
             ))}
           </div>
