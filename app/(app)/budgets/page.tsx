@@ -45,10 +45,16 @@ export default function BudgetsPage() {
       return
     }
 
-    // Get previous month's budgets
+    // Get previous month's budgets (exclude rollover categories)
     const { data: prevBudgets } = await supabase
       .from("budgets")
-      .select("category_id, amount")
+      .select(`
+        category_id,
+        amount,
+        categories (
+          is_rollover
+        )
+      `)
       .eq("user_id", userId)
       .eq("month", prevMonth)
       .eq("year", prevYear)
@@ -57,14 +63,16 @@ export default function BudgetsPage() {
       return
     }
 
-    // Create budgets for current month
-    const newBudgets = prevBudgets.map((budget: any) => ({
-      user_id: userId,
-      category_id: budget.category_id,
-      amount: budget.amount,
-      month: selectedMonth,
-      year: selectedYear
-    }))
+    // Create budgets for current month (exclude rollover categories)
+    const newBudgets = prevBudgets
+      .filter((budget: any) => !budget.categories?.is_rollover)
+      .map((budget: any) => ({
+        user_id: userId,
+        category_id: budget.category_id,
+        amount: budget.amount,
+        month: selectedMonth,
+        year: selectedYear
+      }))
 
     await supabase.from("budgets").insert(newBudgets)
     console.log(`Auto-created ${newBudgets.length} budgets for ${selectedYear}-${selectedMonth}`)
@@ -170,7 +178,9 @@ export default function BudgetsPage() {
                 id,
                 name,
                 color,
-                icon
+                icon,
+                is_rollover,
+                target_amount
               )
             `)
             .eq("user_id", user.id)
@@ -242,8 +252,13 @@ export default function BudgetsPage() {
           spending[categoryId] = Math.max(0, data.expenses - data.income)
         })
 
+        // Filter out rollover/savings goal budgets - they don't count toward budget totals
+        const regularBudgets = (budgetsResult.data || []).filter(
+          (budget: any) => !budget.categories?.is_rollover
+        )
+
         const newData = {
-          budgets: budgetsResult.data || [],
+          budgets: regularBudgets,
           categories: categoriesResult.data || [],
           netByCategory: categoryTotals,
           spendingByCategory: spending,
