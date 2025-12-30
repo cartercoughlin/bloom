@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Switch } from "@/components/ui/switch"
 import { AlertCircle, Loader2 } from "lucide-react"
 
 interface Category {
@@ -17,6 +18,8 @@ interface Category {
   name: string
   color: string
   icon: string | null
+  is_rollover?: boolean
+  target_amount?: number | null
 }
 
 const PRESET_COLORS = [
@@ -35,6 +38,8 @@ export function CategoryForm({ category }: { category?: Category }) {
   const [name, setName] = useState(category?.name || "")
   const [color, setColor] = useState(category?.color || "#3B82F6")
   const [icon, setIcon] = useState(category?.icon || "📦")
+  const [isRollover, setIsRollover] = useState(category?.is_rollover || false)
+  const [targetAmount, setTargetAmount] = useState<string>(category?.target_amount?.toString() || "")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -51,11 +56,19 @@ export function CategoryForm({ category }: { category?: Category }) {
       } = await supabase.auth.getUser()
       if (!user) throw new Error("Not authenticated")
 
+      const categoryData = {
+        name,
+        color,
+        icon,
+        is_rollover: isRollover,
+        target_amount: isRollover && targetAmount ? parseFloat(targetAmount) : null,
+      }
+
       if (category) {
         // Update existing category
         const { error: updateError } = await supabase
           .from("categories")
-          .update({ name, color, icon })
+          .update(categoryData)
           .eq("id", category.id)
 
         if (updateError) throw updateError
@@ -63,9 +76,7 @@ export function CategoryForm({ category }: { category?: Category }) {
         // Create new category
         const { error: insertError } = await supabase.from("categories").insert({
           user_id: user.id,
-          name,
-          color,
-          icon,
+          ...categoryData,
         })
 
         if (insertError) throw insertError
@@ -137,6 +148,39 @@ export function CategoryForm({ category }: { category?: Category }) {
               />
               <span className="text-xs md:text-sm text-muted-foreground">{color}</span>
             </div>
+          </div>
+
+          <div className="space-y-4 p-4 border rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="rollover">Savings Goal / Rollover Category</Label>
+                <p className="text-xs text-muted-foreground">
+                  Unused budget carries over to next month
+                </p>
+              </div>
+              <Switch
+                id="rollover"
+                checked={isRollover}
+                onCheckedChange={setIsRollover}
+              />
+            </div>
+
+            {isRollover && (
+              <div className="space-y-2 pt-2 border-t">
+                <Label htmlFor="target-amount">Target Amount (Optional)</Label>
+                <Input
+                  id="target-amount"
+                  type="number"
+                  step="0.01"
+                  value={targetAmount}
+                  onChange={(e) => setTargetAmount(e.target.value)}
+                  placeholder="e.g., 2000"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Set a savings goal target for this category
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3 md:gap-4 p-3 md:p-4 bg-muted rounded-lg">
