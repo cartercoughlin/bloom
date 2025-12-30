@@ -98,6 +98,12 @@ export const cache = {
     const keys = await storage.keys();
     const cacheKeys = keys.filter(k => k.startsWith('cache:'));
     await Promise.all(cacheKeys.map(k => storage.remove(k)));
+  },
+
+  async removePattern(pattern: string): Promise<void> {
+    const keys = await storage.keys();
+    const matchingKeys = keys.filter(k => k.startsWith(`cache:${pattern}`));
+    await Promise.all(matchingKeys.map(k => storage.remove(k)));
   }
 };
 
