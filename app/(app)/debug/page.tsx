@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RefreshCw } from 'lucide-react'
@@ -11,7 +11,14 @@ import { cache } from '@/lib/capacitor'
 export default function DebugPage() {
   const [syncing, setSyncing] = useState(false)
   const [clearingCache, setClearingCache] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [accountInfo, setAccountInfo] = useState<any>(null)
   const router = useRouter()
+
+  // Load account info on mount
+  useEffect(() => {
+    handleCheckAccounts(true)
+  }, [])
 
   const handleForceSyncTransactions = async () => {
     setSyncing(true)
@@ -25,6 +32,7 @@ export default function DebugPage() {
 
       if (data.success) {
         toast.success(`✅ Synced! New: ${data.newTransactions}, Updated: ${data.updatedTransactions}, Total: ${data.totalProcessed}`)
+        await handleCheckAccounts(true)
         router.refresh()
       } else {
         toast.error(`❌ Sync failed: ${data.error || 'Unknown error'}`)
@@ -49,6 +57,7 @@ export default function DebugPage() {
 
       if (response.ok) {
         toast.success(`✅ Balances synced!`)
+        await handleCheckAccounts(true)
         router.refresh()
       } else {
         toast.error(`❌ Balance sync failed: ${data.error || 'Unknown error'}`)
@@ -81,15 +90,38 @@ export default function DebugPage() {
     }
   }
 
-  const handleCheckAccounts = async () => {
+  const handleCheckAccounts = async (silent = false) => {
+    if (!silent) setChecking(true)
     try {
-      const response = await fetch('/api/connected-accounts')
-      const data = await response.json()
-      console.log('Connected accounts:', data)
-      toast.success(`Found ${data.length} account(s). Check console for details.`)
+      const [accountsRes, balancesRes] = await Promise.all([
+        fetch('/api/connected-accounts'),
+        fetch('/api/account-balances')
+      ])
+
+      const accounts = await accountsRes.json()
+      const balances = await balancesRes.json()
+
+      console.log('Connected accounts:', accounts)
+      console.log('Account balances:', balances)
+
+      setAccountInfo({
+        connectedAccounts: accounts.length,
+        accountsWithBalances: balances.length,
+        totalBalance: balances.reduce((sum: number, acc: any) => sum + Number(acc.balance), 0),
+        accounts,
+        balances
+      })
+
+      if (!silent) {
+        toast.success(`Found ${accounts.length} account(s), ${balances.length} balances. Check console for details.`)
+      }
     } catch (error) {
       console.error('Error fetching accounts:', error)
-      toast.error('Failed to fetch accounts')
+      if (!silent) {
+        toast.error('Failed to fetch accounts')
+      }
+    } finally {
+      if (!silent) setChecking(false)
     }
   }
 
@@ -98,6 +130,40 @@ export default function DebugPage() {
       <h1 className="text-2xl md:text-3xl font-bold mb-6">🛠️ Debug Tools</h1>
 
       <div className="space-y-4">
+        {accountInfo && (
+          <Card className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+            <CardHeader>
+              <CardTitle className="text-blue-600 dark:text-blue-400">Account Status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">Connected Accounts:</span>
+                <span>{accountInfo.connectedAccounts}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">Accounts with Balances:</span>
+                <span className={accountInfo.accountsWithBalances === 0 ? 'text-red-600 font-bold' : ''}>
+                  {accountInfo.accountsWithBalances}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">Total Balance:</span>
+                <span className="font-bold">
+                  ${accountInfo.totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+              {accountInfo.accountsWithBalances === 0 && accountInfo.connectedAccounts > 0 && (
+                <div className="mt-4 p-3 bg-yellow-100 dark:bg-yellow-900 border border-yellow-300 dark:border-yellow-700 rounded text-xs">
+                  <p className="font-bold text-yellow-800 dark:text-yellow-200">⚠️ No balances found!</p>
+                  <p className="text-yellow-700 dark:text-yellow-300 mt-1">
+                    Your accounts are connected but have no balance data. Click "Sync Balances" below to fix this.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>Force Sync</CardTitle>
@@ -153,14 +219,16 @@ export default function DebugPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Check what accounts are connected (results in browser console).
+              Refresh account status and check database (results in browser console).
             </p>
             <Button
-              onClick={handleCheckAccounts}
+              onClick={() => handleCheckAccounts(false)}
+              disabled={checking}
               variant="outline"
               className="w-full"
             >
-              Check Connected Accounts
+              <RefreshCw className={`mr-2 h-4 w-4 ${checking ? 'animate-spin' : ''}`} />
+              Refresh Account Status
             </Button>
           </CardContent>
         </Card>
@@ -168,13 +236,15 @@ export default function DebugPage() {
         <Card className="bg-muted">
           <CardContent className="pt-6">
             <p className="text-xs text-muted-foreground">
-              💡 <strong>Pro tip:</strong> If your new account isn't showing up:
+              💡 <strong>Pro tip:</strong> If your new account isn't showing up with balances:
               <br />
-              1. Click "Sync Transactions" to trigger a full sync
+              1. Click "Sync Balances" to fetch account balance data
               <br />
-              2. Click "Clear All Cache & Reload" to force fresh data
+              2. Click "Sync Transactions" to get transaction history
               <br />
-              3. Check browser console (F12) for any error messages
+              3. Click "Clear All Cache & Reload" to force fresh data
+              <br />
+              4. Check browser console (F12) for any error messages
             </p>
           </CardContent>
         </Card>
