@@ -6,6 +6,7 @@ import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { BudgetList } from "@/components/budget-list"
 import { BudgetOverview } from "@/components/budget-overview"
+import { SavingsGoalsList } from "@/components/savings-goals-list"
 import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -16,6 +17,7 @@ export default function BudgetsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [budgets, setBudgets] = useState<any[]>([])
+  const [savingsGoals, setSavingsGoals] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [netByCategory, setNetByCategory] = useState<any>({})
   const [spendingByCategory, setSpendingByCategory] = useState<any>({})
@@ -143,6 +145,7 @@ export default function BudgetsPage() {
         const cachedData = await cache.getJSON<any>(cacheKey)
         if (cachedData) {
           setBudgets(cachedData.budgets || [])
+          setSavingsGoals(cachedData.savingsGoals || [])
           setCategories(cachedData.categories || [])
           setNetByCategory(cachedData.netByCategory || {})
           setSpendingByCategory(cachedData.spendingByCategory || {})
@@ -244,13 +247,17 @@ export default function BudgetsPage() {
           spending[categoryId] = Math.max(0, data.expenses - data.income)
         })
 
-        // Filter out rollover/savings goal budgets - they don't count toward budget totals
+        // Split budgets into regular and savings goals
         const regularBudgets = (budgetsResult.data || []).filter(
           (budget: any) => !budget.categories?.is_rollover
+        )
+        const savingsGoalBudgets = (budgetsResult.data || []).filter(
+          (budget: any) => budget.categories?.is_rollover
         )
 
         const newData = {
           budgets: regularBudgets,
+          savingsGoals: savingsGoalBudgets,
           categories: categoriesResult.data || [],
           netByCategory: categoryTotals,
           spendingByCategory: spending,
@@ -259,6 +266,7 @@ export default function BudgetsPage() {
 
         // Update state
         setBudgets(newData.budgets)
+        setSavingsGoals(newData.savingsGoals)
         setCategories(newData.categories)
         setNetByCategory(newData.netByCategory)
         setSpendingByCategory(newData.spendingByCategory)
@@ -331,6 +339,14 @@ export default function BudgetsPage() {
           categories={categories || []}
           netByCategory={netByCategory}
           spending={spendingByCategory}
+          rolloverByCategory={rolloverByCategory}
+          month={selectedMonth}
+          year={selectedYear}
+        />
+
+        <SavingsGoalsList
+          savingsGoals={savingsGoals || []}
+          netByCategory={netByCategory}
           rolloverByCategory={rolloverByCategory}
           month={selectedMonth}
           year={selectedYear}

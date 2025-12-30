@@ -391,21 +391,21 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
       <div className="sm:p-4 p-0">
         {/* Uncategorized Transactions Section */}
         {uncategorizedTransactions.length > 0 && (
-          <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="mb-6 p-4 bg-muted/50 border border-border rounded-lg">
             <div
               className="flex items-center justify-between mb-3 cursor-pointer"
               onClick={() => setShowUncategorized(!showUncategorized)}
             >
               <div className="flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-100">
+                <AlertCircle className="h-4 w-4 text-muted-foreground" />
+                <h3 className="font-semibold text-sm">
                   Needs Categorization ({uncategorizedTransactions.length})
                 </h3>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 px-2 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900"
+                className="h-6 px-2"
               >
                 {showUncategorized ? (
                   <ChevronUp className="h-4 w-4" />
@@ -417,7 +417,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
             {showUncategorized && (
               <>
-                <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+                <p className="text-xs text-muted-foreground mb-3">
                   These transactions haven't been categorized yet. Assign categories to include them in your budget tracking.
                 </p>
                 <div className="space-y-2">
@@ -427,7 +427,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                 return (
                   <div
                     key={txId}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 hover:bg-amber-50 dark:hover:bg-amber-950/30 cursor-pointer"
+                    className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer"
                     onClick={() => {
                       if (categoryJustChanged !== txId) {
                         setSelectedTransaction(tx)
