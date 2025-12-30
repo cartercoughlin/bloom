@@ -6,15 +6,17 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { LayoutDashboard, Receipt, Wallet, FolderKanban, TrendingUp, CreditCard, LogOut } from "lucide-react"
+import { LayoutDashboard, Receipt, Wallet, FolderKanban, TrendingUp, CreditCard, LogOut, ChevronLeft, ChevronRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { useMonth } from "@/contexts/month-context"
 
 export function AppNav() {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const { selectedMonth, selectedYear, goToPreviousMonth, goToNextMonth } = useMonth()
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -22,6 +24,10 @@ export function AppNav() {
     router.push("/auth/login")
     router.refresh()
   }
+
+  // Show month selector on dashboard and budgets pages
+  const showMonthSelector = pathname === "/dashboard" || pathname === "/budgets"
+  const monthName = new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' })
 
   const navItems = [
     {
@@ -81,6 +87,33 @@ export function AppNav() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Month Navigation */}
+          {showMonthSelector && (
+            <div className="flex items-center gap-1 md:gap-2 mr-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPreviousMonth}
+                className="h-7 w-7 md:h-8 md:w-8 p-0"
+              >
+                <ChevronLeft className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+
+              <div className="text-xs md:text-sm font-medium min-w-[90px] md:min-w-[120px] text-center">
+                {monthName} {selectedYear}
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextMonth}
+                className="h-7 w-7 md:h-8 md:w-8 p-0"
+              >
+                <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
+              </Button>
+            </div>
+          )}
+
           {/* Desktop Logout Button */}
           <Button variant="ghost" onClick={handleLogout} className="hidden md:flex">
             <LogOut className="h-4 w-4 mr-2" />

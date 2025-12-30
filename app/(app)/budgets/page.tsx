@@ -7,8 +7,7 @@ import { BudgetList } from "@/components/budget-list"
 import { BudgetOverview } from "@/components/budget-overview"
 import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { useMonth } from "@/contexts/month-context"
 
 export default function BudgetsPage() {
   const router = useRouter()
@@ -18,34 +17,11 @@ export default function BudgetsPage() {
   const [netByCategory, setNetByCategory] = useState<any>({})
   const [spendingByCategory, setSpendingByCategory] = useState<any>({})
   const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
+  const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
 
-  // Selected month/year for viewing (can be different from current month)
   const today = new Date()
-  const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1)
-  const [selectedYear, setSelectedYear] = useState(today.getFullYear())
-
   const currentMonth = today.getMonth() + 1
   const currentYear = today.getFullYear()
-
-  // Navigate to previous month
-  const goToPreviousMonth = () => {
-    if (selectedMonth === 1) {
-      setSelectedMonth(12)
-      setSelectedYear(selectedYear - 1)
-    } else {
-      setSelectedMonth(selectedMonth - 1)
-    }
-  }
-
-  // Navigate to next month
-  const goToNextMonth = () => {
-    if (selectedMonth === 12) {
-      setSelectedMonth(1)
-      setSelectedYear(selectedYear + 1)
-    } else {
-      setSelectedMonth(selectedMonth + 1)
-    }
-  }
 
   // Auto-create budgets for new month from previous month
   const autoCreateBudgetsFromPreviousMonth = async (supabase: any, userId: string) => {
@@ -313,42 +289,12 @@ export default function BudgetsPage() {
     )
   }
 
-  const monthName = new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' })
-  const isCurrentMonth = selectedMonth === currentMonth && selectedYear === currentYear
-
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
       <div className="mb-4 md:mb-8">
-        <div className="flex items-center justify-between mb-1 md:mb-2">
-          <h1 className="text-xl md:text-3xl font-bold text-green-600">Budget</h1>
-
-          {/* Month Navigation */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToPreviousMonth}
-              className="h-8 w-8 p-0"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="text-sm md:text-base font-medium min-w-[120px] md:min-w-[140px] text-center">
-              {monthName} {selectedYear}
-            </div>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToNextMonth}
-              className="h-8 w-8 p-0"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Budget</h1>
         <p className="text-muted-foreground text-xs md:text-sm">
-          {isCurrentMonth ? 'Set spending limits and track progress by category' : 'Review past budgets and spending'}
+          {isCurrentMonth() ? 'Set spending limits and track progress by category' : 'Review past budgets and spending'}
         </p>
       </div>
 

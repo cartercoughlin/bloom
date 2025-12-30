@@ -9,23 +9,21 @@ export function RegisterServiceWorker() {
         .register('/sw.js')
         .then((registration) => {
           console.log('Service Worker registered:', registration)
-          
-          // Check for updates every 30 seconds
+
+          // Check for updates every 60 seconds
           setInterval(() => {
             registration.update()
-          }, 30000)
-          
+          }, 60000)
+
           // Listen for new service worker waiting
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing
             if (newWorker) {
               newWorker.addEventListener('statechange', () => {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  // New version available, auto-refresh after 3 seconds
-                  console.log('New version detected, refreshing in 3 seconds...')
-                  setTimeout(() => {
-                    window.location.reload()
-                  }, 3000)
+                  // New version available - dispatch custom event for PWAUpdatePrompt
+                  console.log('New version detected!')
+                  window.dispatchEvent(new Event('swUpdateAvailable'))
                 }
               })
             }
