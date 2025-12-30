@@ -301,6 +301,7 @@ export function BudgetList({
             }
 
             const expectedSpending = calculateExpectedSpending()
+            const pacingDifference = percentageThroughMonth !== null ? netSpending - expectedSpending : 0
 
             return (
               <Card key={budget.id}>
@@ -334,9 +335,9 @@ export function BudgetList({
                             </>
                           )}
                         </CardDescription>
-                        {!isIncomeCategory && income > 0 && (
-                          <p className="text-xs text-green-600 mt-1">
-                            <PrivateAmount amount={income} prefix="$" className="inline" /> {net >= 0 ? 'ahead' : 'behind'} (income offset)
+                        {!isIncomeCategory && percentageThroughMonth !== null && pacingDifference !== 0 && (
+                          <p className={`text-xs mt-1 ${pacingDifference <= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            <PrivateAmount amount={Math.abs(pacingDifference)} prefix="$" className="inline" /> {pacingDifference <= 0 ? 'ahead' : 'behind'} pace
                           </p>
                         )}
                       </div>
