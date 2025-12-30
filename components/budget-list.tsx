@@ -141,6 +141,7 @@ export function BudgetList({
           .from("budgets")
           .update({ amount: Number.parseFloat(amount) })
           .eq("id", editingBudget.id)
+          .eq("user_id", user.id)
 
         if (error) throw error
       } else {
@@ -169,7 +170,14 @@ export function BudgetList({
     const supabase = createClient()
 
     try {
-      const { error } = await supabase.from("budgets").delete().eq("id", budgetId)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Not authenticated")
+
+      const { error } = await supabase
+        .from("budgets")
+        .delete()
+        .eq("id", budgetId)
+        .eq("user_id", user.id)
 
       if (error) throw error
 
