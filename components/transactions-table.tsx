@@ -271,7 +271,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
 
         {/* Collapsible Filters */}
         {showFilters && (
-          <div className="space-y-3 mt-4 p-4 bg-green-50 rounded-lg">
+          <div className="space-y-3 mt-4 p-4 bg-muted rounded-lg border">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
           <Input
             placeholder="Search transactions..."
