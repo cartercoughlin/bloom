@@ -144,3 +144,50 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Fix calendar layout */
+.rdp {
+  --rdp-cell-size: 2.25rem;
+  --rdp-accent-color: hsl(var(--primary));
+  --rdp-background-color: hsl(var(--accent));
+}
+
+.rdp-months {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rdp-month {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.rdp-table {
+  width: 100%;
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.rdp-head_row,
+.rdp-row {
+  display: flex;
+  width: 100%;
+  justify-content: space-between;
+}
+
+.rdp-head_cell,
+.rdp-cell {
+  width: var(--rdp-cell-size);
+  height: var(--rdp-cell-size);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rdp-day {
+  width: var(--rdp-cell-size);
+  height: var(--rdp-cell-size);
+}
