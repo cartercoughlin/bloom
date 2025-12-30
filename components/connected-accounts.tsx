@@ -12,7 +12,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { PrivateAmount } from './private-amount'
 import { useRouter } from 'next/navigation'
-import { cache } from '@/lib/capacitor'
+import { cache, isBrowserOnly } from '@/lib/capacitor'
 
 interface ConnectedAccount {
   id: string
@@ -32,7 +32,14 @@ export function ConnectedAccounts() {
   const [accounts, setAccounts] = useState<ConnectedAccount[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshingBalances, setRefreshingBalances] = useState(false)
+  const [showManualControls, setShowManualControls] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    // Only show manual refresh buttons in regular web browser
+    // (not in PWA or mobile app where auto-sync handles it)
+    setShowManualControls(isBrowserOnly())
+  }, [])
 
   const loadAccounts = async () => {
     try {
@@ -341,16 +348,23 @@ export function ConnectedAccounts() {
         <div className="pt-4 border-t">
           <div className="flex flex-col sm:flex-row gap-2">
             <PlaidLink onSuccess={handlePlaidSuccess} />
-            <Button
-              onClick={refreshBalances}
-              disabled={refreshingBalances || accounts.length === 0}
-              variant="outline"
-              className="w-full sm:w-auto"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshingBalances ? 'animate-spin' : ''}`} />
-              {refreshingBalances ? 'Refreshing...' : 'Refresh Balances'}
-            </Button>
+            {showManualControls && (
+              <Button
+                onClick={refreshBalances}
+                disabled={refreshingBalances || accounts.length === 0}
+                variant="outline"
+                className="w-full sm:w-auto"
+              >
+                <RefreshCw className={`h-4 w-4 mr-2 ${refreshingBalances ? 'animate-spin' : ''}`} />
+                {refreshingBalances ? 'Refreshing...' : 'Refresh Balances'}
+              </Button>
+            )}
           </div>
+          {!showManualControls && accounts.length > 0 && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Automatic sync: Transactions daily, Balances weekly
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

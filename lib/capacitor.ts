@@ -11,6 +11,25 @@ export const isIOS = () => getPlatform() === 'ios';
 export const isAndroid = () => getPlatform() === 'android';
 export const isWeb = () => getPlatform() === 'web';
 
+// PWA detection - returns true if running as installed PWA or native app
+export const isPWAOrMobile = () => {
+  // If running in Capacitor (native mobile), return true
+  if (isNativePlatform()) return true;
+
+  // Check if running as installed PWA
+  if (typeof window === 'undefined') return false;
+
+  // Check display mode
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+  // Check iOS standalone mode
+  const isIOSStandalone = (window.navigator as any).standalone === true;
+
+  return isStandalone || isIOSStandalone;
+};
+
+// Returns true only if running in regular web browser (not PWA, not mobile app)
+export const isBrowserOnly = () => !isPWAOrMobile();
+
 // Storage utilities (replaces localStorage)
 export const storage = {
   async get(key: string): Promise<string | null> {
