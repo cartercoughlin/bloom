@@ -9,6 +9,7 @@ import { MonthlyTrend } from "@/components/monthly-trend"
 import { BudgetOverview } from "@/components/budget-overview"
 import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useMonth } from "@/contexts/month-context"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -18,10 +19,8 @@ export default function DashboardPage() {
   const [budgets, setBudgets] = useState<any[]>([])
   const [categories, setCategories] = useState<any[]>([])
   const [netByCategory, setNetByCategory] = useState<any>({})
-  const [currentDate] = useState(new Date())
-  
-  const currentMonth = currentDate.getMonth() + 1
-  const currentYear = currentDate.getFullYear()
+  const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
+  const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
 
   useEffect(() => {
     async function loadData() {
@@ -36,7 +35,7 @@ export default function DashboardPage() {
         }
 
         // Try to load from cache first for instant display
-        const cacheKey = `dashboard-${currentYear}-${currentMonth}`
+        const cacheKey = `dashboard-${selectedYear}-${selectedMonth}`
         const cachedData = await cache.getJSON<any>(cacheKey)
         if (cachedData) {
           setCurrentMonthTransactions(cachedData.currentMonthTransactions || [])
@@ -77,9 +76,9 @@ export default function DashboardPage() {
           setLoading(false)
         }
 
-        // Get current month date range
-        const firstDay = new Date(currentYear, currentMonth - 1, 1).toISOString().split("T")[0]
-        const lastDay = new Date(currentYear, currentMonth, 0).toISOString().split("T")[0]
+        // Get selected month date range
+        const firstDay = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split("T")[0]
+        const lastDay = new Date(selectedYear, selectedMonth, 0).toISOString().split("T")[0]
 
         // Fetch fresh data
         const [transactionsResult, trendResult, budgetsResult, categoriesResult] = await Promise.all([
@@ -103,7 +102,7 @@ export default function DashboardPage() {
             .from("transactions")
             .select("date, amount, transaction_type")
             .eq("user_id", user.id)
-            .gte("date", new Date(currentYear, currentMonth - 7, 1).toISOString().split("T")[0])
+            .gte("date", new Date(selectedYear, selectedMonth - 7, 1).toISOString().split("T")[0])
             .or("deleted.is.null,deleted.eq.false"),
 
           supabase
@@ -121,8 +120,8 @@ export default function DashboardPage() {
               )
             `)
             .eq("user_id", user.id)
-            .eq("month", currentMonth)
-            .eq("year", currentYear),
+            .eq("month", selectedMonth)
+            .eq("year", selectedYear),
 
           supabase
             .from("categories")
@@ -194,7 +193,7 @@ export default function DashboardPage() {
     }
 
     loadData()
-  }, [router, currentDate])
+  }, [router, selectedMonth, selectedYear])
 
   if (loading && currentMonthTransactions.length === 0) {
     return (
@@ -219,7 +218,7 @@ export default function DashboardPage() {
       <div className="mb-4 md:mb-8">
         <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Dashboard</h1>
         <p className="text-muted-foreground text-xs md:text-sm">
-          Your spending insights for {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
+          {isCurrentMonth() ? 'Your spending insights for this month' : `Review spending for ${new Date(selectedYear, selectedMonth - 1).toLocaleString("default", { month: "long", year: "numeric" })}`}
         </p>
       </div>
 
@@ -227,8 +226,9 @@ export default function DashboardPage() {
         <BudgetOverview
           budgets={budgets || []}
           netByCategory={netByCategory}
-          month={currentMonth}
-          year={currentYear}
+          rolloverByCategory={rolloverByCategory}
+          month={selectedMonth}
+          year={selectedYear}
         />
 
         <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
