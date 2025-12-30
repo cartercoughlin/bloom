@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { plaidClient } from '@/lib/plaid'
 
+// Force dynamic rendering - don't cache
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export async function GET() {
   try {
     const supabase = await createClient()

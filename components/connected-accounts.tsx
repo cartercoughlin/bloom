@@ -262,9 +262,21 @@ export function ConnectedAccounts() {
     loadAccounts()
   }, [])
 
-  const handlePlaidSuccess = () => {
-    toast.success('Account connected successfully!')
-    loadAccounts()
+  const handlePlaidSuccess = async () => {
+    toast.success('Account connected successfully! Syncing data...')
+
+    // Wait for the exchange-token sync to complete
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    // Clear any cached data
+    await cache.remove('dashboard-data')
+    await cache.removePattern('dashboard-')
+
+    // Refresh the page and load accounts
+    router.refresh()
+    await loadAccounts()
+
+    toast.success('Account synced and ready!')
   }
 
   if (loading) {
