@@ -1,15 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { cache } from '@/lib/capacitor'
+import { cache, isBrowserOnly } from '@/lib/capacitor'
 
 export function SyncButton() {
   const [isLoading, setIsLoading] = useState(false)
+  const [showButton, setShowButton] = useState(false)
   const router = useRouter()
+
+  useEffect(() => {
+    // Only show sync button in regular web browser
+    // (not in PWA or mobile app where auto-sync handles it)
+    setShowButton(isBrowserOnly())
+  }, [])
 
   const handleSync = async () => {
     setIsLoading(true)
@@ -46,8 +53,13 @@ export function SyncButton() {
     }
   }
 
+  // Don't render button on mobile/PWA
+  if (!showButton) {
+    return null
+  }
+
   return (
-    <Button 
+    <Button
       onClick={handleSync}
       disabled={isLoading}
       className="text-xs md:text-sm h-8 md:h-10 px-3 md:px-4"
