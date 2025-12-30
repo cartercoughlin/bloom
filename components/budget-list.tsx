@@ -105,6 +105,15 @@ export function BudgetList({
     }
   }, [selectedCategoryId, categories])
 
+  // Handle savings goal toggle
+  const handleSavingsGoalToggle = (checked: boolean) => {
+    setIsSavingsGoal(checked)
+    // Auto-fill target amount with budget amount when toggled ON
+    if (checked && !targetAmount && amount) {
+      setTargetAmount(amount)
+    }
+  }
+
   // Calculate percentage through the month
   const getPercentageThroughMonth = () => {
     const now = new Date()
@@ -351,7 +360,7 @@ export function BudgetList({
                     <Switch
                       id="savings-goal"
                       checked={isSavingsGoal}
-                      onCheckedChange={setIsSavingsGoal}
+                      onCheckedChange={handleSavingsGoalToggle}
                     />
                   </div>
 
