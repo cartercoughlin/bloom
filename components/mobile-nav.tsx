@@ -33,7 +33,7 @@ export function MobileNav() {
 
   return (
     <nav className="fixed bottom-6 left-4 right-4 z-50 bg-background/95 backdrop-blur-sm border rounded-full shadow-lg md:hidden">
-      <div className="flex items-center justify-around h-12">
+      <div className="flex items-center justify-evenly h-12">
         {navItems.map((item) => {
           const Icon = item.icon
           const isActive = pathname?.startsWith(item.href)
