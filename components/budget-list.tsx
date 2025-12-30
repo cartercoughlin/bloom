@@ -315,7 +315,7 @@ export function BudgetList({
                           {budget.categories.icon}
                         </div>
                       )}
-                      <div>
+                      <div className="flex-1">
                         <CardTitle className="text-sm md:text-lg">{budget.categories?.name}</CardTitle>
                         <CardDescription className="text-xs md:text-sm">
                           {isIncomeCategory ? (
@@ -331,30 +331,23 @@ export function BudgetList({
                                   • <PrivateAmount amount={rollover} prefix="$" className="inline" /> rollover
                                 </span>
                               )}
-                              {income > 0 && (
-                                <span className="text-green-600 ml-2">
-                                  • Income offset: <PrivateAmount amount={income} className="inline" />
-                                </span>
-                              )}
                             </>
                           )}
                         </CardDescription>
+                        {!isIncomeCategory && income > 0 && (
+                          <p className="text-xs text-green-600 mt-1">
+                            <PrivateAmount amount={income} prefix="$" className="inline" /> {net >= 0 ? 'ahead' : 'behind'} (income offset)
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <PrivateAmount
-                        amount={Math.abs(net)}
-                        prefix={net >= 0 ? '+$' : '-$'}
-                        className={`text-sm md:text-base font-bold ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}
-                      />
-                      <div className="flex items-center gap-1 md:gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
-                          <Edit className="h-3 w-3 md:h-4 md:w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(budget.id)} className="h-7 w-7 md:h-9 md:w-9">
-                          <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
-                        </Button>
-                      </div>
+                    <div className="flex items-center gap-1 md:gap-2">
+                      <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(budget)} className="h-7 w-7 md:h-9 md:w-9">
+                        <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(budget.id)} className="h-7 w-7 md:h-9 md:w-9">
+                        <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
