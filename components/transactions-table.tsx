@@ -9,7 +9,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat, Trash2, AlertCircle } from "lucide-react"
+import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat, Trash2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { format } from "date-fns"
 import { TransactionCategorizer } from "./transaction-categorizer"
 import Link from "next/link"
@@ -60,6 +60,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
   const [amountMax, setAmountMax] = useState("")
   const [showHidden, setShowHidden] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
+  const [showUncategorized, setShowUncategorized] = useState(true)
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [categoryJustChanged, setCategoryJustChanged] = useState<string | null>(null)
 
@@ -391,16 +392,35 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
         {/* Uncategorized Transactions Section */}
         {uncategorizedTransactions.length > 0 && (
           <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-100">
-                Needs Categorization ({uncategorizedTransactions.length})
-              </h3>
+            <div
+              className="flex items-center justify-between mb-3 cursor-pointer"
+              onClick={() => setShowUncategorized(!showUncategorized)}
+            >
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-100">
+                  Needs Categorization ({uncategorizedTransactions.length})
+                </h3>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900"
+              >
+                {showUncategorized ? (
+                  <ChevronUp className="h-4 w-4" />
+                ) : (
+                  <ChevronDown className="h-4 w-4" />
+                )}
+              </Button>
             </div>
-            <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
-              These transactions haven't been categorized yet. Assign categories to include them in your budget tracking.
-            </p>
-            <div className="space-y-2">
+
+            {showUncategorized && (
+              <>
+                <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+                  These transactions haven't been categorized yet. Assign categories to include them in your budget tracking.
+                </p>
+                <div className="space-y-2">
               {uncategorizedTransactions.map((tx) => {
                 const txId = tx.id
 
@@ -470,7 +490,9 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                   </div>
                 )
               })}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
