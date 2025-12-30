@@ -28,6 +28,7 @@ export function AppNav() {
   // Show month selector on dashboard and budgets pages
   const showMonthSelector = pathname === "/dashboard" || pathname === "/budgets"
   const monthName = new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'long' })
+  const shortMonthName = new Date(selectedYear, selectedMonth - 1).toLocaleString('default', { month: 'short' })
 
   const navItems = [
     {
@@ -89,27 +90,29 @@ export function AppNav() {
         <div className="flex items-center gap-2">
           {/* Month Navigation */}
           {showMonthSelector && (
-            <div className="flex items-center gap-1 md:gap-2 mr-2">
+            <div className="flex items-center gap-0.5">
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={goToPreviousMonth}
-                className="h-7 w-7 md:h-8 md:w-8 p-0"
+                className="h-8 w-8 p-0"
               >
-                <ChevronLeft className="h-3 w-3 md:h-4 md:w-4" />
+                <ChevronLeft className="h-4 w-4" />
               </Button>
 
-              <div className="text-xs md:text-sm font-medium min-w-[90px] md:min-w-[120px] text-center">
-                {monthName} {selectedYear}
-              </div>
+              <span className="text-sm font-medium px-2">
+                <span className="hidden md:inline">{monthName}</span>
+                <span className="md:hidden">{shortMonthName}</span>
+                {' '}{selectedYear}
+              </span>
 
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
                 onClick={goToNextMonth}
-                className="h-7 w-7 md:h-8 md:w-8 p-0"
+                className="h-8 w-8 p-0"
               >
-                <ChevronRight className="h-3 w-3 md:h-4 md:w-4" />
+                <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
           )}
