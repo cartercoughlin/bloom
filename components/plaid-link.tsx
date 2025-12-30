@@ -107,10 +107,10 @@ export function PlaidLink({ onSuccess }: PlaidLinkProps) {
   }
 
   return (
-    <Button 
+    <Button
       onClick={createLinkToken}
       disabled={loading || !plaidLoaded}
-      className="w-full"
+      className="w-full sm:w-auto"
     >
       {loading ? 'Connecting...' : 'Connect Bank Account'}
     </Button>
