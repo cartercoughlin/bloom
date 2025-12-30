@@ -17,6 +17,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Plus, Edit, Trash2, Loader2, Target } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { PrivateAmount } from "./private-amount"
@@ -406,17 +417,35 @@ export function BudgetList({
                       >
                         <Edit className="h-3 w-3 md:h-4 md:w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDelete(budget.id)
-                        }}
-                        className="h-7 w-7 md:h-9 md:w-9"
-                      >
-                        <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
-                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-7 w-7 md:h-9 md:w-9"
+                          >
+                            <Trash2 className="h-3 w-3 md:h-4 md:w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Budget?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete the budget for {budget.categories?.name}? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDelete(budget.id)}
+                              className="bg-destructive text-white hover:bg-destructive/90"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </div>
                 </CardHeader>
