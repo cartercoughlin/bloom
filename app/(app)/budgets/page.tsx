@@ -22,6 +22,7 @@ export default function BudgetsPage() {
   const [netByCategory, setNetByCategory] = useState<any>({})
   const [spendingByCategory, setSpendingByCategory] = useState<any>({})
   const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
+  const [editBudgetId, setEditBudgetId] = useState<string | null>(null)
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
 
   const today = new Date()
@@ -342,6 +343,9 @@ export default function BudgetsPage() {
           rolloverByCategory={rolloverByCategory}
           month={selectedMonth}
           year={selectedYear}
+          editBudgetId={editBudgetId}
+          onEditComplete={() => setEditBudgetId(null)}
+          allBudgets={[...(budgets || []), ...(savingsGoals || [])]}
         />
 
         <SavingsGoalsList
@@ -350,6 +354,7 @@ export default function BudgetsPage() {
           rolloverByCategory={rolloverByCategory}
           month={selectedMonth}
           year={selectedYear}
+          onEdit={(goalId) => setEditBudgetId(goalId)}
         />
       </div>
     </div>

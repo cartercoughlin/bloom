@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Trash2, Loader2, PiggyBank } from "lucide-react"
+import { Edit, Trash2, Loader2, PiggyBank } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { PrivateAmount } from "./private-amount"
 
@@ -52,6 +52,7 @@ interface SavingsGoalsListProps {
   rolloverByCategory: Record<string, number>
   month: number
   year: number
+  onEdit: (goalId: string) => void
 }
 
 export function SavingsGoalsList({
@@ -59,7 +60,8 @@ export function SavingsGoalsList({
   netByCategory,
   rolloverByCategory,
   month,
-  year
+  year,
+  onEdit
 }: SavingsGoalsListProps) {
   const [savingsGoals, setSavingsGoals] = useState(initialSavingsGoals)
   const [showTransactions, setShowTransactions] = useState(false)
@@ -197,6 +199,17 @@ export function SavingsGoalsList({
                     </div>
                   </div>
                   <div className="flex items-center gap-1 md:gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEdit(goal.id)
+                      }}
+                      className="h-7 w-7 md:h-9 md:w-9"
+                    >
+                      <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                    </Button>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button
