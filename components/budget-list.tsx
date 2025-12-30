@@ -68,6 +68,9 @@ interface BudgetListProps {
   rolloverByCategory?: Record<string, number>
   month: number
   year: number
+  editBudgetId?: string | null
+  onEditComplete?: () => void
+  allBudgets?: Budget[]
 }
 
 export function BudgetList({
@@ -77,7 +80,10 @@ export function BudgetList({
   spending,
   rolloverByCategory = {},
   month,
-  year
+  year,
+  editBudgetId = null,
+  onEditComplete,
+  allBudgets
 }: BudgetListProps) {
   const [budgets, setBudgets] = useState(initialBudgets)
   const [categories, setCategories] = useState(initialCategories)
@@ -113,6 +119,17 @@ export function BudgetList({
       setTargetAmount(amount)
     }
   }
+
+  // Handle external edit request (from savings goals)
+  useEffect(() => {
+    if (editBudgetId) {
+      const searchBudgets = allBudgets || budgets
+      const budgetToEdit = searchBudgets.find(b => b.id === editBudgetId)
+      if (budgetToEdit) {
+        handleOpenDialog(budgetToEdit)
+      }
+    }
+  }, [editBudgetId, allBudgets, budgets])
 
   // Calculate percentage through the month
   const getPercentageThroughMonth = () => {
@@ -296,6 +313,13 @@ export function BudgetList({
   const usedCategoryIds = budgets.map((b) => b.category_id)
   const availableCategories = categories.filter((c) => !usedCategoryIds.includes(c.id) || c.id === selectedCategoryId)
 
+  const handleDialogClose = (open: boolean) => {
+    setIsOpen(open)
+    if (!open && onEditComplete) {
+      onEditComplete()
+    }
+  }
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex items-center justify-between">
@@ -303,7 +327,7 @@ export function BudgetList({
           <h2 className="text-lg md:text-2xl font-bold">Category Budgets</h2>
           <p className="text-muted-foreground text-xs md:text-sm">Set spending limits for each category</p>
         </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog open={isOpen} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
             <Button onClick={() => handleOpenDialog()} className="text-xs md:text-sm h-8 md:h-10 px-3 md:px-4">
               <Plus className="mr-1 md:mr-2 h-3 w-3 md:h-4 md:w-4" />
