@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Loader2, Target } from "lucide-react"
+import { Plus, Edit, Trash2, Loader2, Target, Repeat } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { PrivateAmount } from "./private-amount"
 
@@ -98,6 +98,7 @@ export function BudgetList({
   const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null)
   const [categoryTransactions, setCategoryTransactions] = useState<any[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null)
   const router = useRouter()
 
   // Update savings goal state when selected category changes
@@ -274,6 +275,53 @@ export function BudgetList({
     }
   }
 
+  const handleToggleRecurring = async (transactionId: string, currentRecurring: boolean) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}/recurring`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recurring: !currentRecurring }),
+      })
+
+      if (response.ok) {
+        setCategoryTransactions(prev =>
+          prev.map(tx =>
+            tx.id === transactionId ? { ...tx, recurring: !currentRecurring } : tx
+          )
+        )
+        if (selectedTransaction?.id === transactionId) {
+          setSelectedTransaction({ ...selectedTransaction, recurring: !currentRecurring })
+        }
+      } else {
+        console.error("Failed to toggle recurring status")
+        alert("Failed to update recurring status")
+      }
+    } catch (error) {
+      console.error("Error toggling recurring status:", error)
+      alert("Error updating recurring status")
+    }
+  }
+
+  const handleDeleteTransaction = async (transactionId: string) => {
+    try {
+      const response = await fetch(`/api/transactions/${transactionId}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setCategoryTransactions(prev => prev.filter(tx => tx.id !== transactionId))
+        setSelectedTransaction(null)
+        router.refresh()
+      } else {
+        console.error("Failed to delete transaction")
+        alert("Failed to delete transaction")
+      }
+    } catch (error) {
+      console.error("Error deleting transaction:", error)
+      alert("Error deleting transaction")
+    }
+  }
+
   const handleShowTransactions = async (budget: Budget) => {
     setSelectedBudget(budget)
     setShowTransactions(true)
@@ -285,9 +333,10 @@ export function BudgetList({
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Not authenticated")
 
-      // Get transactions for this category and month
-      const firstDay = new Date(year, month - 1, 1).toISOString().split("T")[0]
-      const lastDay = new Date(year, month, 0).toISOString().split("T")[0]
+      // Get transactions for this category and month (use local dates to avoid timezone issues)
+      const lastDayDate = new Date(year, month, 0)
+      const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
+      const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
       const { data, error } = await supabase
         .from("transactions")
@@ -644,9 +693,10 @@ export function BudgetList({
                 {categoryTransactions.map((tx) => (
                   <div
                     key={tx.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
                       tx.hidden ? 'opacity-50' : ''
                     }`}
+                    onClick={() => setSelectedTransaction(tx)}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {tx.logo_url && (
@@ -700,6 +750,89 @@ export function BudgetList({
               </div>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transaction Detail Dialog */}
+      <Dialog open={!!selectedTransaction} onOpenChange={() => setSelectedTransaction(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Transaction Details</DialogTitle>
+          </DialogHeader>
+          {selectedTransaction && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                {selectedTransaction.logo_url && (
+                  <img
+                    src={selectedTransaction.logo_url}
+                    alt={selectedTransaction.merchant_name || selectedTransaction.description}
+                    className="w-8 h-8 rounded-full object-cover"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none'
+                    }}
+                  />
+                )}
+                <div className="flex-1">
+                  <h3 className="font-medium">{selectedTransaction.merchant_name || selectedTransaction.description}</h3>
+                  {selectedTransaction.merchant_name && selectedTransaction.description !== selectedTransaction.merchant_name && (
+                    <p className="text-sm text-muted-foreground">{selectedTransaction.description}</p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(selectedTransaction.date).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
+                  </p>
+                </div>
+                <PrivateAmount
+                  amount={selectedTransaction.amount}
+                  type={selectedTransaction.transaction_type}
+                  className={`text-lg font-semibold ${
+                    selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                  }`}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant={selectedTransaction.recurring ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => {
+                    handleToggleRecurring(selectedTransaction.id, selectedTransaction.recurring || false)
+                  }}
+                  className="flex-1"
+                >
+                  <Repeat className="mr-2 h-4 w-4" />
+                  {selectedTransaction.recurring ? "Recurring" : "Mark Recurring"}
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Transaction?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to delete this transaction? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleDeleteTransaction(selectedTransaction.id)}
+                        className="bg-destructive text-white hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
