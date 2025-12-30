@@ -69,12 +69,16 @@ export function ConnectedAccounts() {
       
       try {
         const supabase = createClient()
-        
+
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error("Not authenticated")
+
         // Get the item_id for this plaid item
         const { data: item } = await supabase
           .from('plaid_items')
           .select('item_id')
           .eq('id', id)
+          .eq('user_id', user.id)
           .single()
 
         if (!item) {
@@ -86,18 +90,20 @@ export function ConnectedAccounts() {
           const { data: existingTransactions } = await supabase
             .from('transactions')
             .select('bank, description')
+            .eq('user_id', user.id)
             .limit(10)
-          
+
           console.log('Existing transactions:', existingTransactions)
           console.log('Looking for bank name:', accountName)
-          
+
           // Delete transactions by matching bank name (contains account name)
           const { data: deletedTransactions, error: deleteError } = await supabase
             .from('transactions')
             .delete()
+            .eq('user_id', user.id)
             .ilike('bank', `%${accountName}%`)
             .select()
-            
+
           console.log('Deleted transactions:', deletedTransactions)
           console.log('Delete error:', deleteError)
         } else {
@@ -105,17 +111,19 @@ export function ConnectedAccounts() {
           const { data: existingBalances } = await supabase
             .from('account_balances')
             .select('account_name')
-          
+            .eq('user_id', user.id)
+
           console.log('Existing balances:', existingBalances)
           console.log('Looking for account name:', accountName)
-          
+
           // Delete account balances by matching account name
           const { data: deletedBalances, error: deleteError } = await supabase
             .from('account_balances')
             .delete()
+            .eq('user_id', user.id)
             .ilike('account_name', `%${accountName}%`)
             .select()
-            
+
           console.log('Deleted balances:', deletedBalances)
           console.log('Delete error:', deleteError)
         }
@@ -125,6 +133,7 @@ export function ConnectedAccounts() {
           .from('plaid_items')
           .update({ [field]: value })
           .eq('id', id)
+          .eq('user_id', user.id)
 
         if (error) throw error
         
@@ -140,13 +149,18 @@ export function ConnectedAccounts() {
     // For enabling, just update the preference
     try {
       const supabase = createClient()
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Not authenticated")
+
       const { error } = await supabase
         .from('plaid_items')
         .update({ [field]: value })
         .eq('id', id)
+        .eq('user_id', user.id)
 
       if (error) throw error
-      
+
       loadAccounts()
     } catch (error) {
       console.error('Error updating sync preference:', error)
@@ -157,12 +171,16 @@ export function ConnectedAccounts() {
   const removeAccount = async (id: string, accountName: string) => {
     try {
       const supabase = createClient()
-      
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Not authenticated")
+
       // Get the item_id before deleting
       const { data: item } = await supabase
         .from('plaid_items')
         .select('item_id')
         .eq('id', id)
+        .eq('user_id', user.id)
         .single()
 
       if (!item) {
@@ -175,12 +193,14 @@ export function ConnectedAccounts() {
         supabase
           .from('transactions')
           .delete()
+          .eq('user_id', user.id)
           .eq('bank', accountName),
-        
+
         // Delete account balances
         supabase
           .from('account_balances')
           .delete()
+          .eq('user_id', user.id)
           .like('account_name', `%${accountName}%`)
       ])
 
@@ -189,9 +209,10 @@ export function ConnectedAccounts() {
         .from('plaid_items')
         .delete()
         .eq('id', id)
+        .eq('user_id', user.id)
 
       if (error) throw error
-      
+
       toast.success('Account and all related data removed')
       loadAccounts()
     } catch (error) {
