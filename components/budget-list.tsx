@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
@@ -49,6 +50,8 @@ interface Category {
   name: string
   color: string
   icon: string | null
+  is_rollover?: boolean
+  target_amount?: number | null
 }
 
 interface BudgetListProps {
@@ -82,12 +85,25 @@ export function BudgetList({
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null)
   const [selectedCategoryId, setSelectedCategoryId] = useState("")
   const [amount, setAmount] = useState("")
+  const [isSavingsGoal, setIsSavingsGoal] = useState(false)
+  const [targetAmount, setTargetAmount] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [showTransactions, setShowTransactions] = useState(false)
   const [selectedBudget, setSelectedBudget] = useState<Budget | null>(null)
   const [categoryTransactions, setCategoryTransactions] = useState<any[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
   const router = useRouter()
+
+  // Update savings goal state when selected category changes
+  useEffect(() => {
+    if (selectedCategoryId) {
+      const category = categories.find(c => c.id === selectedCategoryId)
+      if (category) {
+        setIsSavingsGoal(category.is_rollover || false)
+        setTargetAmount(category.target_amount?.toString() || "")
+      }
+    }
+  }, [selectedCategoryId, categories])
 
   // Calculate percentage through the month
   const getPercentageThroughMonth = () => {
@@ -130,10 +146,17 @@ export function BudgetList({
       setEditingBudget(budget)
       setSelectedCategoryId(budget.category_id)
       setAmount(budget.amount.toString())
+
+      // Set savings goal state from category
+      const category = categories.find(c => c.id === budget.category_id)
+      setIsSavingsGoal(category?.is_rollover || false)
+      setTargetAmount(category?.target_amount?.toString() || "")
     } else {
       setEditingBudget(null)
       setSelectedCategoryId("")
       setAmount("")
+      setIsSavingsGoal(false)
+      setTargetAmount("")
     }
     setIsOpen(true)
   }
@@ -170,6 +193,28 @@ export function BudgetList({
         })
 
         if (error) throw error
+      }
+
+      // Update category savings goal settings if changed
+      const category = categories.find(c => c.id === selectedCategoryId)
+      if (category && (category.is_rollover !== isSavingsGoal || category.target_amount?.toString() !== targetAmount)) {
+        const { error: categoryError } = await supabase
+          .from("categories")
+          .update({
+            is_rollover: isSavingsGoal,
+            target_amount: isSavingsGoal && targetAmount ? parseFloat(targetAmount) : null,
+          })
+          .eq("id", selectedCategoryId)
+          .eq("user_id", user.id)
+
+        if (categoryError) throw categoryError
+
+        // Update local categories state
+        setCategories(prev => prev.map(c =>
+          c.id === selectedCategoryId
+            ? { ...c, is_rollover: isSavingsGoal, target_amount: isSavingsGoal && targetAmount ? parseFloat(targetAmount) : null }
+            : c
+        ))
       }
 
       setIsOpen(false)
@@ -293,6 +338,45 @@ export function BudgetList({
                   />
                 </div>
               </div>
+
+              {selectedCategoryId && (
+                <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="savings-goal">Savings Goal / Rollover Category</Label>
+                      <p className="text-xs text-muted-foreground">
+                        Unused budget carries over to next month
+                      </p>
+                    </div>
+                    <Switch
+                      id="savings-goal"
+                      checked={isSavingsGoal}
+                      onCheckedChange={setIsSavingsGoal}
+                    />
+                  </div>
+
+                  {isSavingsGoal && (
+                    <div className="space-y-2 pt-2 border-t">
+                      <Label htmlFor="target-amount">Target Amount (Optional)</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-2.5 text-muted-foreground">$</span>
+                        <Input
+                          id="target-amount"
+                          type="number"
+                          step="0.01"
+                          value={targetAmount}
+                          onChange={(e) => setTargetAmount(e.target.value)}
+                          className="pl-7"
+                          placeholder="e.g., 2000"
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Set a savings goal target for this category
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading}>
