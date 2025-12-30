@@ -15,12 +15,16 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    console.log('[connected-accounts] Fetching accounts for user:', user.id, user.email)
+
     // Fetch plaid items
     const { data: plaidItems, error: itemsError } = await supabase
       .from('plaid_items')
       .select('id, item_id, account_name, institution_name, sync_transactions, sync_balances, created_at, updated_at, access_token')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
+
+    console.log('[connected-accounts] Found plaid items:', plaidItems?.length, 'for user:', user.id)
 
     if (itemsError) {
       console.error('Database error:', itemsError)
