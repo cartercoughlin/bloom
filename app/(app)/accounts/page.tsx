@@ -25,9 +25,28 @@ export default function AccountsPage() {
 
   const handleLogout = async () => {
     const supabase = createClient()
+
+    // Clear all cached data
+    const { cache, storage } = await import('@/lib/capacitor')
+    await cache.clear()
+    await storage.clear()
+
+    // Clear browser storage (for web)
+    if (typeof window !== 'undefined') {
+      localStorage.clear()
+      sessionStorage.clear()
+    }
+
+    // Sign out
     await supabase.auth.signOut()
-    router.push('/auth/login')
-    router.refresh()
+
+    // Hard refresh to clear any remaining state
+    if (typeof window !== 'undefined') {
+      window.location.href = '/auth/login'
+    } else {
+      router.push('/auth/login')
+      router.refresh()
+    }
   }
 
   useEffect(() => {
