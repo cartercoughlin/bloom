@@ -1,5 +1,5 @@
 // Service Worker for Bloom Budget PWA
-const CACHE_NAME = 'bloom-budget-v5';
+const CACHE_NAME = 'bloom-budget-v6';
 const urlsToCache = [
   '/',
   '/dashboard',
@@ -52,6 +52,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip auth routes and API routes - always fetch fresh
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith('/auth/') ||
+      url.pathname.startsWith('/api/') ||
+      url.pathname.startsWith('/_next/')) {
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -61,8 +70,11 @@ self.addEventListener('fetch', (event) => {
         }
 
         return fetch(event.request).then((response) => {
-          // Don't cache if not a success response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
+          // Don't cache if not a success response or if it's a redirect
+          if (!response ||
+              response.status !== 200 ||
+              response.type !== 'basic' ||
+              response.redirected) {
             return response;
           }
 
