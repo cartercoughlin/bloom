@@ -14,9 +14,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { description, amount } = await request.json()
+    const { transactionId, description, amount } = await request.json()
 
-    const suggestions = await suggestCategories(description, amount, user.id)
+    const suggestions = await suggestCategories(
+      transactionId || null,
+      description,
+      amount,
+      user.id
+    )
 
     return NextResponse.json({ suggestions })
   } catch (error) {

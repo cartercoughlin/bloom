@@ -62,7 +62,7 @@ export function TransactionCategorizer({
       const response = await fetch("/api/category-suggestions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description, amount }),
+        body: JSON.stringify({ transactionId, description, amount }),
       })
 
       if (response.ok) {

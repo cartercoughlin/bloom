@@ -7,6 +7,7 @@ import {
   AccountsGetResponse,
   InstitutionsGetByIdRequest
 } from 'plaid'
+import { assignCategoryByRules } from './category-rules'
 
 export interface SyncResult {
   success: boolean
@@ -460,6 +461,21 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
     }
 
     // Create new transaction
+    const description = transaction.original_description || transaction.name
+    const amount = Math.abs(transaction.amount)
+    const transaction_type = transaction.amount > 0 ? 'debit' : 'credit'
+
+    // Try to auto-categorize using rules
+    const suggestedCategoryId = await assignCategoryByRules(
+      {
+        description,
+        amount,
+        transaction_type,
+        bank: bankName,
+      },
+      userId
+    )
+
     const transactionData = {
       user_id: userId,
       plaid_transaction_id: transaction.transaction_id,
@@ -467,10 +483,10 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       date: transaction.date,
       // Use original_description when available (full bank description),
       // otherwise fall back to cleaned name
-      description: transaction.original_description || transaction.name,
-      amount: Math.abs(transaction.amount),
-      transaction_type: transaction.amount > 0 ? 'debit' : 'credit',
-      category_id: null,
+      description,
+      amount,
+      transaction_type,
+      category_id: suggestedCategoryId, // Auto-categorize if rule matches, otherwise null
       bank: bankName,
       hidden: false,
       merchant_name: transaction.merchant_name || null,

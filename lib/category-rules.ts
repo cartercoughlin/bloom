@@ -181,9 +181,133 @@ export async function learnFromAssignment(transactionId: string, categoryId: str
   }
 }
 
-export async function suggestCategories(description: string, amount: number, userId: string): Promise<SmartAssignment[]> {
-  // Simple suggestions without database rules for now
-  return []
+export async function suggestCategories(
+  transactionId: string | null,
+  description: string,
+  amount: number,
+  userId: string,
+  transactionType?: 'debit' | 'credit',
+  bank?: string,
+  account?: string,
+  institution?: string
+): Promise<SmartAssignment[]> {
+  const supabase = await createClient()
+
+  // If we have a transaction ID, fetch full details from database
+  if (transactionId) {
+    const { data: tx } = await supabase
+      .from('transactions')
+      .select('description, amount, transaction_type, bank')
+      .eq('id', transactionId)
+      .single()
+
+    if (tx) {
+      description = tx.description
+      amount = tx.amount
+      transactionType = tx.transaction_type
+      bank = tx.bank || undefined
+    }
+  }
+
+  // First, try to match using explicit category rules
+  const transaction: Transaction = {
+    description,
+    amount,
+    transaction_type: transactionType || 'debit',
+    bank,
+    account,
+    institution,
+  }
+
+  const ruleCategoryId = await assignCategoryByRules(transaction, userId)
+  if (ruleCategoryId) {
+    return [{
+      transactionId: transactionId || '',
+      categoryId: ruleCategoryId,
+      confidence: 0.95,
+      reason: 'Matched category rule'
+    }]
+  }
+
+  // If no rule matches, look for similar transactions
+  const { data: categorizedTransactions } = await supabase
+    .from('transactions')
+    .select('id, description, category_id, amount')
+    .eq('user_id', userId)
+    .not('category_id', 'is', null)
+    .order('date', { ascending: false })
+    .limit(500) // Look at recent 500 categorized transactions
+
+  if (!categorizedTransactions || categorizedTransactions.length === 0) {
+    return [] // No categorized transactions to learn from
+  }
+
+  // Calculate similarity scores for each categorized transaction
+  interface ScoredTransaction {
+    categoryId: string
+    similarity: number
+    matchedDescription: string
+  }
+
+  const scoredMatches: ScoredTransaction[] = []
+
+  for (const tx of categorizedTransactions) {
+    const similarity = calculateSimilarity(description, tx.description)
+
+    // Only consider transactions with reasonable similarity
+    if (similarity > 0.3) {
+      scoredMatches.push({
+        categoryId: tx.category_id,
+        similarity,
+        matchedDescription: tx.description
+      })
+    }
+  }
+
+  if (scoredMatches.length === 0) {
+    return [] // No similar transactions found
+  }
+
+  // Sort by similarity and group by category
+  scoredMatches.sort((a, b) => b.similarity - a.similarity)
+
+  // Calculate confidence based on how many similar transactions share the same category
+  const categoryScores = new Map<string, { count: number; totalSimilarity: number; bestMatch: string }>()
+
+  for (const match of scoredMatches) {
+    const existing = categoryScores.get(match.categoryId)
+    if (existing) {
+      existing.count++
+      existing.totalSimilarity += match.similarity
+    } else {
+      categoryScores.set(match.categoryId, {
+        count: 1,
+        totalSimilarity: match.similarity,
+        bestMatch: match.matchedDescription
+      })
+    }
+  }
+
+  // Build suggestions sorted by confidence
+  const suggestions: SmartAssignment[] = Array.from(categoryScores.entries())
+    .map(([categoryId, score]) => {
+      // Confidence based on both similarity and frequency
+      const avgSimilarity = score.totalSimilarity / score.count
+      const confidence = Math.min(0.9, avgSimilarity * (1 + Math.log(score.count) * 0.1))
+
+      return {
+        transactionId: transactionId || '',
+        categoryId,
+        confidence,
+        reason: score.count > 1
+          ? `${score.count} similar transactions (e.g., "${score.bestMatch}")`
+          : `Similar to "${score.bestMatch}"`
+      }
+    })
+    .sort((a, b) => b.confidence - a.confidence)
+    .slice(0, 3) // Return top 3 suggestions
+
+  return suggestions
 }
 
 function calculateSimilarity(str1: string, str2: string): number {
