@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
@@ -60,9 +60,23 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
   const [amountMax, setAmountMax] = useState("")
   const [showHidden, setShowHidden] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
-  const [showUncategorized, setShowUncategorized] = useState(true)
+  const [showUncategorized, setShowUncategorized] = useState(() => {
+    // Load from localStorage, default to true if not found
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('showUncategorized')
+      return saved !== null ? saved === 'true' : true
+    }
+    return true
+  })
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [categoryJustChanged, setCategoryJustChanged] = useState<string | null>(null)
+
+  // Save showUncategorized to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('showUncategorized', String(showUncategorized))
+    }
+  }, [showUncategorized])
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
