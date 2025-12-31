@@ -81,9 +81,10 @@ export function SavingsGoalsList({
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Not authenticated")
 
-      // Get transactions for this category and month
-      const firstDay = new Date(year, month - 1, 1).toISOString().split("T")[0]
-      const lastDay = new Date(year, month, 0).toISOString().split("T")[0]
+      // Get transactions for this category and month (use local dates to avoid timezone issues)
+      const lastDayDate = new Date(year, month, 0)
+      const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
+      const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
       const { data, error } = await supabase
         .from("transactions")

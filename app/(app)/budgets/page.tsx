@@ -160,9 +160,11 @@ export default function BudgetsPage() {
         // Calculate rollover from previous month
         const rollover = await calculateRollover(supabase, user.id)
 
-        // Get transactions for selected month
-        const firstDay = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split("T")[0]
-        const lastDay = new Date(selectedYear, selectedMonth, 0).toISOString().split("T")[0]
+        // Get transactions for selected month (use local dates to avoid timezone issues)
+        const firstDayDate = new Date(selectedYear, selectedMonth - 1, 1)
+        const lastDayDate = new Date(selectedYear, selectedMonth, 0)
+        const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+        const lastDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
         // Fetch fresh data
         const [budgetsResult, categoriesResult, transactionsResult] = await Promise.all([
