@@ -177,6 +177,8 @@ export default function BudgetsPage() {
       const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
       const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
 
+      console.log(`Querying transactions for range: ${firstDay} to ${nextMonthFirstDay}`)
+
       // Fetch fresh data
       const [budgetsResult, categoriesResult, transactionsResult] = await Promise.all([
         supabase
@@ -204,12 +206,26 @@ export default function BudgetsPage() {
 
         supabase
           .from("transactions")
-          .select("category_id, amount, transaction_type, recurring, hidden text, hidden")
+          .select("id, category_id, amount, transaction_type, recurring, hidden, date")
           .eq("user_id", user.id)
           .gte("date", firstDay)
           .lt("date", nextMonthFirstDay)
-          .or("deleted.is.null,deleted.eq.false")
+          .not("deleted", "eq", true) // More robust way to say "not deleted"
       ])
+
+      if (transactionsResult.error) {
+        console.error("Error fetching transactions:", transactionsResult.error)
+      }
+
+      console.log(`Fetched ${transactionsResult.data?.length || 0} transactions`)
+      if (transactionsResult.data && transactionsResult.data.length > 0) {
+        console.log("Sample transaction:", {
+          id: transactionsResult.data[0].id,
+          category_id: transactionsResult.data[0].category_id,
+          amount: transactionsResult.data[0].amount,
+          type: transactionsResult.data[0].transaction_type
+        })
+      }
 
       // Calculate net by category with recurring/variable breakdown
       const categoryTotals: Record<string, {
@@ -220,10 +236,12 @@ export default function BudgetsPage() {
         variableExpenses: number
       }> = {}
 
+      let categorizedCount = 0
       transactionsResult.data?.forEach((tx) => {
         if (tx.hidden) return
 
         if (tx.category_id) {
+          categorizedCount++
           if (!categoryTotals[tx.category_id]) {
             categoryTotals[tx.category_id] = {
               income: 0,
@@ -251,6 +269,10 @@ export default function BudgetsPage() {
           categoryData.net = categoryData.income - categoryData.expenses
         }
       })
+
+      console.log(`Categorized ${categorizedCount} out of ${transactionsResult.data?.length || 0} transactions`)
+      console.log("Budget category IDs:", budgetsResult.data?.map(b => b.category_id))
+      console.log("Category totals keys:", Object.keys(categoryTotals))
 
       const spending: Record<string, number> = {}
       Object.entries(categoryTotals).forEach(([categoryId, data]) => {

@@ -104,6 +104,15 @@ export function BudgetList({
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null)
   const router = useRouter()
 
+  // Sync internal state with props when they change
+  useEffect(() => {
+    setBudgets(initialBudgets)
+  }, [initialBudgets])
+
+  useEffect(() => {
+    setCategories(initialCategories)
+  }, [initialCategories])
+
   // Update savings goal state when selected category changes
   useEffect(() => {
     if (selectedCategoryId) {

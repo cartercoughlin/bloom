@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { cache } from "@/lib/capacitor"
 import { Button } from "@/components/ui/button"
@@ -72,6 +72,11 @@ export function SavingsGoalsList({
   const [categoryTransactions, setCategoryTransactions] = useState<any[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
   const router = useRouter()
+
+  // Sync internal state with props when they change
+  useEffect(() => {
+    setSavingsGoals(initialSavingsGoals)
+  }, [initialSavingsGoals])
 
   const handleShowTransactions = async (goal: SavingsGoal) => {
     setSelectedGoal(goal)
