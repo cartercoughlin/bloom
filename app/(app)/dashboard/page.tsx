@@ -76,9 +76,16 @@ export default function DashboardPage() {
           setLoading(false)
         }
 
-        // Get selected month date range
-        const firstDay = new Date(selectedYear, selectedMonth - 1, 1).toISOString().split("T")[0]
-        const lastDay = new Date(selectedYear, selectedMonth, 0).toISOString().split("T")[0]
+        // Get selected month date range (use local dates to avoid timezone issues)
+        const lastDayDate = new Date(selectedYear, selectedMonth, 0)
+        const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+        const lastDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
+
+        // Get trend start date (6 months prior)
+        const trendStartMonth = selectedMonth - 6
+        const trendStartYear = trendStartMonth <= 0 ? selectedYear - 1 : selectedYear
+        const trendMonth = trendStartMonth <= 0 ? trendStartMonth + 12 : trendStartMonth
+        const trendStartDay = `${trendStartYear}-${String(trendMonth).padStart(2, '0')}-01`
 
         // Fetch fresh data
         const [transactionsResult, trendResult, budgetsResult, categoriesResult] = await Promise.all([
@@ -102,7 +109,7 @@ export default function DashboardPage() {
             .from("transactions")
             .select("date, amount, transaction_type")
             .eq("user_id", user.id)
-            .gte("date", new Date(selectedYear, selectedMonth - 7, 1).toISOString().split("T")[0])
+            .gte("date", trendStartDay)
             .or("deleted.is.null,deleted.eq.false"),
 
           supabase
@@ -116,7 +123,8 @@ export default function DashboardPage() {
               categories (
                 name,
                 color,
-                icon
+                icon,
+                is_rollover
               )
             `)
             .eq("user_id", user.id)
@@ -130,10 +138,15 @@ export default function DashboardPage() {
             .order("name")
         ])
 
+        // Filter out savings goals from budgets (only show regular budgets in dashboard)
+        const regularBudgets = (budgetsResult.data || []).filter(
+          (budget: any) => !budget.categories?.is_rollover
+        )
+
         const newData = {
           currentMonthTransactions: transactionsResult.data || [],
           trendTransactions: trendResult.data || [],
-          budgets: budgetsResult.data || [],
+          budgets: regularBudgets,
           categories: categoriesResult.data || []
         }
 

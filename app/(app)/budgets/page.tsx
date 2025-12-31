@@ -90,9 +90,10 @@ export default function BudgetsPage() {
       return {}
     }
 
-    // Get previous month's transactions
-    const prevFirstDay = new Date(prevYear, prevMonth - 1, 1).toISOString().split("T")[0]
-    const prevLastDay = new Date(prevYear, prevMonth, 0).toISOString().split("T")[0]
+    // Get previous month's transactions (use local dates to avoid timezone issues)
+    const prevLastDayDate = new Date(prevYear, prevMonth, 0)
+    const prevFirstDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
+    const prevLastDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDayDate.getDate()).padStart(2, '0')}`
 
     const { data: prevTransactions } = await supabase
       .from("transactions")
