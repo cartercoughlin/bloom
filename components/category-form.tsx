@@ -35,7 +35,7 @@ const PRESET_COLORS = [
   "#6B7280",
 ]
 
-export function CategoryForm({ category }: { category?: Category }) {
+export function CategoryForm({ category, onSuccess, onCancel }: { category?: Category, onSuccess?: () => void, onCancel?: () => void }) {
   const [name, setName] = useState(category?.name || "")
   const [color, setColor] = useState(category?.color || "#3B82F6")
   const [icon, setIcon] = useState(category?.icon || "📦")
@@ -87,9 +87,13 @@ export function CategoryForm({ category }: { category?: Category }) {
       await cache.removePattern('budgets-')
       await cache.removePattern('dashboard-')
 
-      router.push("/categories")
-      // Force page reload to get fresh data
-      window.location.reload()
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push("/categories")
+        // Force page reload to get fresh data
+        window.location.reload()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save category")
     } finally {
@@ -136,9 +140,8 @@ export function CategoryForm({ category }: { category?: Category }) {
                   key={presetColor}
                   type="button"
                   onClick={() => setColor(presetColor)}
-                  className={`w-10 h-10 md:w-12 md:h-12 rounded-lg transition-all ${
-                    color === presetColor ? "ring-2 ring-primary scale-110" : "hover:scale-105"
-                  }`}
+                  className={`w-10 h-10 md:w-12 md:h-12 rounded-lg transition-all ${color === presetColor ? "ring-2 ring-primary scale-110" : "hover:scale-105"
+                    }`}
                   style={{ backgroundColor: presetColor }}
                 />
               ))}
@@ -213,7 +216,7 @@ export function CategoryForm({ category }: { category?: Category }) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => router.back()}
+              onClick={() => onCancel ? onCancel() : router.back()}
               disabled={isLoading}
               className="flex-1 text-xs md:text-sm h-9 md:h-10"
             >

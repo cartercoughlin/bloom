@@ -33,6 +33,7 @@ import {
 import { Plus, Edit, Trash2, Loader2, Target, Repeat } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { PrivateAmount } from "./private-amount"
+import { CategoryForm } from "./category-form"
 
 interface Budget {
   id: string
@@ -102,6 +103,7 @@ export function BudgetList({
   const [categoryTransactions, setCategoryTransactions] = useState<any[]>([])
   const [loadingTransactions, setLoadingTransactions] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null)
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
   const router = useRouter()
 
   // Sync internal state with props when they change
@@ -435,7 +437,18 @@ export function BudgetList({
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="category">Category</Label>
+                  {!editingBudget && (
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 text-xs text-blue-600"
+                      onClick={() => setIsCategoryDialogOpen(true)}
+                    >
+                      + New Category
+                    </Button>
+                  )}
+                </div>
                 <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId} disabled={!!editingBudget}>
                   <SelectTrigger id="category">
                     <SelectValue placeholder="Select a category" />
@@ -449,6 +462,23 @@ export function BudgetList({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Sub-dialog for category creation */}
+              <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Create New Category</DialogTitle>
+                    <DialogDescription>Add a new category to use in your budget</DialogDescription>
+                  </DialogHeader>
+                  <CategoryForm
+                    onSuccess={() => {
+                      setIsCategoryDialogOpen(false)
+                      fetchLatestCategories() // Fetch fresh categories after creation
+                    }}
+                    onCancel={() => setIsCategoryDialogOpen(false)}
+                  />
+                </DialogContent>
+              </Dialog>
               <div className="space-y-2">
                 <Label htmlFor="amount">Monthly Budget Amount</Label>
                 <div className="relative">

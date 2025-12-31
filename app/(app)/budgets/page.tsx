@@ -44,13 +44,30 @@ export default function BudgetsPage() {
       return
     }
 
-    // Get previous month's budgets (including rollover categories)
+    // Get the most recent month's budgets to use as a template
+    const { data: recentBudgets } = await supabase
+      .from("budgets")
+      .select("month, year")
+      .eq("user_id", userId)
+      .or(`year.lt.${selectedYear},and(year.eq.${selectedYear},month.lt.${selectedMonth})`)
+      .order("year", { ascending: false })
+      .order("month", { ascending: false })
+      .limit(1)
+
+    if (!recentBudgets || recentBudgets.length === 0) {
+      return
+    }
+
+    const templateMonth = recentBudgets[0].month
+    const templateYear = recentBudgets[0].year
+
+    // Get the actual budget records for that template month
     const { data: prevBudgets } = await supabase
       .from("budgets")
       .select("category_id, amount")
       .eq("user_id", userId)
-      .eq("month", prevMonth)
-      .eq("year", prevYear)
+      .eq("month", templateMonth)
+      .eq("year", templateYear)
 
     if (!prevBudgets || prevBudgets.length === 0) {
       return
@@ -87,7 +104,13 @@ export default function BudgetsPage() {
       .eq("month", prevMonth)
       .eq("year", prevYear)
 
-    if (!prevBudgets || prevBudgets.length === 0) {
+    // Calculate rollover even if no budgets exist in prev month (we might have balance from month before)
+    const rolloverCategories = new Set([
+      ...(prevBudgets || []).map((b: any) => b.category_id),
+      ...Object.keys(previousMonthsRollover)
+    ])
+
+    if (rolloverCategories.size === 0) {
       return {}
     }
 
@@ -103,7 +126,7 @@ export default function BudgetsPage() {
       .eq("user_id", userId)
       .gte("date", prevFirstDay)
       .lt("date", prevNextMonthFirstDay)
-      .or("deleted.is.null,deleted.eq.false")
+      .not("deleted", "eq", true)
 
     // Calculate spending by category for the previous month
     const prevSpending: Record<string, number> = {}
@@ -123,15 +146,16 @@ export default function BudgetsPage() {
 
     // Calculate rollover: (Base Budget + Previous Rollover) - Spending
     const rollover: Record<string, number> = {}
-    prevBudgets.forEach((budget: any) => {
-      const spent = prevSpending[budget.category_id] || 0
-      const prevRollover = previousMonthsRollover[budget.category_id] || 0
-      const totalAvailable = Number(budget.amount) + prevRollover
+    rolloverCategories.forEach(catId => {
+      const budgetAmount = (prevBudgets || []).find((b: any) => b.category_id === catId)?.amount || 0
+      const spent = prevSpending[catId] || 0
+      const prevRollover = previousMonthsRollover[catId] || 0
+      const totalAvailable = Number(budgetAmount) + prevRollover
       const remaining = totalAvailable - spent
 
       // Only roll over positive amounts
       if (remaining > 0) {
-        rollover[budget.category_id] = remaining
+        rollover[catId] = remaining
       }
     })
 

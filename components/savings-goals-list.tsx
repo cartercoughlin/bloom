@@ -184,7 +184,7 @@ export function SavingsGoalsList({
           }
           const expenses = categoryData.expenses
           const income = categoryData.income
-          const netSpending = Math.max(0, expenses - income)
+          const netSpending = expenses - income
 
           // Get rollover from previous month
           const rollover = rolloverByCategory[goal.category_id] || 0
