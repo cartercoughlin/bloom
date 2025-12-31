@@ -45,36 +45,59 @@ export default function BudgetsPage() {
     }
 
     // Get the most recent month's budgets to use as a template
-    const { data: recentBudgets } = await supabase
+    const { data: recentBudgetsCurrentYear } = await supabase
       .from("budgets")
       .select("month, year")
       .eq("user_id", userId)
-      .or(`year.lt.${selectedYear},and(year.eq.${selectedYear},month.lt.${selectedMonth})`)
-      .order("year", { ascending: false })
+      .eq("year", selectedYear)
+      .lt("month", selectedMonth)
       .order("month", { ascending: false })
       .limit(1)
 
-    if (!recentBudgets || recentBudgets.length === 0) {
-      return
+    let chosenTemplate = recentBudgetsCurrentYear?.[0]
+
+    if (!chosenTemplate) {
+      const { data: recentBudgetsPrevYear } = await supabase
+        .from("budgets")
+        .select("month, year")
+        .eq("user_id", userId)
+        .lt("year", selectedYear)
+        .order("year", { ascending: false })
+        .order("month", { ascending: false })
+        .limit(1)
+      chosenTemplate = recentBudgetsPrevYear?.[0]
     }
 
-    const templateMonth = recentBudgets[0].month
-    const templateYear = recentBudgets[0].year
+    if (!chosenTemplate) return
 
-    // Get the actual budget records for that template month
-    const { data: prevBudgets } = await supabase
-      .from("budgets")
-      .select("category_id, amount")
-      .eq("user_id", userId)
-      .eq("month", templateMonth)
-      .eq("year", templateYear)
+    // Get budgets for the current month to see what we're missing
+    const [templateBudgetsResult, currentBudgetsResult] = await Promise.all([
+      supabase
+        .from("budgets")
+        .select("category_id, amount")
+        .eq("user_id", userId)
+        .eq("month", chosenTemplate.month)
+        .eq("year", chosenTemplate.year),
+      supabase
+        .from("budgets")
+        .select("category_id")
+        .eq("user_id", userId)
+        .eq("month", selectedMonth)
+        .eq("year", selectedYear)
+    ])
 
-    if (!prevBudgets || prevBudgets.length === 0) {
-      return
-    }
+    const prevBudgets = templateBudgetsResult.data || []
+    const currentBudgets = currentBudgetsResult.data || []
 
-    // Create budgets for current month (including rollover/savings goal categories)
-    const newBudgets = prevBudgets.map((budget: any) => ({
+    if (prevBudgets.length === 0) return
+
+    const currentCategoryIds = new Set(currentBudgets.map((b: any) => b.category_id))
+    const budgetsToCreate = prevBudgets.filter((b: any) => !currentCategoryIds.has(b.category_id))
+
+    if (budgetsToCreate.length === 0) return
+
+    // Create missing budgets for current month
+    const newBudgets = budgetsToCreate.map((budget: any) => ({
       user_id: userId,
       category_id: budget.category_id,
       amount: budget.amount,
@@ -306,9 +329,26 @@ export default function BudgetsPage() {
       const regularBudgets = (budgetsResult.data || []).filter(
         (budget: any) => !budget.categories?.is_rollover
       )
-      const savingsGoalBudgets = (budgetsResult.data || []).filter(
-        (budget: any) => budget.categories?.is_rollover
-      )
+
+      // Ensure all rollover categories appear in savings goals list, even if they don't have a budget record this month
+      const allCategories = categoriesResult.data || []
+      const rolloverCategoriesFromDb = allCategories.filter((c: any) => c.is_rollover)
+
+      const savingsGoalBudgets = rolloverCategoriesFromDb.map((cat: any) => {
+        const existingBudget = (budgetsResult.data || []).find((b: any) => b.category_id === cat.id)
+        if (existingBudget) return existingBudget
+
+        // Create a virtual budget for display purposes
+        return {
+          id: `virtual-${cat.id}`,
+          category_id: cat.id,
+          amount: 0,
+          user_id: user.id,
+          month: selectedMonth,
+          year: selectedYear,
+          categories: cat
+        }
+      })
 
       const newData = {
         budgets: regularBudgets,

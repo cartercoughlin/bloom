@@ -184,7 +184,8 @@ export function BudgetList({
     await fetchLatestCategories()
 
     if (budget) {
-      setEditingBudget(budget)
+      const isVirtual = budget.id?.startsWith('virtual-')
+      setEditingBudget(isVirtual ? null : budget)
       setSelectedCategoryId(budget.category_id)
       setAmount(budget.amount.toString())
 
