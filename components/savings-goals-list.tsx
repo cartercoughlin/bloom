@@ -87,11 +87,17 @@ export function SavingsGoalsList({
       const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
       const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
+      // Calculate next month for strict filtering
+      const nextMonth = month === 12 ? 1 : month + 1
+      const nextYear = month === 12 ? year + 1 : year
+      const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
       console.log(`[Savings Goal Modal] Loading transactions for goal ${goal.categories?.name}:`, {
         year,
         month,
         firstDay,
         lastDay,
+        nextMonthFirstDay,
         lastDayDate: lastDayDate.toISOString(),
         lastDayGetDate: lastDayDate.getDate()
       })
@@ -102,7 +108,7 @@ export function SavingsGoalsList({
         .eq("user_id", user.id)
         .eq("category_id", goal.category_id)
         .gte("date", firstDay)
-        .lte("date", lastDay)
+        .lt("date", nextMonthFirstDay)  // Strict: less than first day of NEXT month
         .or("deleted.is.null,deleted.eq.false")
         .order("date", { ascending: false })
 

@@ -95,12 +95,17 @@ export default function BudgetsPage() {
     const prevFirstDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
     const prevLastDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDayDate.getDate()).padStart(2, '0')}`
 
+    // Calculate next month for strict filtering
+    const prevNextMonth = prevMonth === 12 ? 1 : prevMonth + 1
+    const prevNextYear = prevMonth === 12 ? prevYear + 1 : prevYear
+    const prevNextMonthFirstDay = `${prevNextYear}-${String(prevNextMonth).padStart(2, '0')}-01`
+
     const { data: prevTransactions } = await supabase
       .from("transactions")
       .select("category_id, amount, transaction_type, hidden")
       .eq("user_id", userId)
       .gte("date", prevFirstDay)
-      .lte("date", prevLastDay)
+      .lt("date", prevNextMonthFirstDay)  // Strict: less than first day of NEXT month
       .or("deleted.is.null,deleted.eq.false")
 
     // Calculate spending by category
@@ -167,11 +172,17 @@ export default function BudgetsPage() {
         const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
         const lastDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
+        // Calculate next month for strict filtering
+        const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
+        const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
+        const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
         console.log(`[Budgets] Querying transactions for ${selectedYear}-${selectedMonth}:`, {
           selectedMonth,
           selectedYear,
           firstDay,
           lastDay,
+          nextMonthFirstDay,
           lastDayDate: lastDayDate.toISOString(),
           lastDayDateGetDate: lastDayDate.getDate()
         })
@@ -206,7 +217,7 @@ export default function BudgetsPage() {
             .select("category_id, amount, transaction_type, recurring, hidden")
             .eq("user_id", user.id)
             .gte("date", firstDay)
-            .lte("date", lastDay)
+            .lt("date", nextMonthFirstDay)  // Strict: less than first day of NEXT month
             .or("deleted.is.null,deleted.eq.false")
         ])
 
