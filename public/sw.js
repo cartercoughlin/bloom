@@ -54,6 +54,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Only cache GET requests (POST/PUT/DELETE cannot be cached)
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   // Quick check: Skip auth/API routes using string matching (faster than URL parsing)
   if (requestUrl.includes('/auth/') ||
       requestUrl.includes('/api/') ||

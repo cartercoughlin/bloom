@@ -355,11 +355,17 @@ export function BudgetList({
       const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
       const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
+      // Calculate next month for strict filtering
+      const nextMonth = month === 12 ? 1 : month + 1
+      const nextYear = month === 12 ? year + 1 : year
+      const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
       console.log(`[Budget Modal] Loading transactions for category ${budget.categories?.name}:`, {
         year,
         month,
         firstDay,
         lastDay,
+        nextMonthFirstDay,
         lastDayDate: lastDayDate.toISOString(),
         lastDayGetDate: lastDayDate.getDate()
       })
@@ -370,7 +376,7 @@ export function BudgetList({
         .eq("user_id", user.id)
         .eq("category_id", budget.category_id)
         .gte("date", firstDay)
-        .lte("date", lastDay)
+        .lt("date", nextMonthFirstDay)  // Strict: less than first day of NEXT month
         .or("deleted.is.null,deleted.eq.false")
         .order("date", { ascending: false })
 

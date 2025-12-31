@@ -81,6 +81,11 @@ export default function DashboardPage() {
         const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
         const lastDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
+        // Calculate next month for strict filtering
+        const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
+        const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
+        const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
         // Get trend start date (6 months prior)
         const trendStartMonth = selectedMonth - 6
         const trendStartYear = trendStartMonth <= 0 ? selectedYear - 1 : selectedYear
@@ -101,7 +106,7 @@ export default function DashboardPage() {
             `)
             .eq("user_id", user.id)
             .gte("date", firstDay)
-            .lte("date", lastDay)
+            .lt("date", nextMonthFirstDay)  // Strict: less than first day of NEXT month
             .or("deleted.is.null,deleted.eq.false")
             .order("date", { ascending: false }),
 
