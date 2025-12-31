@@ -167,6 +167,15 @@ export default function BudgetsPage() {
         const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
         const lastDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
+        console.log(`[Budgets] Querying transactions for ${selectedYear}-${selectedMonth}:`, {
+          selectedMonth,
+          selectedYear,
+          firstDay,
+          lastDay,
+          lastDayDate: lastDayDate.toISOString(),
+          lastDayDateGetDate: lastDayDate.getDate()
+        })
+
         // Fetch fresh data
         const [budgetsResult, categoriesResult, transactionsResult] = await Promise.all([
           supabase
@@ -200,6 +209,14 @@ export default function BudgetsPage() {
             .lte("date", lastDay)
             .or("deleted.is.null,deleted.eq.false")
         ])
+
+        console.log(`[Budgets] Received ${transactionsResult.data?.length || 0} transactions`)
+        // Log first few transaction dates to verify correct filtering
+        if (transactionsResult.data && transactionsResult.data.length > 0) {
+          console.log('[Budgets] Sample transaction dates:',
+            transactionsResult.data.slice(0, 5).map((tx: any) => ({ date: tx.date, amount: tx.amount, type: tx.transaction_type }))
+          )
+        }
 
         // Calculate net by category with recurring/variable breakdown
         const categoryTotals: Record<string, {
