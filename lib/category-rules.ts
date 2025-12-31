@@ -229,7 +229,7 @@ export async function suggestCategories(
     }
   }
 
-  // First, try to match using explicit category rules
+  // Build transaction object for rule matching
   const transaction: Transaction = {
     description,
     amount,
@@ -239,17 +239,10 @@ export async function suggestCategories(
     institution,
   }
 
+  // Check which category would match by rules (but don't return yet - use for weighting)
   const ruleCategoryId = await assignCategoryByRules(transaction, userId)
-  if (ruleCategoryId) {
-    return [{
-      transactionId: transactionId || '',
-      categoryId: ruleCategoryId,
-      confidence: 0.95,
-      reason: 'Matched category rule'
-    }]
-  }
 
-  // If no rule matches, look for similar transactions
+  // Look for similar transactions to calculate real confidence
   const { data: categorizedTransactions } = await supabase
     .from('transactions')
     .select('id, description, category_id, amount')
@@ -319,7 +312,14 @@ export async function suggestCategories(
     .map(([categoryId, score]) => {
       // Confidence based on both similarity and frequency
       const avgSimilarity = score.totalSimilarity / score.count
-      const confidence = Math.min(0.9, avgSimilarity * (1 + Math.log(score.count) * 0.1))
+      let confidence = avgSimilarity * (1 + Math.log(score.count) * 0.1)
+
+      // Give a boost to categories that match explicit rules
+      if (categoryId === ruleCategoryId) {
+        confidence = Math.min(0.95, confidence * 1.15) // 15% boost, capped at 95%
+      } else {
+        confidence = Math.min(0.9, confidence) // Cap at 90% for non-rule matches
+      }
 
       return {
         transactionId: transactionId || '',
