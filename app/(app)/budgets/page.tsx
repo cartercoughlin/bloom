@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -24,10 +24,6 @@ export default function BudgetsPage() {
   const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
   const [editBudgetId, setEditBudgetId] = useState<string | null>(null)
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
-
-  const today = new Date()
-  const currentMonth = today.getMonth() + 1
-  const currentYear = today.getFullYear()
 
   // Auto-create budgets for new month from previous month
   const autoCreateBudgetsFromPreviousMonth = async (supabase: any, userId: string) => {
@@ -70,13 +66,18 @@ export default function BudgetsPage() {
     }))
 
     await supabase.from("budgets").insert(newBudgets)
-    console.log(`Auto-created ${newBudgets.length} budgets for ${selectedYear}-${selectedMonth}`)
   }
 
-  // Calculate rollover from previous month
-  const calculateRollover = async (supabase: any, userId: string) => {
-    const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
-    const prevYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
+  // Calculate rollover from previous month (cumulative)
+  const calculateRollover = useCallback(async (supabase: any, userId: string, targetMonth: number, targetYear: number, depth = 0): Promise<Record<string, number>> => {
+    // Limit recursion to 12 months to avoid infinite loops and performance issues
+    if (depth > 12) return {}
+
+    const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1
+    const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear
+
+    // Get rollover from the month BEFORE the previous month
+    const previousMonthsRollover = await calculateRollover(supabase, userId, prevMonth, prevYear, depth + 1)
 
     // Get previous month's budgets
     const { data: prevBudgets } = await supabase
@@ -90,12 +91,8 @@ export default function BudgetsPage() {
       return {}
     }
 
-    // Get previous month's transactions (use local dates to avoid timezone issues)
-    const prevLastDayDate = new Date(prevYear, prevMonth, 0)
+    // Get previous month's transactions
     const prevFirstDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
-    const prevLastDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevLastDayDate.getDate()).padStart(2, '0')}`
-
-    // Calculate next month for strict filtering
     const prevNextMonth = prevMonth === 12 ? 1 : prevMonth + 1
     const prevNextYear = prevMonth === 12 ? prevYear + 1 : prevYear
     const prevNextMonthFirstDay = `${prevNextYear}-${String(prevNextMonth).padStart(2, '0')}-01`
@@ -105,10 +102,10 @@ export default function BudgetsPage() {
       .select("category_id, amount, transaction_type, hidden")
       .eq("user_id", userId)
       .gte("date", prevFirstDay)
-      .lt("date", prevNextMonthFirstDay)  // Strict: less than first day of NEXT month
+      .lt("date", prevNextMonthFirstDay)
       .or("deleted.is.null,deleted.eq.false")
 
-    // Calculate spending by category
+    // Calculate spending by category for the previous month
     const prevSpending: Record<string, number> = {}
     prevTransactions?.forEach((tx: any) => {
       if (tx.hidden) return
@@ -118,36 +115,43 @@ export default function BudgetsPage() {
         }
         if (tx.transaction_type === 'debit') {
           prevSpending[tx.category_id] += Number(tx.amount)
+        } else if (tx.transaction_type === 'credit') {
+          prevSpending[tx.category_id] -= Number(tx.amount)
         }
       }
     })
 
-    // Calculate rollover (budget - spending)
+    // Calculate rollover: (Base Budget + Previous Rollover) - Spending
     const rollover: Record<string, number> = {}
     prevBudgets.forEach((budget: any) => {
       const spent = prevSpending[budget.category_id] || 0
-      const remaining = Number(budget.amount) - spent
+      const prevRollover = previousMonthsRollover[budget.category_id] || 0
+      const totalAvailable = Number(budget.amount) + prevRollover
+      const remaining = totalAvailable - spent
+
+      // Only roll over positive amounts
       if (remaining > 0) {
         rollover[budget.category_id] = remaining
       }
     })
 
     return rollover
-  }
+  }, [])
 
-  useEffect(() => {
-    async function loadData() {
-      try {
-        const supabase = createClient()
+  const loadData = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true)
+    try {
+      const supabase = createClient()
 
-        // Check authentication
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
-        if (userError || !user) {
-          router.push("/auth/login")
-          return
-        }
+      // Check authentication
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      if (userError || !user) {
+        router.push("/auth/login")
+        return
+      }
 
-        // Try to load from cache first for instant display
+      // Try to load from cache first for instant display
+      if (showLoading) {
         const cacheKey = `budgets-${selectedYear}-${selectedMonth}`
         const cachedData = await cache.getJSON<any>(cacheKey)
         if (cachedData) {
@@ -159,170 +163,135 @@ export default function BudgetsPage() {
           setRolloverByCategory(cachedData.rolloverByCategory || {})
           setLoading(false)
         }
-
-        // Auto-create budgets from previous month if needed
-        await autoCreateBudgetsFromPreviousMonth(supabase, user.id)
-
-        // Calculate rollover from previous month
-        const rollover = await calculateRollover(supabase, user.id)
-
-        // Get transactions for selected month (use local dates to avoid timezone issues)
-        const firstDayDate = new Date(selectedYear, selectedMonth - 1, 1)
-        const lastDayDate = new Date(selectedYear, selectedMonth, 0)
-        const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-        const lastDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
-
-        // Calculate next month for strict filtering
-        const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
-        const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
-        const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
-
-        console.log(`[Budgets] Querying transactions for ${selectedYear}-${selectedMonth}:`, {
-          selectedMonth,
-          selectedYear,
-          firstDay,
-          lastDay,
-          nextMonthFirstDay,
-          lastDayDate: lastDayDate.toISOString(),
-          lastDayDateGetDate: lastDayDate.getDate()
-        })
-
-        // Fetch fresh data
-        const [budgetsResult, categoriesResult, transactionsResult] = await Promise.all([
-          supabase
-            .from("budgets")
-            .select(`
-              *,
-              categories (
-                id,
-                name,
-                color,
-                icon,
-                is_rollover,
-                target_amount
-              )
-            `)
-            .eq("user_id", user.id)
-            .eq("month", selectedMonth)
-            .eq("year", selectedYear),
-
-          supabase
-            .from("categories")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("name"),
-
-          supabase
-            .from("transactions")
-            .select("category_id, amount, transaction_type, recurring, hidden")
-            .eq("user_id", user.id)
-            .gte("date", firstDay)
-            .lt("date", nextMonthFirstDay)  // Strict: less than first day of NEXT month
-            .or("deleted.is.null,deleted.eq.false")
-        ])
-
-        console.log(`[Budgets] Received ${transactionsResult.data?.length || 0} transactions`)
-        // Log first few transaction dates to verify correct filtering
-        if (transactionsResult.data && transactionsResult.data.length > 0) {
-          console.log('[Budgets] Sample transaction dates:',
-            transactionsResult.data.slice(0, 5).map((tx: any) => ({ date: tx.date, amount: tx.amount, type: tx.transaction_type }))
-          )
-        }
-
-        // Calculate net by category with recurring/variable breakdown
-        const categoryTotals: Record<string, {
-          income: number
-          expenses: number
-          net: number
-          recurringExpenses: number
-          variableExpenses: number
-        }> = {}
-
-        transactionsResult.data?.forEach((tx) => {
-          // Skip hidden transactions
-          if (tx.hidden) return
-
-          if (tx.category_id) {
-            if (!categoryTotals[tx.category_id]) {
-              categoryTotals[tx.category_id] = {
-                income: 0,
-                expenses: 0,
-                net: 0,
-                recurringExpenses: 0,
-                variableExpenses: 0,
-              }
-            }
-
-            const amount = Number(tx.amount)
-            const categoryData = categoryTotals[tx.category_id]
-
-            if (tx.transaction_type === 'credit') {
-              categoryData.income += amount
-            } else {
-              categoryData.expenses += amount
-
-              // Separate recurring from variable expenses
-              if (tx.recurring) {
-                categoryData.recurringExpenses += amount
-              } else {
-                categoryData.variableExpenses += amount
-              }
-            }
-
-            categoryData.net = categoryData.income - categoryData.expenses
-          }
-        })
-
-        // Also create simple spending record for backward compatibility
-        const spending: Record<string, number> = {}
-        Object.entries(categoryTotals).forEach(([categoryId, data]) => {
-          spending[categoryId] = Math.max(0, data.expenses - data.income)
-        })
-
-        // Split budgets into regular and savings goals
-        const regularBudgets = (budgetsResult.data || []).filter(
-          (budget: any) => !budget.categories?.is_rollover
-        )
-        const savingsGoalBudgets = (budgetsResult.data || []).filter(
-          (budget: any) => budget.categories?.is_rollover
-        )
-
-        const newData = {
-          budgets: regularBudgets,
-          savingsGoals: savingsGoalBudgets,
-          categories: categoriesResult.data || [],
-          netByCategory: categoryTotals,
-          spendingByCategory: spending,
-          rolloverByCategory: rollover
-        }
-
-        // Update state
-        setBudgets(newData.budgets)
-        setSavingsGoals(newData.savingsGoals)
-        setCategories(newData.categories)
-        setNetByCategory(newData.netByCategory)
-        setSpendingByCategory(newData.spendingByCategory)
-        setRolloverByCategory(newData.rolloverByCategory)
-
-        console.log('Budgets page data loaded:', {
-          budgets: newData.budgets.length,
-          categories: newData.categories.length,
-          transactions: transactionsResult.data?.length,
-          rollover: Object.keys(rollover).length
-        })
-
-        setLoading(false)
-
-        // Cache the data
-        await cache.setJSON(cacheKey, newData)
-      } catch (error) {
-        console.error("Error loading budgets:", error)
-        setLoading(false)
       }
-    }
 
+      // Auto-create budgets from previous month if needed
+      await autoCreateBudgetsFromPreviousMonth(supabase, user.id)
+
+      // Calculate rollover from previous month (cumulative)
+      const rollover = await calculateRollover(supabase, user.id, selectedMonth, selectedYear)
+
+      // Get transactions for selected month
+      const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+      const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
+      const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
+      const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+
+      // Fetch fresh data
+      const [budgetsResult, categoriesResult, transactionsResult] = await Promise.all([
+        supabase
+          .from("budgets")
+          .select(`
+            *,
+            categories (
+              id,
+              name,
+              color,
+              icon,
+              is_rollover,
+              target_amount
+            )
+          `)
+          .eq("user_id", user.id)
+          .eq("month", selectedMonth)
+          .eq("year", selectedYear),
+
+        supabase
+          .from("categories")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("name"),
+
+        supabase
+          .from("transactions")
+          .select("category_id, amount, transaction_type, recurring, hidden text, hidden")
+          .eq("user_id", user.id)
+          .gte("date", firstDay)
+          .lt("date", nextMonthFirstDay)
+          .or("deleted.is.null,deleted.eq.false")
+      ])
+
+      // Calculate net by category with recurring/variable breakdown
+      const categoryTotals: Record<string, {
+        income: number
+        expenses: number
+        net: number
+        recurringExpenses: number
+        variableExpenses: number
+      }> = {}
+
+      transactionsResult.data?.forEach((tx) => {
+        if (tx.hidden) return
+
+        if (tx.category_id) {
+          if (!categoryTotals[tx.category_id]) {
+            categoryTotals[tx.category_id] = {
+              income: 0,
+              expenses: 0,
+              net: 0,
+              recurringExpenses: 0,
+              variableExpenses: 0,
+            }
+          }
+
+          const amount = Number(tx.amount)
+          const categoryData = categoryTotals[tx.category_id]
+
+          if (tx.transaction_type === 'credit') {
+            categoryData.income += amount
+          } else {
+            categoryData.expenses += amount
+            if (tx.recurring) {
+              categoryData.recurringExpenses += amount
+            } else {
+              categoryData.variableExpenses += amount
+            }
+          }
+
+          categoryData.net = categoryData.income - categoryData.expenses
+        }
+      })
+
+      const spending: Record<string, number> = {}
+      Object.entries(categoryTotals).forEach(([categoryId, data]) => {
+        spending[categoryId] = Math.max(0, data.expenses - data.income)
+      })
+
+      const regularBudgets = (budgetsResult.data || []).filter(
+        (budget: any) => !budget.categories?.is_rollover
+      )
+      const savingsGoalBudgets = (budgetsResult.data || []).filter(
+        (budget: any) => budget.categories?.is_rollover
+      )
+
+      const newData = {
+        budgets: regularBudgets,
+        savingsGoals: savingsGoalBudgets,
+        categories: categoriesResult.data || [],
+        netByCategory: categoryTotals,
+        spendingByCategory: spending,
+        rolloverByCategory: rollover
+      }
+
+      setBudgets(newData.budgets)
+      setSavingsGoals(newData.savingsGoals)
+      setCategories(newData.categories)
+      setNetByCategory(newData.netByCategory)
+      setSpendingByCategory(newData.spendingByCategory)
+      setRolloverByCategory(newData.rolloverByCategory)
+
+      const cacheKey = `budgets-${selectedYear}-${selectedMonth}`
+      await cache.setJSON(cacheKey, newData)
+    } catch (error) {
+      console.error("Error loading budgets:", error)
+    } finally {
+      setLoading(false)
+    }
+  }, [router, selectedMonth, selectedYear, calculateRollover])
+
+  useEffect(() => {
     loadData()
-  }, [router, selectedMonth, selectedYear])
+  }, [loadData])
 
   if (loading && budgets.length === 0) {
     return (
@@ -375,7 +344,10 @@ export default function BudgetsPage() {
           month={selectedMonth}
           year={selectedYear}
           editBudgetId={editBudgetId}
-          onEditComplete={() => setEditBudgetId(null)}
+          onEditComplete={() => {
+            setEditBudgetId(null)
+          }}
+          onRefresh={() => loadData(false)}
           allBudgets={[...(budgets || []), ...(savingsGoals || [])]}
         />
 
@@ -386,6 +358,7 @@ export default function BudgetsPage() {
           month={selectedMonth}
           year={selectedYear}
           onEdit={(goalId) => setEditBudgetId(goalId)}
+          onRefresh={() => loadData(false)}
         />
       </div>
     </div>

@@ -71,6 +71,7 @@ interface BudgetListProps {
   year: number
   editBudgetId?: string | null
   onEditComplete?: () => void
+  onRefresh?: () => void
   allBudgets?: Budget[]
 }
 
@@ -84,6 +85,7 @@ export function BudgetList({
   year,
   editBudgetId = null,
   onEditComplete,
+  onRefresh,
   allBudgets
 }: BudgetListProps) {
   const [budgets, setBudgets] = useState(initialBudgets)
@@ -251,8 +253,7 @@ export function BudgetList({
 
       setIsOpen(false)
       if (onEditComplete) onEditComplete()
-      // Force page reload to get fresh data
-      window.location.reload()
+      if (onRefresh) onRefresh()
     } catch (error) {
       console.error("Error saving budget:", error)
     } finally {
@@ -280,8 +281,7 @@ export function BudgetList({
       await cache.removePattern(`dashboard-${year}-${month}`)
 
       setBudgets(budgets.filter((b) => b.id !== budgetId))
-      // Force page reload to get fresh data
-      window.location.reload()
+      if (onRefresh) onRefresh()
     } catch (error) {
       console.error("Error deleting budget:", error)
     }
@@ -327,8 +327,7 @@ export function BudgetList({
 
         setCategoryTransactions(prev => prev.filter(tx => tx.id !== transactionId))
         setSelectedTransaction(null)
-        // Force page reload to get fresh data
-        window.location.reload()
+        if (onRefresh) onRefresh()
       } else {
         console.error("Failed to delete transaction")
         alert("Failed to delete transaction")
@@ -729,9 +728,8 @@ export function BudgetList({
                 {categoryTransactions.map((tx) => (
                   <div
                     key={tx.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${
-                      tx.hidden ? 'opacity-50' : ''
-                    }`}
+                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors ${tx.hidden ? 'opacity-50' : ''
+                      }`}
                     onClick={() => setSelectedTransaction(tx)}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -773,9 +771,8 @@ export function BudgetList({
                     <PrivateAmount
                       amount={tx.amount}
                       type={tx.transaction_type}
-                      className={`font-semibold flex-shrink-0 ${
-                        tx.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
-                      }`}
+                      className={`font-semibold flex-shrink-0 ${tx.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
+                        }`}
                     />
                   </div>
                 ))}
@@ -824,9 +821,8 @@ export function BudgetList({
                 <PrivateAmount
                   amount={selectedTransaction.amount}
                   type={selectedTransaction.transaction_type}
-                  className={`text-lg font-semibold ${
-                    selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
-                  }`}
+                  className={`text-lg font-semibold ${selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
+                    }`}
                 />
               </div>
 

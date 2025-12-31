@@ -54,6 +54,7 @@ interface SavingsGoalsListProps {
   month: number
   year: number
   onEdit: (goalId: string) => void
+  onRefresh?: () => void
 }
 
 export function SavingsGoalsList({
@@ -62,7 +63,8 @@ export function SavingsGoalsList({
   rolloverByCategory,
   month,
   year,
-  onEdit
+  onEdit,
+  onRefresh
 }: SavingsGoalsListProps) {
   const [savingsGoals, setSavingsGoals] = useState(initialSavingsGoals)
   const [showTransactions, setShowTransactions] = useState(false)
@@ -147,8 +149,7 @@ export function SavingsGoalsList({
       await cache.removePattern(`dashboard-${year}-${month}`)
 
       setSavingsGoals(savingsGoals.filter((g) => g.id !== goalId))
-      // Force page reload to get fresh data
-      window.location.reload()
+      if (onRefresh) onRefresh()
     } catch (error) {
       console.error("Error deleting savings goal:", error)
     }
@@ -330,9 +331,8 @@ export function SavingsGoalsList({
                 {categoryTransactions.map((tx) => (
                   <div
                     key={tx.id}
-                    className={`flex items-center justify-between p-3 rounded-lg border ${
-                      tx.hidden ? 'opacity-50' : ''
-                    }`}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${tx.hidden ? 'opacity-50' : ''
+                      }`}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {tx.logo_url && (
@@ -373,9 +373,8 @@ export function SavingsGoalsList({
                     <PrivateAmount
                       amount={tx.amount}
                       type={tx.transaction_type}
-                      className={`font-semibold flex-shrink-0 ${
-                        tx.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
-                      }`}
+                      className={`font-semibold flex-shrink-0 ${tx.transaction_type === 'credit' ? 'text-green-600' : 'text-red-600'
+                        }`}
                     />
                   </div>
                 ))}
