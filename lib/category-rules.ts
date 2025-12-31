@@ -87,9 +87,14 @@ export async function assignCategoryByRules(transaction: Transaction, userId: st
 function matchesRule(transaction: Transaction, rule: CategoryRule): boolean {
   // Check description pattern
   if (rule.description_pattern) {
-    const pattern = new RegExp(rule.description_pattern, 'i')
-    if (!pattern.test(transaction.description)) {
-      return false
+    try {
+      const pattern = new RegExp(rule.description_pattern, 'i')
+      if (!pattern.test(transaction.description)) {
+        return false
+      }
+    } catch (error) {
+      console.error(`Invalid regex pattern in rule: ${rule.description_pattern}`, error)
+      return false // Invalid pattern doesn't match
     }
   }
 
@@ -114,24 +119,39 @@ function matchesRule(transaction: Transaction, rule: CategoryRule): boolean {
 
   // Check bank pattern
   if (rule.bank_pattern && transaction.bank) {
-    const pattern = new RegExp(rule.bank_pattern, 'i')
-    if (!pattern.test(transaction.bank)) {
+    try {
+      const pattern = new RegExp(rule.bank_pattern, 'i')
+      if (!pattern.test(transaction.bank)) {
+        return false
+      }
+    } catch (error) {
+      console.error(`Invalid regex pattern in rule: ${rule.bank_pattern}`, error)
       return false
     }
   }
 
   // Check account pattern
   if (rule.account_pattern && transaction.account) {
-    const pattern = new RegExp(rule.account_pattern, 'i')
-    if (!pattern.test(transaction.account)) {
+    try {
+      const pattern = new RegExp(rule.account_pattern, 'i')
+      if (!pattern.test(transaction.account)) {
+        return false
+      }
+    } catch (error) {
+      console.error(`Invalid regex pattern in rule: ${rule.account_pattern}`, error)
       return false
     }
   }
 
   // Check institution pattern
   if (rule.institution_pattern && transaction.institution) {
-    const pattern = new RegExp(rule.institution_pattern, 'i')
-    if (!pattern.test(transaction.institution)) {
+    try {
+      const pattern = new RegExp(rule.institution_pattern, 'i')
+      if (!pattern.test(transaction.institution)) {
+        return false
+      }
+    } catch (error) {
+      console.error(`Invalid regex pattern in rule: ${rule.institution_pattern}`, error)
       return false
     }
   }

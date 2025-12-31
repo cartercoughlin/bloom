@@ -171,56 +171,6 @@ export function TransactionCategorizer({
         </button>
       ) : (
         <div className="space-y-2">
-          {loading && hasInteracted && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Sparkles className="h-3 w-3 animate-pulse" />
-              Finding similar transactions...
-            </div>
-          )}
-
-          {!loading && hasInteracted && suggestions.length === 0 && (
-            <div className="text-xs text-muted-foreground">
-              No suggestions found
-            </div>
-          )}
-
-          {suggestions.length > 0 && (
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
-                <Sparkles className="h-3 w-3" />
-                Suggested categories:
-              </div>
-              {suggestions.slice(0, 2).map((suggestion) => {
-                const category = categories.find(c => c.id === suggestion.categoryId)
-                if (!category) return null
-
-                return (
-                  <Button
-                    key={suggestion.categoryId}
-                    variant="outline"
-                    size="sm"
-                    className="h-6 px-2 text-xs justify-start w-full"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleCategorySelect(suggestion.categoryId)
-                    }}
-                  >
-                    <div className="flex items-center gap-1">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: category.color }}
-                      />
-                      {category.icon} {category.name}
-                      <Badge variant="secondary" className="text-xs ml-1">
-                        {Math.round(suggestion.confidence * 100)}%
-                      </Badge>
-                    </div>
-                  </Button>
-                )
-              })}
-            </div>
-          )}
-
           <Select value="" onValueChange={(value) => {
             if (value === '__create_new__') {
               // Use setTimeout to ensure Select closes first
@@ -237,20 +187,51 @@ export function TransactionCategorizer({
             }
           }}>
             <SelectTrigger className="h-8 text-xs" onClick={(e) => e.stopPropagation()}>
-              <SelectValue placeholder="Select category..." />
+              <SelectValue placeholder={loading ? "Finding suggestions..." : "Select category..."} />
             </SelectTrigger>
             <SelectContent onClick={(e) => e.stopPropagation()}>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id} onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: category.color }}
-                    />
-                    {category.icon} {category.name}
-                  </div>
-                </SelectItem>
-              ))}
+              {(() => {
+                // Sort categories by relevance - suggested categories first
+                const suggestionMap = new Map(suggestions.map(s => [s.categoryId, s]))
+                const sortedCategories = [...categories].sort((a, b) => {
+                  const aSuggestion = suggestionMap.get(a.id)
+                  const bSuggestion = suggestionMap.get(b.id)
+
+                  // Both suggested - sort by confidence
+                  if (aSuggestion && bSuggestion) {
+                    return bSuggestion.confidence - aSuggestion.confidence
+                  }
+                  // Only a is suggested
+                  if (aSuggestion) return -1
+                  // Only b is suggested
+                  if (bSuggestion) return 1
+                  // Neither suggested - keep original order
+                  return 0
+                })
+
+                return sortedCategories.map((category) => {
+                  const suggestion = suggestionMap.get(category.id)
+                  return (
+                    <SelectItem key={category.id} value={category.id} onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2 justify-between w-full">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="w-3 h-3 rounded-full"
+                            style={{ backgroundColor: category.color }}
+                          />
+                          {category.icon} {category.name}
+                        </div>
+                        {suggestion && (
+                          <Badge variant="secondary" className="text-xs ml-2">
+                            <Sparkles className="h-2.5 w-2.5 mr-1" />
+                            {Math.round(suggestion.confidence * 100)}%
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  )
+                })
+              })()}
               <SelectItem value="__create_new__" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-2">
                   <Plus className="h-4 w-4" />
