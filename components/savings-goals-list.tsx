@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { cache } from "@/lib/capacitor"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -122,8 +123,13 @@ export function SavingsGoalsList({
 
       if (error) throw error
 
+      // Invalidate cache to force fresh data load
+      await cache.removePattern(`budgets-${year}-${month}`)
+      await cache.removePattern(`dashboard-${year}-${month}`)
+
       setSavingsGoals(savingsGoals.filter((g) => g.id !== goalId))
-      router.refresh()
+      // Force page reload to get fresh data
+      window.location.reload()
     } catch (error) {
       console.error("Error deleting savings goal:", error)
     }
