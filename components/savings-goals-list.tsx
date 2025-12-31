@@ -87,6 +87,15 @@ export function SavingsGoalsList({
       const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
       const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
+      console.log(`[Savings Goal Modal] Loading transactions for goal ${goal.categories?.name}:`, {
+        year,
+        month,
+        firstDay,
+        lastDay,
+        lastDayDate: lastDayDate.toISOString(),
+        lastDayGetDate: lastDayDate.getDate()
+      })
+
       const { data, error } = await supabase
         .from("transactions")
         .select("id, date, description, amount, transaction_type, merchant_name, logo_url, hidden, recurring")
@@ -96,6 +105,10 @@ export function SavingsGoalsList({
         .lte("date", lastDay)
         .or("deleted.is.null,deleted.eq.false")
         .order("date", { ascending: false })
+
+      console.log(`[Savings Goal Modal] Received ${data?.length || 0} transactions:`,
+        data?.slice(0, 10).map(tx => ({ date: tx.date, desc: tx.description, amount: tx.amount }))
+      )
 
       if (error) throw error
 
