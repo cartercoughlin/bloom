@@ -5,16 +5,17 @@ import { NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
-    
+
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    
+
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { transactionId, description, amount } = await request.json()
+    console.log('Category suggestions request:', { transactionId, description, amount, userId: user.id })
 
     const suggestions = await suggestCategories(
       transactionId || null,
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
       user.id
     )
 
+    console.log('Returning suggestions:', suggestions.length, 'suggestions')
     return NextResponse.json({ suggestions })
   } catch (error) {
     console.error("Error getting suggestions:", error)

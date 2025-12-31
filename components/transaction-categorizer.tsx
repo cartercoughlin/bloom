@@ -56,8 +56,9 @@ export function TransactionCategorizer({
 
   const fetchSuggestions = async () => {
     if (loading || suggestions.length > 0) return
-    
+
     setLoading(true)
+    console.log('Fetching suggestions for:', { transactionId, description, amount })
     try {
       const response = await fetch("/api/category-suggestions", {
         method: "POST",
@@ -67,7 +68,10 @@ export function TransactionCategorizer({
 
       if (response.ok) {
         const data = await response.json()
+        console.log('Received suggestions:', data.suggestions)
         setSuggestions(data.suggestions || [])
+      } else {
+        console.error('Failed to fetch suggestions:', response.status, response.statusText)
       }
     } catch (error) {
       console.error("Error fetching suggestions:", error)
@@ -167,18 +171,35 @@ export function TransactionCategorizer({
         </button>
       ) : (
         <div className="space-y-2">
+          {loading && hasInteracted && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <Sparkles className="h-3 w-3 animate-pulse" />
+              Finding similar transactions...
+            </div>
+          )}
+
+          {!loading && hasInteracted && suggestions.length === 0 && (
+            <div className="text-xs text-muted-foreground">
+              No suggestions found
+            </div>
+          )}
+
           {suggestions.length > 0 && (
             <div className="space-y-1">
+              <div className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                <Sparkles className="h-3 w-3" />
+                Suggested categories:
+              </div>
               {suggestions.slice(0, 2).map((suggestion) => {
                 const category = categories.find(c => c.id === suggestion.categoryId)
                 if (!category) return null
-                
+
                 return (
                   <Button
                     key={suggestion.categoryId}
                     variant="outline"
                     size="sm"
-                    className="h-6 px-2 text-xs justify-start"
+                    className="h-6 px-2 text-xs justify-start w-full"
                     onClick={(e) => {
                       e.stopPropagation()
                       handleCategorySelect(suggestion.categoryId)
