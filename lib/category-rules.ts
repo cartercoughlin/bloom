@@ -181,8 +181,57 @@ export async function learnFromAssignment(transactionId: string, categoryId: str
   }
 }
 
-export async function suggestCategories(description: string, amount: number, userId: string): Promise<SmartAssignment[]> {
-  // Simple suggestions without database rules for now
+export async function suggestCategories(
+  transactionId: string | null,
+  description: string,
+  amount: number,
+  userId: string,
+  transactionType?: 'debit' | 'credit',
+  bank?: string,
+  account?: string,
+  institution?: string
+): Promise<SmartAssignment[]> {
+  // If we have a transaction ID, fetch full details from database
+  if (transactionId) {
+    const supabase = await createClient()
+    const { data: tx } = await supabase
+      .from('transactions')
+      .select('description, amount, transaction_type, bank')
+      .eq('id', transactionId)
+      .single()
+
+    if (tx) {
+      description = tx.description
+      amount = tx.amount
+      transactionType = tx.transaction_type
+      bank = tx.bank || undefined
+    }
+  }
+
+  // Build transaction object for rule matching
+  const transaction: Transaction = {
+    description,
+    amount,
+    transaction_type: transactionType || 'debit',
+    bank,
+    account,
+    institution,
+  }
+
+  // Try to assign category using rules
+  const categoryId = await assignCategoryByRules(transaction, userId)
+
+  // If a matching rule was found, return it as a suggestion
+  if (categoryId) {
+    return [{
+      transactionId: transactionId || '',
+      categoryId,
+      confidence: 0.95,
+      reason: 'Matched category rule'
+    }]
+  }
+
+  // No match found - return empty array (transaction stays uncategorized)
   return []
 }
 
