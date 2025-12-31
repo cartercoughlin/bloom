@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { cache } from "@/lib/capacitor"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -82,8 +83,13 @@ export function CategoryForm({ category }: { category?: Category }) {
         if (insertError) throw insertError
       }
 
+      // Invalidate all budget and dashboard caches since categories affect all months
+      await cache.removePattern('budgets-')
+      await cache.removePattern('dashboard-')
+
       router.push("/categories")
-      router.refresh()
+      // Force page reload to get fresh data
+      window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save category")
     } finally {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
+import { cache } from "@/lib/capacitor"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -244,8 +245,14 @@ export function BudgetList({
         ))
       }
 
+      // Invalidate cache to force fresh data load
+      await cache.removePattern(`budgets-${year}-${month}`)
+      await cache.removePattern(`dashboard-${year}-${month}`)
+
       setIsOpen(false)
-      router.refresh()
+      if (onEditComplete) onEditComplete()
+      // Force page reload to get fresh data
+      window.location.reload()
     } catch (error) {
       console.error("Error saving budget:", error)
     } finally {
@@ -268,8 +275,13 @@ export function BudgetList({
 
       if (error) throw error
 
+      // Invalidate cache to force fresh data load
+      await cache.removePattern(`budgets-${year}-${month}`)
+      await cache.removePattern(`dashboard-${year}-${month}`)
+
       setBudgets(budgets.filter((b) => b.id !== budgetId))
-      router.refresh()
+      // Force page reload to get fresh data
+      window.location.reload()
     } catch (error) {
       console.error("Error deleting budget:", error)
     }
@@ -309,9 +321,14 @@ export function BudgetList({
       })
 
       if (response.ok) {
+        // Invalidate cache to force fresh data load
+        await cache.removePattern(`budgets-${year}-${month}`)
+        await cache.removePattern(`dashboard-${year}-${month}`)
+
         setCategoryTransactions(prev => prev.filter(tx => tx.id !== transactionId))
         setSelectedTransaction(null)
-        router.refresh()
+        // Force page reload to get fresh data
+        window.location.reload()
       } else {
         console.error("Failed to delete transaction")
         alert("Failed to delete transaction")
