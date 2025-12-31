@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
     }
 
     const { transactionId, description, amount } = await request.json()
-    console.log('Category suggestions request:', { transactionId, description, amount, userId: user.id })
 
     const suggestions = await suggestCategories(
       transactionId || null,
@@ -24,7 +23,6 @@ export async function POST(request: NextRequest) {
       user.id
     )
 
-    console.log('Returning suggestions:', suggestions.length, 'suggestions')
     return NextResponse.json({ suggestions })
   } catch (error) {
     console.error("Error getting suggestions:", error)

@@ -251,10 +251,7 @@ export async function suggestCategories(
     .order('date', { ascending: false })
     .limit(500) // Look at recent 500 categorized transactions
 
-  console.log(`Found ${categorizedTransactions?.length || 0} categorized transactions for user`)
-
   if (!categorizedTransactions || categorizedTransactions.length === 0) {
-    console.log('No categorized transactions to learn from')
     return [] // No categorized transactions to learn from
   }
 
@@ -281,11 +278,8 @@ export async function suggestCategories(
   }
 
   if (scoredMatches.length === 0) {
-    console.log('No similar transactions found (all below 30% similarity threshold)')
     return [] // No similar transactions found
   }
-
-  console.log(`Found ${scoredMatches.length} similar transactions`)
 
   // Sort by similarity and group by category
   scoredMatches.sort((a, b) => b.similarity - a.similarity)

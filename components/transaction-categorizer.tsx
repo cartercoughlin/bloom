@@ -58,7 +58,6 @@ export function TransactionCategorizer({
     if (loading || suggestions.length > 0) return
 
     setLoading(true)
-    console.log('Fetching suggestions for:', { transactionId, description, amount })
     try {
       const response = await fetch("/api/category-suggestions", {
         method: "POST",
@@ -68,10 +67,7 @@ export function TransactionCategorizer({
 
       if (response.ok) {
         const data = await response.json()
-        console.log('Received suggestions:', data.suggestions)
         setSuggestions(data.suggestions || [])
-      } else {
-        console.error('Failed to fetch suggestions:', response.status, response.statusText)
       }
     } catch (error) {
       console.error("Error fetching suggestions:", error)
