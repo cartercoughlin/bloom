@@ -355,6 +355,15 @@ export function BudgetList({
       const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
       const lastDay = `${year}-${String(month).padStart(2, '0')}-${String(lastDayDate.getDate()).padStart(2, '0')}`
 
+      console.log(`[Budget Modal] Loading transactions for category ${budget.categories?.name}:`, {
+        year,
+        month,
+        firstDay,
+        lastDay,
+        lastDayDate: lastDayDate.toISOString(),
+        lastDayGetDate: lastDayDate.getDate()
+      })
+
       const { data, error } = await supabase
         .from("transactions")
         .select("id, date, description, amount, transaction_type, merchant_name, logo_url, hidden, recurring")
@@ -364,6 +373,10 @@ export function BudgetList({
         .lte("date", lastDay)
         .or("deleted.is.null,deleted.eq.false")
         .order("date", { ascending: false })
+
+      console.log(`[Budget Modal] Received ${data?.length || 0} transactions:`,
+        data?.slice(0, 10).map(tx => ({ date: tx.date, desc: tx.description, amount: tx.amount }))
+      )
 
       if (error) throw error
 
