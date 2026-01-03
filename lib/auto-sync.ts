@@ -33,7 +33,13 @@ async function updateLastSync(storageKey: string): Promise<void> {
 /**
  * Sync transactions if it's been more than 24 hours
  */
-export async function autoSyncTransactions(): Promise<{ synced: boolean; reason?: string }> {
+export async function autoSyncTransactions(): Promise<{
+  synced: boolean;
+  reason?: string;
+  newTransactions?: number;
+  updatedTransactions?: number;
+  totalProcessed?: number;
+}> {
   try {
     const should = await shouldSync(LAST_TRANSACTION_SYNC_KEY, ONE_DAY_MS);
 
@@ -55,7 +61,12 @@ export async function autoSyncTransactions(): Promise<{ synced: boolean; reason?
     if (result.success) {
       await updateLastSync(LAST_TRANSACTION_SYNC_KEY);
       console.log('[AutoSync] Transactions synced successfully:', result);
-      return { synced: true };
+      return {
+        synced: true,
+        newTransactions: result.newTransactions || 0,
+        updatedTransactions: result.updatedTransactions || 0,
+        totalProcessed: result.totalProcessed || 0,
+      };
     }
 
     return { synced: false, reason: result.message || 'Sync failed' };
@@ -68,7 +79,11 @@ export async function autoSyncTransactions(): Promise<{ synced: boolean; reason?
 /**
  * Sync account balances if it's been more than 7 days
  */
-export async function autoSyncBalances(): Promise<{ synced: boolean; reason?: string }> {
+export async function autoSyncBalances(): Promise<{
+  synced: boolean;
+  reason?: string;
+  syncedAccounts?: number;
+}> {
   try {
     const should = await shouldSync(LAST_BALANCE_SYNC_KEY, ONE_WEEK_MS);
 
@@ -90,7 +105,10 @@ export async function autoSyncBalances(): Promise<{ synced: boolean; reason?: st
     if (result.success) {
       await updateLastSync(LAST_BALANCE_SYNC_KEY);
       console.log('[AutoSync] Balances synced successfully:', result);
-      return { synced: true };
+      return {
+        synced: true,
+        syncedAccounts: result.syncedAccounts || 0,
+      };
     }
 
     return { synced: false, reason: result.message || 'Sync failed' };
@@ -103,7 +121,17 @@ export async function autoSyncBalances(): Promise<{ synced: boolean; reason?: st
 /**
  * Run both auto-sync checks
  */
-export async function performAutoSync(): Promise<void> {
+export async function performAutoSync(): Promise<{
+  transactions: {
+    synced: boolean;
+    newTransactions?: number;
+    updatedTransactions?: number;
+  };
+  balances: {
+    synced: boolean;
+    syncedAccounts?: number;
+  };
+}> {
   console.log('[AutoSync] Starting automatic sync check...');
 
   // Run syncs in parallel
@@ -114,6 +142,18 @@ export async function performAutoSync(): Promise<void> {
 
   console.log('[AutoSync] Transaction sync:', transactionResult);
   console.log('[AutoSync] Balance sync:', balanceResult);
+
+  return {
+    transactions: {
+      synced: transactionResult.synced,
+      newTransactions: transactionResult.newTransactions,
+      updatedTransactions: transactionResult.updatedTransactions,
+    },
+    balances: {
+      synced: balanceResult.synced,
+      syncedAccounts: balanceResult.syncedAccounts,
+    },
+  };
 }
 
 /**
