@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { performAutoSync } from '@/lib/auto-sync';
 import { isPWAOrMobile, cache } from '@/lib/capacitor';
 
@@ -28,7 +29,7 @@ export function AutoSyncService() {
     // Wrapper function that syncs and refreshes UI
     const syncAndRefresh = async (isInitialSync = false) => {
       console.log('[AutoSync] Running sync...');
-      await performAutoSync();
+      const result = await performAutoSync();
 
       // Don't reload on initial mount - only on scheduled syncs
       // This prevents infinite reload loops
@@ -37,16 +38,38 @@ export function AutoSyncService() {
         return;
       }
 
-      // Clear all cached data to ensure fresh data loads
-      console.log('[AutoSync] Clearing cache...');
-      await cache.removePattern('dashboard-');
-      await cache.remove('transactions-page');
+      // Show notification if anything was synced
+      const newTxCount = result.transactions.newTransactions || 0;
+      const updatedTxCount = result.transactions.updatedTransactions || 0;
+      const totalTxCount = newTxCount + updatedTxCount;
+      const balanceCount = result.balances.syncedAccounts || 0;
 
-      // Reload the page to show updated data
-      // This is necessary because the pages use client-side data fetching
-      // and router.refresh() doesn't trigger useEffect re-runs
-      console.log('[AutoSync] Refreshing page...');
-      window.location.reload();
+      if (totalTxCount > 0 || balanceCount > 0) {
+        const messages = [];
+        if (totalTxCount > 0) {
+          messages.push(`${totalTxCount} transaction${totalTxCount !== 1 ? 's' : ''} synced`);
+        }
+        if (balanceCount > 0) {
+          messages.push(`${balanceCount} account${balanceCount !== 1 ? 's' : ''} updated`);
+        }
+
+        toast.success(messages.join(', '));
+
+        // Clear all cached data to ensure fresh data loads
+        console.log('[AutoSync] Clearing cache...');
+        await cache.removePattern('dashboard-');
+        await cache.remove('transactions-page');
+
+        // Reload the page to show updated data after a short delay
+        // This is necessary because the pages use client-side data fetching
+        // and router.refresh() doesn't trigger useEffect re-runs
+        setTimeout(() => {
+          console.log('[AutoSync] Refreshing page...');
+          window.location.reload();
+        }, 1500); // Give user time to see the notification
+      } else {
+        console.log('[AutoSync] No new data to sync');
+      }
     };
 
     // Run sync check immediately on mount (don't reload)
