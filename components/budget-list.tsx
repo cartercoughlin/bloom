@@ -39,6 +39,7 @@ interface Budget {
   id: string
   amount: number
   category_id: string
+  enable_rollover?: boolean
   categories: {
     id: string
     name: string
@@ -95,6 +96,7 @@ export function BudgetList({
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null)
   const [selectedCategoryId, setSelectedCategoryId] = useState("")
   const [amount, setAmount] = useState("")
+  const [enableRollover, setEnableRollover] = useState(true)
   const [isSavingsGoal, setIsSavingsGoal] = useState(false)
   const [targetAmount, setTargetAmount] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -188,6 +190,7 @@ export function BudgetList({
       setEditingBudget(isVirtual ? null : budget)
       setSelectedCategoryId(budget.category_id)
       setAmount(budget.amount.toString())
+      setEnableRollover(budget.enable_rollover !== false) // Default to true
 
       // Set savings goal state from category
       const category = categories.find(c => c.id === budget.category_id)
@@ -197,6 +200,7 @@ export function BudgetList({
       setEditingBudget(null)
       setSelectedCategoryId("")
       setAmount("")
+      setEnableRollover(true) // Default to true for new budgets
       setIsSavingsGoal(false)
       setTargetAmount("")
     }
@@ -219,7 +223,10 @@ export function BudgetList({
         // Update existing budget
         const { error } = await supabase
           .from("budgets")
-          .update({ amount: Number.parseFloat(amount) })
+          .update({
+            amount: Number.parseFloat(amount),
+            enable_rollover: enableRollover
+          })
           .eq("id", editingBudget.id)
           .eq("user_id", user.id)
 
@@ -230,6 +237,7 @@ export function BudgetList({
           user_id: user.id,
           category_id: selectedCategoryId,
           amount: Number.parseFloat(amount),
+          enable_rollover: enableRollover,
           month,
           year,
         })
@@ -494,6 +502,20 @@ export function BudgetList({
                     placeholder="0.00"
                   />
                 </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div className="space-y-0.5">
+                  <Label htmlFor="enable-rollover">Enable Rollover</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Allow unused/overspent amounts to carry over to next month
+                  </p>
+                </div>
+                <Switch
+                  id="enable-rollover"
+                  checked={enableRollover}
+                  onCheckedChange={setEnableRollover}
+                />
               </div>
 
               {selectedCategoryId && (
