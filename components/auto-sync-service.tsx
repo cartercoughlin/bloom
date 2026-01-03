@@ -75,11 +75,11 @@ export function AutoSyncService() {
     // Run sync check immediately on mount (don't reload)
     syncAndRefresh(true);
 
-    // Check for sync every hour
+    // Check for sync once per day (24 hours)
     const intervalId = setInterval(() => {
       console.log('[AutoSync] Running scheduled check...');
       syncAndRefresh();
-    }, 60 * 60 * 1000); // 1 hour
+    }, 24 * 60 * 60 * 1000); // 24 hours
 
     return () => {
       clearInterval(intervalId);
