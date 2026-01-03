@@ -22,6 +22,83 @@ export default function DashboardPage() {
   const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
 
+  // Calculate rollover from previous month (cumulative)
+  const calculateRollover = async (supabase: any, userId: string, targetMonth: number, targetYear: number, depth = 0): Promise<Record<string, number>> => {
+    // Limit recursion to 12 months to avoid infinite loops and performance issues
+    if (depth > 12) return {}
+
+    const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1
+    const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear
+
+    // Get rollover from the month BEFORE the previous month
+    const previousMonthsRollover = await calculateRollover(supabase, userId, prevMonth, prevYear, depth + 1)
+
+    // Get previous month's budgets
+    const { data: prevBudgets } = await supabase
+      .from("budgets")
+      .select("category_id, amount")
+      .eq("user_id", userId)
+      .eq("month", prevMonth)
+      .eq("year", prevYear)
+
+    // Calculate rollover even if no budgets exist in prev month (we might have balance from month before)
+    const rolloverCategories = new Set([
+      ...(prevBudgets || []).map((b: any) => b.category_id),
+      ...Object.keys(previousMonthsRollover)
+    ])
+
+    if (rolloverCategories.size === 0) {
+      return {}
+    }
+
+    // Get previous month's transactions
+    const prevFirstDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
+    const prevNextMonth = prevMonth === 12 ? 1 : prevMonth + 1
+    const prevNextYear = prevMonth === 12 ? prevYear + 1 : prevYear
+    const prevNextMonthFirstDay = `${prevNextYear}-${String(prevNextMonth).padStart(2, '0')}-01`
+
+    const { data: prevTransactions } = await supabase
+      .from("transactions")
+      .select("category_id, amount, transaction_type, hidden")
+      .eq("user_id", userId)
+      .gte("date", prevFirstDay)
+      .lt("date", prevNextMonthFirstDay)
+      .not("deleted", "eq", true)
+
+    // Calculate spending by category for the previous month
+    const prevSpending: Record<string, number> = {}
+    prevTransactions?.forEach((tx: any) => {
+      if (tx.hidden) return
+      if (tx.category_id) {
+        if (!prevSpending[tx.category_id]) {
+          prevSpending[tx.category_id] = 0
+        }
+        if (tx.transaction_type === 'debit') {
+          prevSpending[tx.category_id] += Number(tx.amount)
+        } else if (tx.transaction_type === 'credit') {
+          prevSpending[tx.category_id] -= Number(tx.amount)
+        }
+      }
+    })
+
+    // Calculate rollover: (Base Budget + Previous Rollover) - Spending
+    const rollover: Record<string, number> = {}
+    rolloverCategories.forEach(catId => {
+      const budgetAmount = (prevBudgets || []).find((b: any) => b.category_id === catId)?.amount || 0
+      const spent = prevSpending[catId] || 0
+      const prevRollover = previousMonthsRollover[catId] || 0
+      const totalAvailable = Number(budgetAmount) + prevRollover
+      const remaining = totalAvailable - spent
+
+      // Only roll over positive amounts
+      if (remaining > 0) {
+        rollover[catId] = remaining
+      }
+    })
+
+    return rollover
+  }
+
   useEffect(() => {
     async function loadData() {
       try {
@@ -42,12 +119,13 @@ export default function DashboardPage() {
           setTrendTransactions(cachedData.trendTransactions || [])
           setBudgets(cachedData.budgets || [])
           setCategories(cachedData.categories || [])
-          
+          setRolloverByCategory(cachedData.rolloverByCategory || {})
+
           // Calculate net by category from cached data
           const categoryTotals: any = {}
           ;(cachedData.currentMonthTransactions || []).forEach((tx: any) => {
             if (!tx.category_id || tx.hidden) return
-            
+
             if (!categoryTotals[tx.category_id]) {
               categoryTotals[tx.category_id] = {
                 income: 0,
@@ -57,7 +135,7 @@ export default function DashboardPage() {
                 variableExpenses: 0,
               }
             }
-            
+
             if (tx.transaction_type === "credit") {
               categoryTotals[tx.category_id].income += tx.amount
             } else {
@@ -68,13 +146,16 @@ export default function DashboardPage() {
                 categoryTotals[tx.category_id].variableExpenses += tx.amount
               }
             }
-            
+
             categoryTotals[tx.category_id].net = categoryTotals[tx.category_id].income - categoryTotals[tx.category_id].expenses
           })
           setNetByCategory(categoryTotals)
-          
+
           setLoading(false)
         }
+
+        // Calculate rollover from previous month
+        const rollover = await calculateRollover(supabase, user.id, selectedMonth, selectedYear)
 
         // Get selected month date range (use local dates to avoid timezone issues)
         const lastDayDate = new Date(selectedYear, selectedMonth, 0)
@@ -164,14 +245,15 @@ export default function DashboardPage() {
         console.log('Dashboard data loaded:', {
           transactions: newData.currentMonthTransactions.length,
           budgets: newData.budgets.length,
-          categories: newData.categories.length
+          categories: newData.categories.length,
+          rollover: Object.keys(rollover).length
         })
 
         // Calculate net by category
         const categoryTotals: any = {}
         newData.currentMonthTransactions.forEach((tx: any) => {
           if (!tx.category_id || tx.hidden) return
-          
+
           if (!categoryTotals[tx.category_id]) {
             categoryTotals[tx.category_id] = {
               income: 0,
@@ -181,7 +263,7 @@ export default function DashboardPage() {
               variableExpenses: 0,
             }
           }
-          
+
           if (tx.transaction_type === "credit") {
             categoryTotals[tx.category_id].income += tx.amount
           } else {
@@ -192,18 +274,22 @@ export default function DashboardPage() {
               categoryTotals[tx.category_id].variableExpenses += tx.amount
             }
           }
-          
+
           categoryTotals[tx.category_id].net = categoryTotals[tx.category_id].income - categoryTotals[tx.category_id].expenses
         })
-        
+
         console.log('Category totals calculated:', categoryTotals)
         console.log('Sample transactions:', newData.currentMonthTransactions.slice(0, 3))
         setNetByCategory(categoryTotals)
+        setRolloverByCategory(rollover)
 
         setLoading(false)
 
-        // Cache the data
-        await cache.setJSON(cacheKey, newData)
+        // Cache the data (including rollover)
+        await cache.setJSON(cacheKey, {
+          ...newData,
+          rolloverByCategory: rollover
+        })
       } catch (error) {
         console.error("[v0] Error loading dashboard:", error)
         setLoading(false)
