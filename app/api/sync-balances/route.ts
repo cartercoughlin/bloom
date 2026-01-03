@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { syncAccountBalances } from '@/lib/plaid-sync-improved'
 
@@ -24,6 +25,11 @@ export async function POST() {
     }
 
     if (!plaidItems || plaidItems.length === 0) {
+      // Still revalidate in case accounts were removed
+      revalidatePath('/dashboard')
+      revalidatePath('/accounts')
+      revalidatePath('/net-worth')
+
       return NextResponse.json({
         success: true,
         message: 'No accounts configured for balance sync',
@@ -52,6 +58,11 @@ export async function POST() {
         errors.push(`Failed to sync ${item.institution_name}: ${itemError instanceof Error ? itemError.message : 'Unknown error'}`)
       }
     }
+
+    // Revalidate pages that display balance data
+    revalidatePath('/dashboard')
+    revalidatePath('/accounts')
+    revalidatePath('/net-worth')
 
     return NextResponse.json({
       success: errors.length === 0,

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { syncPlaidTransactions } from '@/lib/plaid-sync'
 
@@ -47,8 +48,15 @@ export async function POST() {
       if (balanceCleanupError) {
         console.error('Error cleaning up Plaid balances:', balanceCleanupError)
       }
-      
-      return NextResponse.json({ 
+
+      // Revalidate pages that display transaction data
+      revalidatePath('/dashboard')
+      revalidatePath('/transactions')
+      revalidatePath('/accounts')
+      revalidatePath('/budgets')
+      revalidatePath('/net-worth')
+
+      return NextResponse.json({
         success: true,
         message: 'All Plaid data cleaned up. Connect a bank account to sync transactions.',
         newTransactions: 0,
@@ -145,7 +153,14 @@ export async function POST() {
       }
     }
 
-    return NextResponse.json({ 
+    // Revalidate pages that display transaction data
+    revalidatePath('/dashboard')
+    revalidatePath('/transactions')
+    revalidatePath('/accounts')
+    revalidatePath('/budgets')
+    revalidatePath('/net-worth')
+
+    return NextResponse.json({
       success: errors.length === 0,
       newTransactions: totalNewTransactions,
       updatedTransactions: totalUpdatedTransactions,
