@@ -119,17 +119,22 @@ export default function BudgetsPage() {
     // Get rollover from the month BEFORE the previous month
     const previousMonthsRollover = await calculateRollover(supabase, userId, prevMonth, prevYear, depth + 1)
 
-    // Get previous month's budgets
+    // Get previous month's budgets with rollover settings
     const { data: prevBudgets } = await supabase
       .from("budgets")
-      .select("category_id, amount")
+      .select("category_id, amount, enable_rollover")
       .eq("user_id", userId)
       .eq("month", prevMonth)
       .eq("year", prevYear)
 
+    // Only process categories that have rollover enabled
+    const rolloverEnabledCategories = (prevBudgets || [])
+      .filter((b: any) => b.enable_rollover !== false) // Default to true if not set
+      .map((b: any) => b.category_id)
+
     // Calculate rollover even if no budgets exist in prev month (we might have balance from month before)
     const rolloverCategories = new Set([
-      ...(prevBudgets || []).map((b: any) => b.category_id),
+      ...rolloverEnabledCategories,
       ...Object.keys(previousMonthsRollover)
     ])
 
@@ -168,16 +173,23 @@ export default function BudgetsPage() {
     })
 
     // Calculate rollover: (Base Budget + Previous Rollover) - Spending
+    // Allow both positive AND negative rollover amounts
     const rollover: Record<string, number> = {}
     rolloverCategories.forEach(catId => {
-      const budgetAmount = (prevBudgets || []).find((b: any) => b.category_id === catId)?.amount || 0
+      const budget = (prevBudgets || []).find((b: any) => b.category_id === catId)
+      const budgetAmount = budget?.amount || 0
+      const rolloverEnabled = budget?.enable_rollover !== false // Default to true
+
+      // Skip if rollover is explicitly disabled for this budget
+      if (!rolloverEnabled && !previousMonthsRollover[catId]) return
+
       const spent = prevSpending[catId] || 0
       const prevRollover = previousMonthsRollover[catId] || 0
       const totalAvailable = Number(budgetAmount) + prevRollover
       const remaining = totalAvailable - spent
 
-      // Only roll over positive amounts
-      if (remaining > 0) {
+      // Include both positive and negative amounts
+      if (remaining !== 0) {
         rollover[catId] = remaining
       }
     })

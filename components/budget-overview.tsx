@@ -18,6 +18,7 @@ interface Budget {
   id: string
   amount: number
   category_id: string
+  enable_rollover?: boolean
   categories: {
     name: string
     color: string
@@ -43,10 +44,11 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
   const { privacyMode } = usePrivacy()
   const [showDetailModal, setShowDetailModal] = useState(false)
 
-  // Calculate total rollover from previous month (only for budgets in this list, not savings goals)
-  const budgetCategoryIds = new Set(budgets.map(b => b.category_id))
+  // Calculate total rollover from previous month (only for budgets with rollover enabled)
+  const budgetsWithRollover = budgets.filter(b => b.enable_rollover !== false) // Default to true
+  const rolloverCategoryIds = new Set(budgetsWithRollover.map(b => b.category_id))
   const totalRollover = Object.entries(rolloverByCategory)
-    .filter(([categoryId]) => budgetCategoryIds.has(categoryId))
+    .filter(([categoryId]) => rolloverCategoryIds.has(categoryId))
     .reduce((sum, [_, amount]) => sum + amount, 0)
 
   // Base budget (before rollover)
