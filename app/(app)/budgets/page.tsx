@@ -120,12 +120,26 @@ export default function BudgetsPage() {
     const previousMonthsRollover = await calculateRollover(supabase, userId, prevMonth, prevYear, depth + 1)
 
     // Get previous month's budgets with rollover settings
-    const { data: prevBudgets } = await supabase
+    // Try with enable_rollover first, fall back to without if column doesn't exist yet
+    let prevBudgets: any[] | null = null
+    let budgetsResult = await supabase
       .from("budgets")
       .select("category_id, amount, enable_rollover")
       .eq("user_id", userId)
       .eq("month", prevMonth)
       .eq("year", prevYear)
+
+    if (budgetsResult.error) {
+      // Column might not exist yet, try without it
+      budgetsResult = await supabase
+        .from("budgets")
+        .select("category_id, amount")
+        .eq("user_id", userId)
+        .eq("month", prevMonth)
+        .eq("year", prevYear)
+    }
+
+    prevBudgets = budgetsResult.data
 
     // Only process categories that have rollover enabled
     const rolloverEnabledCategories = (prevBudgets || [])
