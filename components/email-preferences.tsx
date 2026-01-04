@@ -14,6 +14,7 @@ export function EmailPreferences() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [dailyDigestEnabled, setDailyDigestEnabled] = useState(false)
+  const [canSendTestEmail, setCanSendTestEmail] = useState(false)
 
   useEffect(() => {
     loadPreferences()
@@ -25,6 +26,9 @@ export function EmailPreferences() {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) return
+
+      // Check if user is authorized to send test emails
+      setCanSendTestEmail(user.email === 'cocoughlin@me.com')
 
       // Try to get existing preferences
       let { data: prefs, error } = await supabase
@@ -160,38 +164,45 @@ export function EmailPreferences() {
         {dailyDigestEnabled && (
           <div className="flex flex-col gap-2 pt-4 border-t">
             <p className="text-sm text-muted-foreground mb-2">
-              Test your daily digest email:
+              {canSendTestEmail ? 'Test your daily digest email:' : 'Preview your daily digest:'}
             </p>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={previewDigest}
-                className="flex-1"
+                className={canSendTestEmail ? "flex-1" : "w-full"}
               >
                 <Mail className="h-4 w-4 mr-2" />
                 Preview
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={sendTestEmail}
-                disabled={sending}
-                className="flex-1"
-              >
-                {sending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Test
-                  </>
-                )}
-              </Button>
+              {canSendTestEmail && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={sendTestEmail}
+                  disabled={sending}
+                  className="flex-1"
+                >
+                  {sending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Test
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
+            {!canSendTestEmail && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Once enabled, you'll receive your daily digest automatically at 8:00 AM each day. Use Preview to see what it will look like.
+              </p>
+            )}
           </div>
         )}
       </CardContent>
