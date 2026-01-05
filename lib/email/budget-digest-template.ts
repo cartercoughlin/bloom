@@ -261,7 +261,7 @@ export function generateBudgetDigestHTML(data: DigestData): string {
 
     <div class="content">
       <div class="greeting">
-        Good morning, ${userName}! 👋
+        Good morning${userName ? `, ${userName}` : ''}! 👋
       </div>
 
       <!-- Budget Overview -->

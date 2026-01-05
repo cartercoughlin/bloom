@@ -68,7 +68,7 @@ export async function generateDigestData(
       .eq('id', userId)
       .single()
 
-    const userName = profile?.full_name || 'there'
+    const userName = profile?.full_name || ''
 
     // Fetch budgets for current month
     const { data: budgets } = await supabase
