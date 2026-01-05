@@ -132,7 +132,7 @@ export function generateBudgetDigestHTML(data: DigestData): string {
       margin-bottom: 4px;
     }
     .stat-value {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 700;
       color: #111827;
     }

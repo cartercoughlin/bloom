@@ -32,14 +32,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No email address found' }, { status: 400 })
     }
 
-    // Restrict test emails to authorized user only
-    if (userEmail !== 'cocoughlin@me.com') {
-      return NextResponse.json({
-        success: false,
-        message: 'Test email functionality is restricted. Daily digest will be sent automatically via cron job when enabled.'
-      }, { status: 403 })
-    }
-
     // Check if user has email notifications enabled
     const { data: preferences } = await supabase
       .from('email_preferences')
