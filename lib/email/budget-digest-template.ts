@@ -292,6 +292,33 @@ export function generateBudgetDigestHTML(data: DigestData): string {
             : `✅ You have ${daysRemainingInMonth} days left in the month`
           }
         </p>
+
+        <!-- Pacing Metrics -->
+        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #e5e7eb;">
+          <div style="font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 8px;">📈 Pacing</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+            <div>
+              <span style="color: #6b7280;">Month Progress:</span>
+              <strong style="color: #111827; margin-left: 4px;">${Math.round(budgetProgress.percentageThroughMonth)}%</strong>
+            </div>
+            <div>
+              <span style="color: #6b7280;">Budget Used:</span>
+              <strong style="color: ${budgetProgress.isPacingOver ? '#ef4444' : '#10b981'}; margin-left: 4px;">
+                ${Math.round(budgetProgress.percentageUsed)}%
+              </strong>
+            </div>
+            <div style="grid-column: 1 / -1;">
+              <span style="color: #6b7280;">Expected vs Actual:</span>
+              <strong style="color: #111827; margin-left: 4px;">
+                ${formatCurrency(budgetProgress.expectedSpending)} / ${formatCurrency(budgetProgress.totalSpent)}
+              </strong>
+              ${budgetProgress.isPacingOver
+                ? `<span style="color: #ef4444; margin-left: 4px;">(+${formatCurrency(budgetProgress.pacingDifference)} over pace)</span>`
+                : `<span style="color: #10b981; margin-left: 4px;">(${formatCurrency(Math.abs(budgetProgress.pacingDifference))} under pace)</span>`
+              }
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Category Breakdown -->

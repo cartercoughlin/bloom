@@ -15,6 +15,10 @@ export interface DigestData {
     totalRemaining: number
     percentageUsed: number
     isOverBudget: boolean
+    percentageThroughMonth: number
+    expectedSpending: number
+    pacingDifference: number
+    isPacingOver: boolean
   }
   categoryBreakdown: Array<{
     categoryName: string
@@ -170,6 +174,14 @@ export async function generateDigestData(
     const totalRemaining = totalBudget - totalSpent
     const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
 
+    // Calculate pacing metrics
+    const daysInMonth = lastDayOfMonth
+    const daysElapsed = now.getDate()
+    const percentageThroughMonth = (daysElapsed / daysInMonth) * 100
+    const expectedSpending = totalBudget * (percentageThroughMonth / 100)
+    const pacingDifference = totalSpent - expectedSpending
+    const isPacingOver = pacingDifference > 0
+
     // Get recent transactions (last 24 hours)
     const recentTransactions = (transactions || [])
       .filter((tx: any) => !tx.hidden && tx.date >= yesterdayStr)
@@ -196,7 +208,11 @@ export async function generateDigestData(
         totalSpent,
         totalRemaining,
         percentageUsed,
-        isOverBudget: totalRemaining < 0
+        isOverBudget: totalRemaining < 0,
+        percentageThroughMonth,
+        expectedSpending,
+        pacingDifference,
+        isPacingOver
       },
       categoryBreakdown,
       recentTransactions,
