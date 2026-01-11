@@ -131,17 +131,22 @@ export async function generateDigestData(
     // Calculate rollover from previous month
     const rollover = await calculateRollover(supabase, userId, currentMonth, currentYear)
 
-    // Calculate spending by category
-    const spendingByCategory: Record<string, { spent: number; income: number }> = {}
+    // Calculate spending by category (including recurring tracking)
+    const spendingByCategory: Record<string, { spent: number; income: number; recurring: number }> = {}
+    let totalRecurringSpent = 0
     transactions?.forEach((tx: any) => {
       if (tx.hidden || !tx.category_id) return
 
       if (!spendingByCategory[tx.category_id]) {
-        spendingByCategory[tx.category_id] = { spent: 0, income: 0 }
+        spendingByCategory[tx.category_id] = { spent: 0, income: 0, recurring: 0 }
       }
 
       if (tx.transaction_type === 'debit') {
         spendingByCategory[tx.category_id].spent += Number(tx.amount)
+        if (tx.recurring) {
+          spendingByCategory[tx.category_id].recurring += Number(tx.amount)
+          totalRecurringSpent += Number(tx.amount)
+        }
       } else if (tx.transaction_type === 'credit') {
         spendingByCategory[tx.category_id].income += Number(tx.amount)
       }
@@ -191,12 +196,23 @@ export async function generateDigestData(
     const daysElapsed = now.getDate()
     const percentageThroughMonth = (daysElapsed / daysInMonth) * 100
 
-    // Calculate expected spending using historical recurring data when available
-    // This accounts for recurring expenses that haven't hit yet this month
+    // Calculate expected spending using hybrid approach:
+    // - Take MAX of (actual recurring so far) vs (historical recurring × % through month)
+    // - This acknowledges front-loaded recurring (like rent) while also expecting future recurring
+    // - Scale variable expenses linearly based on historical variable amount
     let expectedSpending: number
     if (historicalRecurring.monthsUsed > 0) {
-      // Both recurring and variable scale linearly since recurring is spread through the month
-      expectedSpending = totalBudget * (percentageThroughMonth / 100)
+      const historicalRecurringTotal = historicalRecurring.total
+      const historicalVariable = Math.max(0, totalBudget - historicalRecurringTotal)
+
+      // Expected recurring: whichever is higher - what's already hit or baseline expectation
+      const expectedRecurringBaseline = historicalRecurringTotal * (percentageThroughMonth / 100)
+      const expectedRecurring = Math.max(totalRecurringSpent, expectedRecurringBaseline)
+
+      // Expected variable: scales linearly through the month
+      const expectedVariable = historicalVariable * (percentageThroughMonth / 100)
+
+      expectedSpending = expectedRecurring + expectedVariable
     } else {
       // Fallback: simple linear scaling
       expectedSpending = totalBudget * (percentageThroughMonth / 100)

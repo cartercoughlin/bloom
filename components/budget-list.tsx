@@ -614,17 +614,24 @@ export function BudgetList({
             const calculateExpectedSpending = () => {
               if (percentageThroughMonth === null) return 0
 
-              // If we have historical data for this category, use it
+              // If we have historical data for this category, use hybrid approach
               const historicalRecurringForCategory = historicalRecurring?.byCategory?.[budget.category_id] || 0
               const hasHistoricalData = historicalRecurring && historicalRecurring.monthsUsed > 0 && historicalRecurringForCategory > 0
 
               if (hasHistoricalData) {
-                // Use historical recurring as expected recurring, scale both linearly
-                // since recurring expenses are spread throughout the month
-                const expectedRecurring = historicalRecurringForCategory
-                const expectedVariable = Math.max(0, totalBudget - expectedRecurring)
+                const historicalVariable = Math.max(0, totalBudget - historicalRecurringForCategory)
 
-                return (expectedRecurring + expectedVariable) * (percentageThroughMonth / 100)
+                // Net recurring expenses (after income offsets)
+                const netRecurringExpenses = Math.max(0, recurringExpenses - income)
+
+                // Expected recurring: whichever is higher - what's already hit or baseline expectation
+                const expectedRecurringBaseline = historicalRecurringForCategory * (percentageThroughMonth / 100)
+                const expectedRecurring = Math.max(netRecurringExpenses, expectedRecurringBaseline)
+
+                // Expected variable: scales linearly through the month
+                const expectedVariable = historicalVariable * (percentageThroughMonth / 100)
+
+                return expectedRecurring + expectedVariable
               }
 
               // Fallback: no historical data for this category

@@ -108,15 +108,22 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
   const calculateExpectedSpending = () => {
     if (percentageThroughMonth === null) return 0
 
-    // If we have historical data, use it to determine the recurring/variable split
-    // and scale both linearly since recurring expenses are spread throughout the month
+    // If we have historical data, use hybrid approach:
+    // - Take MAX of (actual recurring so far) vs (historical recurring × % through month)
+    // - This acknowledges front-loaded recurring (like rent) while also expecting future recurring
+    // - Scale variable expenses linearly based on historical variable amount
     if (historicalRecurring && historicalRecurring.monthsUsed > 0) {
-      const expectedRecurring = historicalRecurring.total
-      const expectedVariable = Math.max(0, totalBudget - expectedRecurring)
+      const historicalRecurringTotal = historicalRecurring.total
+      const historicalVariable = Math.max(0, totalBudget - historicalRecurringTotal)
 
-      // Both recurring and variable scale linearly through the month
-      // because recurring expenses are spread throughout (rent on 1st, Netflix on 5th, phone on 20th, etc.)
-      return (expectedRecurring + expectedVariable) * (percentageThroughMonth / 100)
+      // Expected recurring: whichever is higher - what's already hit or baseline expectation
+      const expectedRecurringBaseline = historicalRecurringTotal * (percentageThroughMonth / 100)
+      const expectedRecurring = Math.max(totalRecurring, expectedRecurringBaseline)
+
+      // Expected variable: scales linearly through the month
+      const expectedVariable = historicalVariable * (percentageThroughMonth / 100)
+
+      return expectedRecurring + expectedVariable
     }
 
     // Fallback: no historical data available
