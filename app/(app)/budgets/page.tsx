@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { FolderKanban } from "lucide-react"
 import { useMonth } from "@/contexts/month-context"
+import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 
 export default function BudgetsPage() {
   const router = useRouter()
@@ -23,6 +24,7 @@ export default function BudgetsPage() {
   const [spendingByCategory, setSpendingByCategory] = useState<any>({})
   const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
   const [editBudgetId, setEditBudgetId] = useState<string | null>(null)
+  const [historicalRecurring, setHistoricalRecurring] = useState<HistoricalRecurringData>({ byCategory: {}, total: 0, monthsUsed: 0 })
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
 
   // Auto-create budgets for new month from previous month
@@ -234,6 +236,7 @@ export default function BudgetsPage() {
           setNetByCategory(cachedData.netByCategory || {})
           setSpendingByCategory(cachedData.spendingByCategory || {})
           setRolloverByCategory(cachedData.rolloverByCategory || {})
+          setHistoricalRecurring(cachedData.historicalRecurring || { byCategory: {}, total: 0, monthsUsed: 0 })
           setLoading(false)
         }
       }
@@ -356,6 +359,22 @@ export default function BudgetsPage() {
         (budget: any) => !budget.categories?.is_rollover
       )
 
+      // Calculate historical recurring averages for pacing calculations
+      // Only fetch for current month since pacing is only shown for current month
+      let historicalRecurringData: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
+      const now = new Date()
+      if (selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear()) {
+        const budgetCategoryIds = regularBudgets.map((b: any) => b.category_id)
+        historicalRecurringData = await calculateHistoricalRecurring(
+          supabase,
+          user.id,
+          selectedMonth,
+          selectedYear,
+          budgetCategoryIds,
+          3 // Look back 3 months
+        )
+      }
+
       // Ensure all rollover categories appear in savings goals list, even if they don't have a budget record this month
       const allCategories = categoriesResult.data || []
       const rolloverCategoriesFromDb = allCategories.filter((c: any) => c.is_rollover)
@@ -382,7 +401,8 @@ export default function BudgetsPage() {
         categories: categoriesResult.data || [],
         netByCategory: categoryTotals,
         spendingByCategory: spending,
-        rolloverByCategory: rollover
+        rolloverByCategory: rollover,
+        historicalRecurring: historicalRecurringData
       }
 
       setBudgets(newData.budgets)
@@ -391,6 +411,7 @@ export default function BudgetsPage() {
       setNetByCategory(newData.netByCategory)
       setSpendingByCategory(newData.spendingByCategory)
       setRolloverByCategory(newData.rolloverByCategory)
+      setHistoricalRecurring(newData.historicalRecurring)
 
       const cacheKey = `budgets-${selectedYear}-${selectedMonth}`
       await cache.setJSON(cacheKey, newData)
@@ -443,6 +464,7 @@ export default function BudgetsPage() {
           budgets={budgets || []}
           netByCategory={netByCategory}
           rolloverByCategory={rolloverByCategory}
+          historicalRecurring={historicalRecurring}
           month={selectedMonth}
           year={selectedYear}
         />
@@ -453,6 +475,7 @@ export default function BudgetsPage() {
           netByCategory={netByCategory}
           spending={spendingByCategory}
           rolloverByCategory={rolloverByCategory}
+          historicalRecurring={historicalRecurring}
           month={selectedMonth}
           year={selectedYear}
           editBudgetId={editBudgetId}

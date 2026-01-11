@@ -10,6 +10,7 @@ import { BudgetOverview } from "@/components/budget-overview"
 import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMonth } from "@/contexts/month-context"
+import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -20,6 +21,7 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<any[]>([])
   const [netByCategory, setNetByCategory] = useState<any>({})
   const [rolloverByCategory, setRolloverByCategory] = useState<any>({})
+  const [historicalRecurring, setHistoricalRecurring] = useState<HistoricalRecurringData>({ byCategory: {}, total: 0, monthsUsed: 0 })
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
 
   // Calculate rollover from previous month (cumulative)
@@ -146,6 +148,7 @@ export default function DashboardPage() {
           setBudgets(cachedData.budgets || [])
           setCategories(cachedData.categories || [])
           setRolloverByCategory(cachedData.rolloverByCategory || {})
+          setHistoricalRecurring(cachedData.historicalRecurring || { byCategory: {}, total: 0, monthsUsed: 0 })
 
           // Calculate net by category from cached data
           const categoryTotals: any = {}
@@ -255,11 +258,28 @@ export default function DashboardPage() {
           (budget: any) => !budget.categories?.is_rollover
         )
 
+        // Calculate historical recurring averages for pacing calculations
+        // Only fetch for current month since pacing is only shown for current month
+        let historicalRecurringData: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
+        const now = new Date()
+        if (selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear()) {
+          const budgetCategoryIds = regularBudgets.map((b: any) => b.category_id)
+          historicalRecurringData = await calculateHistoricalRecurring(
+            supabase,
+            user.id,
+            selectedMonth,
+            selectedYear,
+            budgetCategoryIds,
+            3 // Look back 3 months
+          )
+        }
+
         const newData = {
           currentMonthTransactions: transactionsResult.data || [],
           trendTransactions: trendResult.data || [],
           budgets: regularBudgets,
-          categories: categoriesResult.data || []
+          categories: categoriesResult.data || [],
+          historicalRecurring: historicalRecurringData
         }
 
         // Update state
@@ -267,6 +287,7 @@ export default function DashboardPage() {
         setTrendTransactions(newData.trendTransactions)
         setBudgets(newData.budgets)
         setCategories(newData.categories)
+        setHistoricalRecurring(newData.historicalRecurring)
 
         console.log('Dashboard data loaded:', {
           transactions: newData.currentMonthTransactions.length,
@@ -311,10 +332,11 @@ export default function DashboardPage() {
 
         setLoading(false)
 
-        // Cache the data (including rollover)
+        // Cache the data (including rollover and historical recurring)
         await cache.setJSON(cacheKey, {
           ...newData,
-          rolloverByCategory: rollover
+          rolloverByCategory: rollover,
+          historicalRecurring: historicalRecurringData
         })
       } catch (error) {
         console.error("[v0] Error loading dashboard:", error)
@@ -357,6 +379,7 @@ export default function DashboardPage() {
           budgets={budgets || []}
           netByCategory={netByCategory}
           rolloverByCategory={rolloverByCategory}
+          historicalRecurring={historicalRecurring}
           month={selectedMonth}
           year={selectedYear}
         />

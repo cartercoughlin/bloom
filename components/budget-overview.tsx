@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 
 interface Budget {
   id: string
@@ -36,11 +37,12 @@ interface BudgetOverviewProps {
     variableExpenses: number
   }>
   rolloverByCategory?: Record<string, number>
+  historicalRecurring?: HistoricalRecurringData
   month: number
   year: number
 }
 
-export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, month, year }: BudgetOverviewProps) {
+export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, month, year }: BudgetOverviewProps) {
   const { privacyMode } = usePrivacy()
   const [showDetailModal, setShowDetailModal] = useState(false)
 
@@ -100,10 +102,36 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
 
   const percentageThroughMonth = getPercentageThroughMonth()
 
-  // Calculate expected spending
-  const expectedSpending = percentageThroughMonth !== null
-    ? totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))
-    : 0
+  // Calculate expected spending using historical recurring data when available
+  // Historical data tells us what recurring expenses to expect for the full month,
+  // even if they haven't hit yet (e.g., phone bill on the 20th)
+  const calculateExpectedSpending = () => {
+    if (percentageThroughMonth === null) return 0
+
+    // If we have historical data, use hybrid approach:
+    // - Take MAX of (actual recurring so far) vs (historical recurring × % through month)
+    // - This acknowledges front-loaded recurring (like rent) while also expecting future recurring
+    // - Scale variable expenses linearly based on historical variable amount
+    if (historicalRecurring && historicalRecurring.monthsUsed > 0) {
+      const historicalRecurringTotal = historicalRecurring.total
+      const historicalVariable = Math.max(0, totalBudget - historicalRecurringTotal)
+
+      // Expected recurring: whichever is higher - what's already hit or baseline expectation
+      const expectedRecurringBaseline = historicalRecurringTotal * (percentageThroughMonth / 100)
+      const expectedRecurring = Math.max(totalRecurring, expectedRecurringBaseline)
+
+      // Expected variable: scales linearly through the month
+      const expectedVariable = historicalVariable * (percentageThroughMonth / 100)
+
+      return expectedRecurring + expectedVariable
+    }
+
+    // Fallback: no historical data available
+    // Use actual recurring spent so far as the baseline (old behavior)
+    return totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))
+  }
+
+  const expectedSpending = calculateExpectedSpending()
 
   const difference = totalBudget - totalSpent
   const differencePercent = totalBudget > 0 ? (difference / totalBudget) * 100 : 0
@@ -206,14 +234,14 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
               />
             </div>
 
-            {/* Expected spending line (only for variable expenses) - outside overflow container */}
+            {/* Expected spending line - outside overflow container */}
             {percentageThroughMonth !== null && (
               <div
                 className="absolute -top-1 -bottom-1 w-1 bg-blue-600 dark:bg-blue-400 z-10 shadow-lg"
                 style={{
-                  left: `${Math.min(recurringPercentage + ((100 - recurringPercentage) * (percentageThroughMonth / 100)), 100)}%`
+                  left: `${Math.min((expectedSpending / totalBudget) * 100, 100)}%`
                 }}
-                title={privacyMode ? 'Expected variable: ••••' : `Expected variable: $${((totalBudget - totalRecurring) * (percentageThroughMonth / 100)).toFixed(2)}`}
+                title={privacyMode ? 'Expected: ••••' : `Expected: $${expectedSpending.toFixed(2)}`}
               />
             )}
           </div>
@@ -303,6 +331,36 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
                     </p>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Historical Recurring Info */}
+          {historicalRecurring && historicalRecurring.monthsUsed > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Expected Monthly Recurring</h3>
+              <p className="text-xs text-muted-foreground">
+                Based on {historicalRecurring.monthsUsed} month{historicalRecurring.monthsUsed !== 1 ? 's' : ''} of history
+              </p>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Avg. monthly recurring</span>
+                  <PrivateAmount amount={historicalRecurring.total} className="text-sm font-medium" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Expected variable</span>
+                  <PrivateAmount amount={Math.max(0, totalBudget - historicalRecurring.total)} className="text-sm font-medium" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Recurring so far</span>
+                  <PrivateAmount amount={totalRecurring} className="text-sm font-medium" />
+                </div>
+                {historicalRecurring.total > totalRecurring && (
+                  <div className="flex justify-between items-center text-blue-600">
+                    <span className="text-sm">Recurring still expected</span>
+                    <PrivateAmount amount={historicalRecurring.total - totalRecurring} className="text-sm font-medium" />
+                  </div>
+                )}
               </div>
             </div>
           )}
