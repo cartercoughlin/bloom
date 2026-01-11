@@ -328,6 +328,36 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
             </div>
           )}
 
+          {/* Historical Recurring Info */}
+          {historicalRecurring && historicalRecurring.monthsUsed > 0 && (
+            <div className="space-y-2">
+              <h3 className="font-semibold text-sm">Expected Monthly Recurring</h3>
+              <p className="text-xs text-muted-foreground">
+                Based on {historicalRecurring.monthsUsed} month{historicalRecurring.monthsUsed !== 1 ? 's' : ''} of history
+              </p>
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Avg. monthly recurring</span>
+                  <PrivateAmount amount={historicalRecurring.total} className="text-sm font-medium" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Expected variable</span>
+                  <PrivateAmount amount={Math.max(0, totalBudget - historicalRecurring.total)} className="text-sm font-medium" />
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">Recurring so far</span>
+                  <PrivateAmount amount={totalRecurring} className="text-sm font-medium" />
+                </div>
+                {historicalRecurring.total > totalRecurring && (
+                  <div className="flex justify-between items-center text-blue-600">
+                    <span className="text-sm">Recurring still expected</span>
+                    <PrivateAmount amount={historicalRecurring.total - totalRecurring} className="text-sm font-medium" />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Overall Status */}
           <div className="space-y-2 pt-4 border-t">
             <h3 className="font-semibold text-sm">Overall Budget Status</h3>
