@@ -34,6 +34,7 @@ import { Plus, Edit, Trash2, Loader2, Target, Repeat } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { PrivateAmount } from "./private-amount"
 import { CategoryForm } from "./category-form"
+import { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 
 interface Budget {
   id: string
@@ -69,6 +70,7 @@ interface BudgetListProps {
   }>
   spending: Record<string, number>
   rolloverByCategory?: Record<string, number>
+  historicalRecurring?: HistoricalRecurringData
   month: number
   year: number
   editBudgetId?: string | null
@@ -83,6 +85,7 @@ export function BudgetList({
   netByCategory,
   spending,
   rolloverByCategory = {},
+  historicalRecurring,
   month,
   year,
   editBudgetId = null,
@@ -606,20 +609,30 @@ export function BudgetList({
             const isOverBudget = netSpending > totalBudget
             const isIncomeCategory = income > expenses
 
-            // Calculate expected spending considering recurring vs variable expenses
-            // Recurring expenses are expected immediately, variable expenses scale through the month
+            // Calculate expected spending using historical recurring data when available
+            // Historical data tells us what recurring expenses to expect for the full month
             const calculateExpectedSpending = () => {
               if (percentageThroughMonth === null) return 0
 
-              // Expected spending should be based on budget (including rollover), not historical spending
-              // Recurring expenses are expected immediately, remaining budget scales with time
+              // If we have historical data for this category, use it
+              const historicalRecurringForCategory = historicalRecurring?.byCategory?.[budget.category_id] || 0
+              const hasHistoricalData = historicalRecurring && historicalRecurring.monthsUsed > 0 && historicalRecurringForCategory > 0
+
+              if (hasHistoricalData) {
+                // Use historical recurring as expected recurring, scale both linearly
+                // since recurring expenses are spread throughout the month
+                const expectedRecurring = historicalRecurringForCategory
+                const expectedVariable = Math.max(0, totalBudget - expectedRecurring)
+
+                return (expectedRecurring + expectedVariable) * (percentageThroughMonth / 100)
+              }
+
+              // Fallback: no historical data for this category
+              // Use actual recurring spent so far as the baseline (old behavior)
               const netRecurringExpenses = Math.max(0, recurringExpenses - income)
               const remainingBudgetAfterRecurring = Math.max(0, totalBudget - netRecurringExpenses)
 
-              // Expected = recurring (immediate) + remaining budget (scaled by time)
-              const expected = netRecurringExpenses + (remainingBudgetAfterRecurring * (percentageThroughMonth / 100))
-
-              return expected
+              return netRecurringExpenses + (remainingBudgetAfterRecurring * (percentageThroughMonth / 100))
             }
 
             const expectedSpending = calculateExpectedSpending()

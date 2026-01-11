@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 
 interface Budget {
   id: string
@@ -36,11 +37,12 @@ interface BudgetOverviewProps {
     variableExpenses: number
   }>
   rolloverByCategory?: Record<string, number>
+  historicalRecurring?: HistoricalRecurringData
   month: number
   year: number
 }
 
-export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, month, year }: BudgetOverviewProps) {
+export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, month, year }: BudgetOverviewProps) {
   const { privacyMode } = usePrivacy()
   const [showDetailModal, setShowDetailModal] = useState(false)
 
@@ -100,10 +102,29 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
 
   const percentageThroughMonth = getPercentageThroughMonth()
 
-  // Calculate expected spending
-  const expectedSpending = percentageThroughMonth !== null
-    ? totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))
-    : 0
+  // Calculate expected spending using historical recurring data when available
+  // Historical data tells us what recurring expenses to expect for the full month,
+  // even if they haven't hit yet (e.g., phone bill on the 20th)
+  const calculateExpectedSpending = () => {
+    if (percentageThroughMonth === null) return 0
+
+    // If we have historical data, use it to determine the recurring/variable split
+    // and scale both linearly since recurring expenses are spread throughout the month
+    if (historicalRecurring && historicalRecurring.monthsUsed > 0) {
+      const expectedRecurring = historicalRecurring.total
+      const expectedVariable = Math.max(0, totalBudget - expectedRecurring)
+
+      // Both recurring and variable scale linearly through the month
+      // because recurring expenses are spread throughout (rent on 1st, Netflix on 5th, phone on 20th, etc.)
+      return (expectedRecurring + expectedVariable) * (percentageThroughMonth / 100)
+    }
+
+    // Fallback: no historical data available
+    // Use actual recurring spent so far as the baseline (old behavior)
+    return totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))
+  }
+
+  const expectedSpending = calculateExpectedSpending()
 
   const difference = totalBudget - totalSpent
   const differencePercent = totalBudget > 0 ? (difference / totalBudget) * 100 : 0
@@ -206,14 +227,14 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
               />
             </div>
 
-            {/* Expected spending line (only for variable expenses) - outside overflow container */}
+            {/* Expected spending line - outside overflow container */}
             {percentageThroughMonth !== null && (
               <div
                 className="absolute -top-1 -bottom-1 w-1 bg-blue-600 dark:bg-blue-400 z-10 shadow-lg"
                 style={{
-                  left: `${Math.min(recurringPercentage + ((100 - recurringPercentage) * (percentageThroughMonth / 100)), 100)}%`
+                  left: `${Math.min((expectedSpending / totalBudget) * 100, 100)}%`
                 }}
-                title={privacyMode ? 'Expected variable: ••••' : `Expected variable: $${((totalBudget - totalRecurring) * (percentageThroughMonth / 100)).toFixed(2)}`}
+                title={privacyMode ? 'Expected: ••••' : `Expected: $${expectedSpending.toFixed(2)}`}
               />
             )}
           </div>

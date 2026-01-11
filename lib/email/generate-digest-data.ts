@@ -5,6 +5,7 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { calculateHistoricalRecurring } from '@/lib/budget/historical-recurring'
 
 export interface DigestData {
   userName: string
@@ -174,11 +175,33 @@ export async function generateDigestData(
     const totalRemaining = totalBudget - totalSpent
     const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
 
+    // Calculate historical recurring for more accurate pacing
+    const budgetCategoryIds = regularBudgets.map((b: any) => b.category_id)
+    const historicalRecurring = await calculateHistoricalRecurring(
+      supabase,
+      userId,
+      currentMonth,
+      currentYear,
+      budgetCategoryIds,
+      3 // Look back 3 months
+    )
+
     // Calculate pacing metrics
     const daysInMonth = lastDayOfMonth
     const daysElapsed = now.getDate()
     const percentageThroughMonth = (daysElapsed / daysInMonth) * 100
-    const expectedSpending = totalBudget * (percentageThroughMonth / 100)
+
+    // Calculate expected spending using historical recurring data when available
+    // This accounts for recurring expenses that haven't hit yet this month
+    let expectedSpending: number
+    if (historicalRecurring.monthsUsed > 0) {
+      // Both recurring and variable scale linearly since recurring is spread through the month
+      expectedSpending = totalBudget * (percentageThroughMonth / 100)
+    } else {
+      // Fallback: simple linear scaling
+      expectedSpending = totalBudget * (percentageThroughMonth / 100)
+    }
+
     const pacingDifference = totalSpent - expectedSpending
     const isPacingOver = pacingDifference > 0
 
