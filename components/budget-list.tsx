@@ -611,6 +611,7 @@ export function BudgetList({
 
             // Calculate expected spending using historical recurring data when available
             // Historical data tells us what recurring expenses to expect for the full month
+            // Rollover is available immediately, not scaled through the month
             const calculateExpectedSpending = () => {
               if (percentageThroughMonth === null) return 0
 
@@ -619,7 +620,8 @@ export function BudgetList({
               const hasHistoricalData = historicalRecurring && historicalRecurring.monthsUsed > 0 && historicalRecurringForCategory > 0
 
               if (hasHistoricalData) {
-                const historicalVariable = Math.max(0, totalBudget - historicalRecurringForCategory)
+                // Use baseBudget (not totalBudget) so rollover isn't scaled
+                const historicalVariableFromBase = Math.max(0, baseBudget - historicalRecurringForCategory)
 
                 // Net recurring expenses (after income offsets)
                 const netRecurringExpenses = Math.max(0, recurringExpenses - income)
@@ -628,18 +630,18 @@ export function BudgetList({
                 const expectedRecurringBaseline = historicalRecurringForCategory * (percentageThroughMonth / 100)
                 const expectedRecurring = Math.max(netRecurringExpenses, expectedRecurringBaseline)
 
-                // Expected variable: scales linearly through the month
-                const expectedVariable = historicalVariable * (percentageThroughMonth / 100)
+                // Expected variable: scales linearly through the month (from base budget only)
+                const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
 
                 return expectedRecurring + expectedVariable
               }
 
               // Fallback: no historical data for this category
-              // Use actual recurring spent so far as the baseline (old behavior)
+              // Use actual recurring spent so far as the baseline, scale base budget variable only
               const netRecurringExpenses = Math.max(0, recurringExpenses - income)
-              const remainingBudgetAfterRecurring = Math.max(0, totalBudget - netRecurringExpenses)
+              const remainingBaseBudget = Math.max(0, baseBudget - netRecurringExpenses)
 
-              return netRecurringExpenses + (remainingBudgetAfterRecurring * (percentageThroughMonth / 100))
+              return netRecurringExpenses + (remainingBaseBudget * (percentageThroughMonth / 100))
             }
 
             const expectedSpending = calculateExpectedSpending()
