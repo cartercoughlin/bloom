@@ -177,6 +177,7 @@ export async function generateDigestData(
     // Calculate total budget progress
     const totalBudget = categoryBreakdown.reduce((sum, cat) => sum + cat.budgetAmount, 0)
     const baseBudget = regularBudgets.reduce((sum, b: any) => sum + Number(b.amount), 0)
+    const totalRollover = totalBudget - baseBudget  // Rollover is the difference between total and base
     const totalSpent = categoryBreakdown.reduce((sum, cat) => sum + cat.spent, 0)
     const totalRemaining = totalBudget - totalSpent
     const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
@@ -215,10 +216,12 @@ export async function generateDigestData(
       // Expected variable: scales linearly through the month (from base budget only)
       const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
 
-      expectedSpending = expectedRecurring + expectedVariable
+      // Rollover is available immediately from day 1, so add the full amount
+      expectedSpending = expectedRecurring + expectedVariable + totalRollover
     } else {
       // Fallback: simple linear scaling of base budget only
-      expectedSpending = baseBudget * (percentageThroughMonth / 100)
+      // Rollover is available immediately from day 1, so add the full amount
+      expectedSpending = baseBudget * (percentageThroughMonth / 100) + totalRollover
     }
 
     const pacingDifference = totalSpent - expectedSpending

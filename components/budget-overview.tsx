@@ -125,13 +125,15 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
       // Expected variable: scales linearly through the month (from base budget only)
       const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
 
-      return expectedRecurring + expectedVariable
+      // Rollover is available immediately from day 1, so add the full amount
+      return expectedRecurring + expectedVariable + totalRollover
     }
 
     // Fallback: no historical data available
     // Use actual recurring spent so far as the baseline, scale base budget variable only
+    // Rollover is available immediately from day 1, so add the full amount
     const remainingBaseBudget = Math.max(0, baseBudget - totalRecurring)
-    return totalRecurring + (remainingBaseBudget * (percentageThroughMonth / 100))
+    return totalRecurring + (remainingBaseBudget * (percentageThroughMonth / 100)) + totalRollover
   }
 
   const expectedSpending = calculateExpectedSpending()
