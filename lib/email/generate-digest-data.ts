@@ -176,6 +176,7 @@ export async function generateDigestData(
 
     // Calculate total budget progress
     const totalBudget = categoryBreakdown.reduce((sum, cat) => sum + cat.budgetAmount, 0)
+    const baseBudget = regularBudgets.reduce((sum, b: any) => sum + Number(b.amount), 0)
     const totalSpent = categoryBreakdown.reduce((sum, cat) => sum + cat.spent, 0)
     const totalRemaining = totalBudget - totalSpent
     const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
@@ -199,23 +200,25 @@ export async function generateDigestData(
     // Calculate expected spending using hybrid approach:
     // - Take MAX of (actual recurring so far) vs (historical recurring × % through month)
     // - This acknowledges front-loaded recurring (like rent) while also expecting future recurring
-    // - Scale variable expenses linearly based on historical variable amount
+    // - Scale variable expenses linearly based on BASE budget (excluding rollover)
+    // - Rollover is available immediately, not scaled through the month
     let expectedSpending: number
     if (historicalRecurring.monthsUsed > 0) {
       const historicalRecurringTotal = historicalRecurring.total
-      const historicalVariable = Math.max(0, totalBudget - historicalRecurringTotal)
+      // Use baseBudget (not totalBudget) so rollover isn't scaled
+      const historicalVariableFromBase = Math.max(0, baseBudget - historicalRecurringTotal)
 
       // Expected recurring: whichever is higher - what's already hit or baseline expectation
       const expectedRecurringBaseline = historicalRecurringTotal * (percentageThroughMonth / 100)
       const expectedRecurring = Math.max(totalRecurringSpent, expectedRecurringBaseline)
 
-      // Expected variable: scales linearly through the month
-      const expectedVariable = historicalVariable * (percentageThroughMonth / 100)
+      // Expected variable: scales linearly through the month (from base budget only)
+      const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
 
       expectedSpending = expectedRecurring + expectedVariable
     } else {
-      // Fallback: simple linear scaling
-      expectedSpending = totalBudget * (percentageThroughMonth / 100)
+      // Fallback: simple linear scaling of base budget only
+      expectedSpending = baseBudget * (percentageThroughMonth / 100)
     }
 
     const pacingDifference = totalSpent - expectedSpending

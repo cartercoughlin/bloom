@@ -111,24 +111,27 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
     // If we have historical data, use hybrid approach:
     // - Take MAX of (actual recurring so far) vs (historical recurring × % through month)
     // - This acknowledges front-loaded recurring (like rent) while also expecting future recurring
-    // - Scale variable expenses linearly based on historical variable amount
+    // - Scale variable expenses linearly based on BASE budget (excluding rollover)
+    // - Rollover is available immediately, not scaled through the month
     if (historicalRecurring && historicalRecurring.monthsUsed > 0) {
       const historicalRecurringTotal = historicalRecurring.total
-      const historicalVariable = Math.max(0, totalBudget - historicalRecurringTotal)
+      // Use baseBudget (not totalBudget) so rollover isn't scaled
+      const historicalVariableFromBase = Math.max(0, baseBudget - historicalRecurringTotal)
 
       // Expected recurring: whichever is higher - what's already hit or baseline expectation
       const expectedRecurringBaseline = historicalRecurringTotal * (percentageThroughMonth / 100)
       const expectedRecurring = Math.max(totalRecurring, expectedRecurringBaseline)
 
-      // Expected variable: scales linearly through the month
-      const expectedVariable = historicalVariable * (percentageThroughMonth / 100)
+      // Expected variable: scales linearly through the month (from base budget only)
+      const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
 
       return expectedRecurring + expectedVariable
     }
 
     // Fallback: no historical data available
-    // Use actual recurring spent so far as the baseline (old behavior)
-    return totalRecurring + ((totalBudget - totalRecurring) * (percentageThroughMonth / 100))
+    // Use actual recurring spent so far as the baseline, scale base budget variable only
+    const remainingBaseBudget = Math.max(0, baseBudget - totalRecurring)
+    return totalRecurring + (remainingBaseBudget * (percentageThroughMonth / 100))
   }
 
   const expectedSpending = calculateExpectedSpending()
