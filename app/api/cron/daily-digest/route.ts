@@ -1,16 +1,8 @@
 /**
  * Daily Digest Cron Job
  *
- * This endpoint is called daily by Vercel Cron to send budget digests
- * to all users who have daily_digest_enabled = true
- *
- * Setup in vercel.json:
- * {
- *   "crons": [{
- *     "path": "/api/cron/daily-digest",
- *     "schedule": "0 8 * * *"
- *   }]
- * }
+ * Called daily by Vercel Cron to send budget digests to opted-in users.
+ * Schedule: 0 8 * * * (8 AM UTC daily) — see vercel.json
  */
 
 import { NextResponse } from 'next/server'
@@ -19,156 +11,119 @@ import { generateDigestData } from '@/lib/email/generate-digest-data'
 import { generateBudgetDigestHTML } from '@/lib/email/budget-digest-template'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 300 // 5 minutes max
+export const maxDuration = 60
 
 export async function GET(request: Request) {
-  try {
-    // Verify cron secret to prevent unauthorized calls
-    const authHeader = request.headers.get('authorization')
-    const cronSecret = process.env.CRON_SECRET
+  // Log immediately so we can always see invocations in Vercel logs
+  console.log('[DailyDigest] Cron invoked')
 
-    if (authHeader !== `Bearer ${cronSecret}`) {
+  try {
+    // Verify cron secret
+    const authHeader = request.headers.get('authorization')
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      console.log('[DailyDigest] Auth failed — CRON_SECRET mismatch')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('[DailyDigest] Starting daily digest cron job')
-
-    // Create Supabase client with service role key
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const resendApiKey = process.env.RESEND_API_KEY
 
     if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error('Missing Supabase credentials')
+      console.error('[DailyDigest] Missing SUPABASE env vars')
+      return NextResponse.json({ error: 'Missing Supabase config' }, { status: 500 })
+    }
+
+    if (!resendApiKey) {
+      console.error('[DailyDigest] Missing RESEND_API_KEY')
+      return NextResponse.json({ error: 'Email service not configured' }, { status: 500 })
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
+      auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    // Get all users with daily digest enabled
+    // Get opted-in users
     const { data: usersWithDigest, error: usersError } = await supabase
       .from('email_preferences')
       .select('user_id')
       .eq('daily_digest_enabled', true)
 
     if (usersError) {
-      console.error('[DailyDigest] Error fetching users:', usersError)
+      console.error('[DailyDigest] DB error fetching users:', usersError.message)
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
     }
 
     if (!usersWithDigest || usersWithDigest.length === 0) {
-      console.log('[DailyDigest] No users with daily digest enabled')
-      return NextResponse.json({
-        success: true,
-        message: 'No users to send digests to',
-        sent: 0
-      })
+      console.log('[DailyDigest] No opted-in users')
+      return NextResponse.json({ success: true, sent: 0 })
     }
 
-    console.log(`[DailyDigest] Found ${usersWithDigest.length} users to send digests to`)
+    console.log(`[DailyDigest] Processing ${usersWithDigest.length} user(s)`)
 
-    // Resend API setup
-    const resendApiKey = process.env.RESEND_API_KEY
-    if (!resendApiKey) {
-      console.error('[DailyDigest] RESEND_API_KEY not configured')
-      return NextResponse.json({ error: 'Email service not configured' }, { status: 500 })
-    }
+    const results = { sent: 0, failed: 0, skipped: 0, errors: [] as string[] }
 
-    const results = {
-      sent: 0,
-      failed: 0,
-      skipped: 0,
-      errors: [] as Array<{ userId: string; error: string }>
-    }
-
-    // Send digest to each user
     for (const userPref of usersWithDigest) {
+      const userId = userPref.user_id
       try {
-        const userId = userPref.user_id
+        // Get email via admin API
+        const { data: { user: authUser }, error: authError } =
+          await supabase.auth.admin.getUserById(userId)
 
-        // Fetch user email via Auth admin API (auth.users is not
-        // accessible via PostgREST joins reliably)
-        const { data: { user: authUser }, error: authError } = await supabase.auth.admin.getUserById(userId)
-        const userEmail = authUser?.email
-
-        if (authError || !userEmail) {
-          console.warn(`[DailyDigest] No email for user ${userId}:`, authError?.message)
+        if (authError || !authUser?.email) {
+          console.warn(`[DailyDigest] No email for ${userId}`)
           results.skipped++
           continue
         }
 
-        // Generate digest data for this user
+        // Generate digest
         const digestData = await generateDigestData(supabase, userId)
-
         if (!digestData) {
-          console.log(`[DailyDigest] No budget data for user ${userId}`)
+          console.log(`[DailyDigest] No budget data for ${userId}`)
           results.skipped++
           continue
         }
 
-        // Generate HTML email
         const htmlContent = generateBudgetDigestHTML(digestData)
 
-        // Send email via Resend
-        const emailResponse = await fetch('https://api.resend.com/emails', {
+        // Send via Resend
+        const emailRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${resendApiKey}`
+            Authorization: `Bearer ${resendApiKey}`,
           },
           body: JSON.stringify({
             from: process.env.EMAIL_FROM || 'Budget Digest <digest@yourdomain.com>',
-            to: [userEmail],
+            to: [authUser.email],
             subject: `Your Daily Budget Digest - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
-            html: htmlContent
-          })
+            html: htmlContent,
+          }),
         })
 
-        if (!emailResponse.ok) {
-          const error = await emailResponse.json()
-          console.error(`[DailyDigest] Failed to send to ${userEmail}:`, error)
+        if (!emailRes.ok) {
+          const err = await emailRes.text()
+          console.error(`[DailyDigest] Resend error for ${authUser.email}: ${err}`)
           results.failed++
-          results.errors.push({
-            userId,
-            error: error.message || 'Unknown error'
-          })
-          continue
+          results.errors.push(`${authUser.email}: ${err}`)
+        } else {
+          const { id } = await emailRes.json()
+          console.log(`[DailyDigest] Sent to ${authUser.email}: ${id}`)
+          results.sent++
         }
-
-        const emailResult = await emailResponse.json()
-        console.log(`[DailyDigest] Sent to ${userEmail}: ${emailResult.id}`)
-        results.sent++
-
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 100))
-      } catch (error) {
-        console.error('[DailyDigest] Error processing user:', error)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unknown error'
+        console.error(`[DailyDigest] Error for ${userId}: ${msg}`)
         results.failed++
-        results.errors.push({
-          userId: userPref.user_id,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
+        results.errors.push(`${userId}: ${msg}`)
       }
     }
 
-    console.log('[DailyDigest] Completed:', results)
-
-    return NextResponse.json({
-      success: true,
-      message: 'Daily digest cron job completed',
-      ...results
-    })
+    console.log(`[DailyDigest] Done: ${results.sent} sent, ${results.failed} failed, ${results.skipped} skipped`)
+    return NextResponse.json({ success: true, ...results })
   } catch (error) {
-    console.error('[DailyDigest] Fatal error:', error)
-    return NextResponse.json(
-      {
-        error: 'Internal server error',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    )
+    const msg = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`[DailyDigest] Fatal: ${msg}`)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
 }
