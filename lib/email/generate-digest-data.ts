@@ -6,6 +6,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { calculateHistoricalRecurring } from '@/lib/budget/historical-recurring'
+import { calculateRolloverEfficient } from '@/lib/budget/calculate-rollover'
 
 export interface DigestData {
   userName: string
@@ -128,8 +129,8 @@ export async function generateDigestData(
       .not('deleted', 'eq', true)
       .order('date', { ascending: false })
 
-    // Calculate rollover from previous month
-    const rollover = await calculateRollover(supabase, userId, currentMonth, currentYear)
+    // Calculate rollover efficiently (2 queries instead of 12+ recursive)
+    const rollover = await calculateRolloverEfficient(supabase, userId, currentMonth, currentYear)
 
     // Calculate spending by category (including recurring tracking)
     const spendingByCategory: Record<string, { spent: number; income: number; recurring: number }> = {}
@@ -269,98 +270,3 @@ export async function generateDigestData(
   }
 }
 
-// Helper function to calculate rollover (same as in dashboard)
-async function calculateRollover(
-  supabase: SupabaseClient,
-  userId: string,
-  targetMonth: number,
-  targetYear: number,
-  depth = 0
-): Promise<Record<string, number>> {
-  if (depth > 12) return {}
-
-  const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1
-  const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear
-
-  const previousMonthsRollover = await calculateRollover(supabase, userId, prevMonth, prevYear, depth + 1)
-
-  let prevBudgets: any[] | null = null
-  let budgetsResult = await supabase
-    .from('budgets')
-    .select('category_id, amount, enable_rollover')
-    .eq('user_id', userId)
-    .eq('month', prevMonth)
-    .eq('year', prevYear)
-
-  if (budgetsResult.error) {
-    budgetsResult = await supabase
-      .from('budgets')
-      .select('category_id, amount')
-      .eq('user_id', userId)
-      .eq('month', prevMonth)
-      .eq('year', prevYear)
-  }
-
-  prevBudgets = budgetsResult.data
-
-  const rolloverEnabledCategories = (prevBudgets || [])
-    .filter((b: any) => b.enable_rollover !== false)
-    .map((b: any) => b.category_id)
-
-  const rolloverCategories = new Set([
-    ...rolloverEnabledCategories,
-    ...Object.keys(previousMonthsRollover)
-  ])
-
-  if (rolloverCategories.size === 0) {
-    return {}
-  }
-
-  const prevFirstDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
-  const prevNextMonth = prevMonth === 12 ? 1 : prevMonth + 1
-  const prevNextYear = prevMonth === 12 ? prevYear + 1 : prevYear
-  const prevNextMonthFirstDay = `${prevNextYear}-${String(prevNextMonth).padStart(2, '0')}-01`
-
-  const { data: prevTransactions } = await supabase
-    .from('transactions')
-    .select('category_id, amount, transaction_type, hidden')
-    .eq('user_id', userId)
-    .gte('date', prevFirstDay)
-    .lt('date', prevNextMonthFirstDay)
-    .not('deleted', 'eq', true)
-
-  const prevSpending: Record<string, number> = {}
-  prevTransactions?.forEach((tx: any) => {
-    if (tx.hidden) return
-    if (tx.category_id) {
-      if (!prevSpending[tx.category_id]) {
-        prevSpending[tx.category_id] = 0
-      }
-      if (tx.transaction_type === 'debit') {
-        prevSpending[tx.category_id] += Number(tx.amount)
-      } else if (tx.transaction_type === 'credit') {
-        prevSpending[tx.category_id] -= Number(tx.amount)
-      }
-    }
-  })
-
-  const rollover: Record<string, number> = {}
-  rolloverCategories.forEach(catId => {
-    const budget = (prevBudgets || []).find((b: any) => b.category_id === catId)
-    const budgetAmount = budget?.amount || 0
-    const rolloverEnabled = budget?.enable_rollover !== false
-
-    if (!rolloverEnabled && !previousMonthsRollover[catId]) return
-
-    const spent = prevSpending[catId] || 0
-    const prevRollover = previousMonthsRollover[catId] || 0
-    const totalAvailable = Number(budgetAmount) + prevRollover
-    const remaining = totalAvailable - spent
-
-    if (remaining !== 0) {
-      rollover[catId] = remaining
-    }
-  })
-
-  return rollover
-}
