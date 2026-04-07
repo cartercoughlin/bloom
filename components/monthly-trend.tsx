@@ -9,6 +9,7 @@ interface Transaction {
   date: string
   amount: number
   transaction_type: string
+  personal_finance_category?: string | null
 }
 
 interface MonthlyTrendProps {
@@ -28,7 +29,14 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
     }
   > = {}
 
+  // Filter out inter-account transfers so they don't inflate income/expense totals
+  const TRANSFER_CATEGORIES = new Set(["TRANSFER_IN", "TRANSFER_OUT"])
+
   transactions.forEach((t) => {
+    if (t.personal_finance_category && TRANSFER_CATEGORIES.has(t.personal_finance_category)) {
+      return
+    }
+
     const date = new Date(t.date)
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
     const monthLabel = date.toLocaleString("default", { month: "short", year: "numeric" })
