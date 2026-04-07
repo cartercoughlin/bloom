@@ -51,7 +51,7 @@ function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
     // 2. Old Plaid category_detailed field (e.g., "Transfer > Debit", "Payment > Credit Card")
     if (t.category_detailed) {
       const lower = t.category_detailed.toLowerCase()
-      if (lower.startsWith("transfer") || lower.startsWith("payment")) {
+      if (lower.startsWith("transfer") || lower === "payment > credit card") {
         return true
       }
     }
