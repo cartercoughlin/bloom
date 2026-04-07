@@ -2,141 +2,99 @@
 
 import { memo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 import { usePrivacy } from "@/contexts/privacy-context"
 
-interface Transaction {
-  date: string
-  amount: number
-  transaction_type: string
-}
-
 interface Account {
+  account_name: string
   account_type: string
   balance: number
 }
 
-interface MonthlyTrendProps {
-  transactions: Transaction[]
+interface NetWorthCardProps {
   accounts: Account[]
 }
 
-function MonthlyTrendInner({ transactions, accounts }: MonthlyTrendProps) {
+function formatCurrency(value: number) {
+  return `$${Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function NetWorthCardInner({ accounts }: NetWorthCardProps) {
   const { privacyMode } = usePrivacy()
+  const masked = "••••••"
 
-  // Calculate current net worth from account balances
-  const currentNetWorth = accounts.reduce((sum, acc) => {
-    const bal = Number(acc.balance)
-    return sum + (acc.account_type === "liability" ? -Math.abs(bal) : bal)
-  }, 0)
+  const assets = accounts.filter((a) => a.account_type !== "liability")
+  const liabilities = accounts.filter((a) => a.account_type === "liability")
+  const totalAssets = assets.reduce((sum, a) => sum + Number(a.balance), 0)
+  const totalLiabilities = liabilities.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0)
+  const netWorth = totalAssets - totalLiabilities
 
-  // Sum net change per month from transactions
-  // credit = money in (increases balance), debit = money out (decreases balance)
-  const monthlyChange: Record<string, number> = {}
-  transactions.forEach((t) => {
-    const date = new Date(t.date)
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-    if (!monthlyChange[key]) monthlyChange[key] = 0
-    const amt = Number(t.amount)
-    if (t.transaction_type === "credit") {
-      monthlyChange[key] += amt
-    } else {
-      monthlyChange[key] -= amt
-    }
-  })
-
-  // Sort months newest to oldest, then work backwards from current net worth
-  const sortedMonths = Object.keys(monthlyChange).sort().reverse()
-  if (sortedMonths.length === 0) {
+  if (accounts.length === 0) {
     return (
       <Card>
         <CardHeader className="pb-3 md:pb-6">
           <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
-          <CardDescription className="text-xs md:text-sm">Net worth over time</CardDescription>
+          <CardDescription className="text-xs md:text-sm">Your total net worth</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-48 md:h-64">
-          <p className="text-muted-foreground text-xs md:text-sm">No transaction history available</p>
+          <p className="text-muted-foreground text-xs md:text-sm">No accounts linked yet</p>
         </CardContent>
       </Card>
     )
   }
 
-  // Build data points from newest month backwards
-  const dataPoints: { monthKey: string; label: string; netWorth: number }[] = []
-  let runningNetWorth = currentNetWorth
-
-  for (const monthKey of sortedMonths) {
-    const [y, m] = monthKey.split("-").map(Number)
-    const label = new Date(y, m - 1).toLocaleString("default", { month: "short", year: "numeric" })
-    dataPoints.push({ monthKey, label, netWorth: Math.round(runningNetWorth * 100) / 100 })
-    // Subtract this month's net change to get end-of-previous-month value
-    runningNetWorth -= monthlyChange[monthKey]
-  }
-
-  // Reverse to chronological order
-  const chartData = dataPoints.reverse()
-
   return (
     <Card>
       <CardHeader className="pb-3 md:pb-6">
         <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
-        <CardDescription className="text-xs md:text-sm">Net worth trend over the last 6 months</CardDescription>
+        <CardDescription className="text-xs md:text-sm">Current account balances</CardDescription>
       </CardHeader>
-      <CardContent className="px-3 sm:px-6 pb-4 md:pb-6">
-        <ChartContainer
-          config={{
-            netWorth: {
-              label: "Net Worth",
-              color: "#3B82F6",
-            },
-          }}
-          className="h-48 sm:h-64 lg:h-80"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="label" className="text-[10px] md:text-xs" />
-              <YAxis
-                className="text-[10px] md:text-xs"
-                tickFormatter={(value) =>
-                  privacyMode ? "••••" : `$${(value / 1000).toFixed(0)}k`
-                }
-              />
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    formatter={(value) =>
-                      privacyMode
-                        ? "••••"
-                        : `$${Number(value).toLocaleString("en-US", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}`
-                    }
-                    labelFormatter={(label) => label}
-                  />
-                }
-              />
-              <Area
-                type="monotone"
-                dataKey="netWorth"
-                stroke="#3B82F6"
-                strokeWidth={2}
-                fill="url(#netWorthGradient)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </ChartContainer>
+      <CardContent className="px-3 sm:px-6 pb-4 md:pb-6 space-y-4">
+        {/* Net Worth Hero */}
+        <div className="text-center py-3 md:py-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p className="text-xs text-muted-foreground mb-1">Total Net Worth</p>
+          <p className={`text-2xl md:text-3xl font-bold ${netWorth >= 0 ? "text-blue-600" : "text-red-600"}`}>
+            {privacyMode ? masked : formatCurrency(netWorth)}
+          </p>
+        </div>
+
+        {/* Assets / Liabilities Summary */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-1">Assets</p>
+            <p className="text-sm md:text-base font-semibold text-green-600">
+              {privacyMode ? masked : formatCurrency(totalAssets)}
+            </p>
+          </div>
+          <div className="p-3 bg-red-50 dark:bg-red-950 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-1">Liabilities</p>
+            <p className="text-sm md:text-base font-semibold text-red-600">
+              {privacyMode ? masked : formatCurrency(totalLiabilities)}
+            </p>
+          </div>
+        </div>
+
+        {/* Account List */}
+        <div className="space-y-1.5">
+          {assets.map((acc) => (
+            <div key={acc.account_name} className="flex justify-between items-center text-sm px-1">
+              <span className="text-muted-foreground truncate mr-2">{acc.account_name}</span>
+              <span className="font-medium text-green-600 whitespace-nowrap">
+                {privacyMode ? masked : formatCurrency(Number(acc.balance))}
+              </span>
+            </div>
+          ))}
+          {liabilities.map((acc) => (
+            <div key={acc.account_name} className="flex justify-between items-center text-sm px-1">
+              <span className="text-muted-foreground truncate mr-2">{acc.account_name}</span>
+              <span className="font-medium text-red-600 whitespace-nowrap">
+                -{privacyMode ? masked : formatCurrency(Math.abs(Number(acc.balance)))}
+              </span>
+            </div>
+          ))}
+        </div>
       </CardContent>
     </Card>
   )
 }
 
-export const MonthlyTrend = memo(MonthlyTrendInner)
+export const MonthlyTrend = memo(NetWorthCardInner)
