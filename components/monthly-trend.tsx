@@ -3,124 +3,57 @@
 import { memo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts"
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 import { usePrivacy } from "@/contexts/privacy-context"
 
 interface Transaction {
   date: string
   amount: number
   transaction_type: string
-  personal_finance_category?: string | null
-  category_detailed?: string | null
-  description?: string | null
+}
+
+interface Account {
+  account_type: string
+  balance: number
 }
 
 interface MonthlyTrendProps {
   transactions: Transaction[]
+  accounts: Account[]
 }
 
-function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
+function MonthlyTrendInner({ transactions, accounts }: MonthlyTrendProps) {
   const { privacyMode } = usePrivacy()
 
-  // Group by month
-  const monthlyData: Record<
-    string,
-    {
-      month: string
-      income: number
-      expenses: number
-    }
-  > = {}
+  // Calculate current net worth from account balances
+  const currentNetWorth = accounts.reduce((sum, acc) => {
+    const bal = Number(acc.balance)
+    return sum + (acc.account_type === "liability" ? -Math.abs(bal) : bal)
+  }, 0)
 
-  // Filter out inter-account transfers and credit card payments so they don't
-  // inflate income/expense totals. Credit card payments are double-counted the
-  // same way transfers are: checking shows a debit, card shows a credit.
-  const EXCLUDED_CATEGORIES = new Set([
-    "TRANSFER_IN",
-    "TRANSFER_OUT",
-    "LOAN_PAYMENTS",       // Plaid category for credit card / loan payments
-    "BANK_FEES",           // Internal bank fees (not real spending decisions)
-  ])
-  const EXCLUDED_DESCRIPTION_PATTERNS = /\b(transfer|xfer|ach\s*(credit|debit|payment)|wire\s*(in|out)|internal\s*transfer|from\s*(checking|savings)|to\s*(checking|savings)|payment\s*thank\s*you|autopay|card\s*payment|credit\s*card\s*payment)\b/i
-
-  function isExcludedByCategory(t: Transaction): boolean {
-    // 1. New Plaid personal_finance_category (most reliable)
-    if (t.personal_finance_category && EXCLUDED_CATEGORIES.has(t.personal_finance_category)) {
-      return true
-    }
-    // 2. Old Plaid category_detailed field
-    if (t.category_detailed) {
-      const lower = t.category_detailed.toLowerCase()
-      // Transfers: "Transfer > Debit", "Transfer > Credit", etc.
-      if (lower.startsWith("transfer")) return true
-      // Credit card payments: "Payment > Credit Card"
-      if (lower.includes("credit card")) return true
-    }
-    // 3. Description keyword matching for older transactions without Plaid categories
-    if (t.description && EXCLUDED_DESCRIPTION_PATTERNS.test(t.description)) {
-      return true
-    }
-    return false
-  }
-
-  // Detect matching pairs: same amount on same date with opposite types
-  // (one credit, one debit) — these are inter-account transfers that
-  // weren't tagged by Plaid categories or description patterns.
-  const transferAmounts = new Set<string>()
-  const dateAmountPairs = new Map<string, { hasCredit: boolean; hasDebit: boolean }>()
+  // Sum net change per month from transactions
+  // credit = money in (increases balance), debit = money out (decreases balance)
+  const monthlyChange: Record<string, number> = {}
   transactions.forEach((t) => {
-    const key = `${t.date}_${Number(t.amount).toFixed(2)}`
-    const entry = dateAmountPairs.get(key) || { hasCredit: false, hasDebit: false }
-    if (t.transaction_type === "credit") entry.hasCredit = true
-    else entry.hasDebit = true
-    dateAmountPairs.set(key, entry)
-  })
-  dateAmountPairs.forEach((entry, key) => {
-    if (entry.hasCredit && entry.hasDebit) {
-      transferAmounts.add(key)
-    }
-  })
-
-  transactions.forEach((t) => {
-    if (isExcludedByCategory(t)) {
-      return
-    }
-
-    // Exclude matched pairs (same date + amount with both credit and debit)
-    const pairKey = `${t.date}_${Number(t.amount).toFixed(2)}`
-    if (transferAmounts.has(pairKey)) {
-      return
-    }
-
     const date = new Date(t.date)
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-    const monthLabel = date.toLocaleString("default", { month: "short", year: "numeric" })
-
-    if (!monthlyData[monthKey]) {
-      monthlyData[monthKey] = {
-        month: monthLabel,
-        income: 0,
-        expenses: 0,
-      }
-    }
-
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
+    if (!monthlyChange[key]) monthlyChange[key] = 0
+    const amt = Number(t.amount)
     if (t.transaction_type === "credit") {
-      monthlyData[monthKey].income += Number(t.amount)
+      monthlyChange[key] += amt
     } else {
-      monthlyData[monthKey].expenses += Number(t.amount)
+      monthlyChange[key] -= amt
     }
   })
 
-  const chartData = Object.keys(monthlyData)
-    .sort()
-    .map((key) => monthlyData[key])
-
-  if (chartData.length === 0) {
+  // Sort months newest to oldest, then work backwards from current net worth
+  const sortedMonths = Object.keys(monthlyChange).sort().reverse()
+  if (sortedMonths.length === 0) {
     return (
       <Card>
         <CardHeader className="pb-3 md:pb-6">
-          <CardTitle className="text-base md:text-lg">Monthly Trend</CardTitle>
-          <CardDescription className="text-xs md:text-sm">Income vs expenses over time</CardDescription>
+          <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
+          <CardDescription className="text-xs md:text-sm">Net worth over time</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-48 md:h-64">
           <p className="text-muted-foreground text-xs md:text-sm">No transaction history available</p>
@@ -129,43 +62,76 @@ function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
     )
   }
 
+  // Build data points from newest month backwards
+  const dataPoints: { monthKey: string; label: string; netWorth: number }[] = []
+  let runningNetWorth = currentNetWorth
+
+  for (const monthKey of sortedMonths) {
+    const [y, m] = monthKey.split("-").map(Number)
+    const label = new Date(y, m - 1).toLocaleString("default", { month: "short", year: "numeric" })
+    dataPoints.push({ monthKey, label, netWorth: Math.round(runningNetWorth * 100) / 100 })
+    // Subtract this month's net change to get end-of-previous-month value
+    runningNetWorth -= monthlyChange[monthKey]
+  }
+
+  // Reverse to chronological order
+  const chartData = dataPoints.reverse()
+
   return (
     <Card>
       <CardHeader className="pb-3 md:pb-6">
-        <CardTitle className="text-base md:text-lg">Monthly Trend</CardTitle>
-        <CardDescription className="text-xs md:text-sm">Income vs expenses over the last 6 months</CardDescription>
+        <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
+        <CardDescription className="text-xs md:text-sm">Net worth trend over the last 6 months</CardDescription>
       </CardHeader>
       <CardContent className="px-3 sm:px-6 pb-4 md:pb-6">
         <ChartContainer
           config={{
-            income: {
-              label: "Income",
-              color: "#10B981",
-            },
-            expenses: {
-              label: "Expenses",
-              color: "#EF4444",
+            netWorth: {
+              label: "Net Worth",
+              color: "#3B82F6",
             },
           }}
           className="h-48 sm:h-64 lg:h-80"
         >
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
+            <AreaChart data={chartData}>
+              <defs>
+                <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis dataKey="month" className="text-[10px] md:text-xs" />
-              <YAxis className="text-[10px] md:text-xs" tickFormatter={(value) => privacyMode ? '••••' : `$${value.toLocaleString('en-US')}`} />
+              <XAxis dataKey="label" className="text-[10px] md:text-xs" />
+              <YAxis
+                className="text-[10px] md:text-xs"
+                tickFormatter={(value) =>
+                  privacyMode ? "••••" : `$${(value / 1000).toFixed(0)}k`
+                }
+              />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
-                    formatter={(value) => privacyMode ? '••••' : `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    formatter={(value) =>
+                      privacyMode
+                        ? "••••"
+                        : `$${Number(value).toLocaleString("en-US", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}`
+                    }
                     labelFormatter={(label) => label}
                   />
                 }
               />
-              <Legend wrapperStyle={{ fontSize: '12px' }} />
-              <Bar dataKey="income" fill="#10B981" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expenses" fill="#EF4444" radius={[4, 4, 0, 0]} />
-            </BarChart>
+              <Area
+                type="monotone"
+                dataKey="netWorth"
+                stroke="#3B82F6"
+                strokeWidth={2}
+                fill="url(#netWorthGradient)"
+              />
+            </AreaChart>
           </ResponsiveContainer>
         </ChartContainer>
       </CardContent>
