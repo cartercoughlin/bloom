@@ -195,6 +195,21 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
             balance: data?.[0]?.balance
           })
           syncedAccountsCount++
+
+          // Record a daily balance snapshot for historical net worth tracking
+          const today = new Date().toISOString().split('T')[0]
+          await supabase
+            .from('balance_snapshots')
+            .upsert({
+              user_id: user.id,
+              snapshot_date: today,
+              account_name: accountName,
+              account_type: accountType,
+              balance: balance,
+              plaid_account_id: account.account_id,
+            }, {
+              onConflict: 'idx_balance_snapshots_unique',
+            })
         }
       }
       

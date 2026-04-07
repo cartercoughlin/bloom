@@ -1,7 +1,9 @@
 "use client"
 
-import { memo } from "react"
+import { memo, useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts"
 import { usePrivacy } from "@/contexts/privacy-context"
 
 interface Account {
@@ -10,33 +12,98 @@ interface Account {
   balance: number
 }
 
-interface NetWorthCardProps {
+interface ChartPoint {
+  month: string
+  netWorth: number
+}
+
+interface MonthlyTrendProps {
   accounts: Account[]
 }
 
-function formatCurrency(value: number) {
-  return `$${Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function NetWorthCardInner({ accounts }: NetWorthCardProps) {
+function MonthlyTrendInner({ accounts }: MonthlyTrendProps) {
   const { privacyMode } = usePrivacy()
-  const masked = "••••••"
+  const [chartData, setChartData] = useState<ChartPoint[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const assets = accounts.filter((a) => a.account_type !== "liability")
-  const liabilities = accounts.filter((a) => a.account_type === "liability")
-  const totalAssets = assets.reduce((sum, a) => sum + Number(a.balance), 0)
-  const totalLiabilities = liabilities.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0)
-  const netWorth = totalAssets - totalLiabilities
+  // Current net worth from live account balances (always accurate)
+  const currentNetWorth = accounts.reduce((sum, acc) => {
+    const bal = Number(acc.balance)
+    return sum + (acc.account_type === "liability" ? -Math.abs(bal) : bal)
+  }, 0)
+
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const res = await fetch("/api/net-worth-history")
+        if (!res.ok) throw new Error("Failed to fetch")
+        const data: ChartPoint[] = await res.json()
+
+        // If we have historical data, use it — replace the latest month
+        // with the live current net worth for accuracy
+        if (data.length > 0) {
+          const now = new Date()
+          const currentMonthLabel = now.toLocaleString("default", { month: "short", year: "numeric" })
+          const lastPoint = data[data.length - 1]
+
+          if (lastPoint.month === currentMonthLabel) {
+            // Update the latest month with live balance
+            lastPoint.netWorth = Math.round(currentNetWorth * 100) / 100
+          } else {
+            // Add current month as a new point
+            data.push({ month: currentMonthLabel, netWorth: Math.round(currentNetWorth * 100) / 100 })
+          }
+          setChartData(data)
+        } else {
+          // No history yet — show just the current month
+          const now = new Date()
+          setChartData([{
+            month: now.toLocaleString("default", { month: "short", year: "numeric" }),
+            netWorth: Math.round(currentNetWorth * 100) / 100,
+          }])
+        }
+      } catch {
+        // Fallback: show current net worth only
+        const now = new Date()
+        setChartData([{
+          month: now.toLocaleString("default", { month: "short", year: "numeric" }),
+          netWorth: Math.round(currentNetWorth * 100) / 100,
+        }])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (accounts.length > 0) {
+      loadHistory()
+    } else {
+      setLoading(false)
+    }
+  }, [accounts, currentNetWorth])
 
   if (accounts.length === 0) {
     return (
       <Card>
         <CardHeader className="pb-3 md:pb-6">
           <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
-          <CardDescription className="text-xs md:text-sm">Your total net worth</CardDescription>
+          <CardDescription className="text-xs md:text-sm">Net worth over time</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-48 md:h-64">
           <p className="text-muted-foreground text-xs md:text-sm">No accounts linked yet</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader className="pb-3 md:pb-6">
+          <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
+          <CardDescription className="text-xs md:text-sm">Net worth over time</CardDescription>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center h-48 md:h-64">
+          <div className="animate-pulse h-full w-full bg-muted rounded" />
         </CardContent>
       </Card>
     )
@@ -46,55 +113,76 @@ function NetWorthCardInner({ accounts }: NetWorthCardProps) {
     <Card>
       <CardHeader className="pb-3 md:pb-6">
         <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
-        <CardDescription className="text-xs md:text-sm">Current account balances</CardDescription>
+        <CardDescription className="text-xs md:text-sm">
+          {chartData.length > 1 ? "Net worth trend over time" : "Net worth — history will build over time"}
+        </CardDescription>
       </CardHeader>
-      <CardContent className="px-3 sm:px-6 pb-4 md:pb-6 space-y-4">
-        {/* Net Worth Hero */}
-        <div className="text-center py-3 md:py-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-          <p className="text-xs text-muted-foreground mb-1">Total Net Worth</p>
-          <p className={`text-2xl md:text-3xl font-bold ${netWorth >= 0 ? "text-blue-600" : "text-red-600"}`}>
-            {privacyMode ? masked : formatCurrency(netWorth)}
+      <CardContent className="px-3 sm:px-6 pb-4 md:pb-6">
+        {/* Current net worth callout */}
+        <div className="text-center mb-4 py-2 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p className="text-xs text-muted-foreground">Current Net Worth</p>
+          <p className={`text-xl md:text-2xl font-bold ${currentNetWorth >= 0 ? "text-blue-600" : "text-red-600"}`}>
+            {privacyMode
+              ? "••••••"
+              : `$${currentNetWorth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
           </p>
         </div>
 
-        {/* Assets / Liabilities Summary */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="p-3 bg-green-50 dark:bg-green-950 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-1">Assets</p>
-            <p className="text-sm md:text-base font-semibold text-green-600">
-              {privacyMode ? masked : formatCurrency(totalAssets)}
-            </p>
-          </div>
-          <div className="p-3 bg-red-50 dark:bg-red-950 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-1">Liabilities</p>
-            <p className="text-sm md:text-base font-semibold text-red-600">
-              {privacyMode ? masked : formatCurrency(totalLiabilities)}
-            </p>
-          </div>
-        </div>
-
-        {/* Account List */}
-        <div className="space-y-1.5">
-          {assets.map((acc) => (
-            <div key={acc.account_name} className="flex justify-between items-center text-sm px-1">
-              <span className="text-muted-foreground truncate mr-2">{acc.account_name}</span>
-              <span className="font-medium text-green-600 whitespace-nowrap">
-                {privacyMode ? masked : formatCurrency(Number(acc.balance))}
-              </span>
-            </div>
-          ))}
-          {liabilities.map((acc) => (
-            <div key={acc.account_name} className="flex justify-between items-center text-sm px-1">
-              <span className="text-muted-foreground truncate mr-2">{acc.account_name}</span>
-              <span className="font-medium text-red-600 whitespace-nowrap">
-                -{privacyMode ? masked : formatCurrency(Math.abs(Number(acc.balance)))}
-              </span>
-            </div>
-          ))}
-        </div>
+        {chartData.length > 1 && (
+          <ChartContainer
+            config={{
+              netWorth: {
+                label: "Net Worth",
+                color: "#3B82F6",
+              },
+            }}
+            className="h-48 sm:h-56 lg:h-64"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                <XAxis dataKey="month" className="text-[10px] md:text-xs" />
+                <YAxis
+                  className="text-[10px] md:text-xs"
+                  tickFormatter={(value) =>
+                    privacyMode ? "••••" : `$${(value / 1000).toFixed(0)}k`
+                  }
+                />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value) =>
+                        privacyMode
+                          ? "••••••"
+                          : `$${Number(value).toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}`
+                      }
+                      labelFormatter={(label) => label}
+                    />
+                  }
+                />
+                <Area
+                  type="monotone"
+                  dataKey="netWorth"
+                  stroke="#3B82F6"
+                  strokeWidth={2}
+                  fill="url(#netWorthGradient)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        )}
       </CardContent>
     </Card>
   )
 }
 
-export const MonthlyTrend = memo(NetWorthCardInner)
+export const MonthlyTrend = memo(MonthlyTrendInner)

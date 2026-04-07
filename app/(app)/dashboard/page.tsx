@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
+import dynamic from "next/dynamic"
 import { createClient } from "@/lib/supabase/client"
 import { CategorySummary } from "@/components/category-summary"
 import { BudgetOverview } from "@/components/budget-overview"
@@ -12,7 +13,20 @@ import { useAppData } from "@/contexts/app-data-context"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 import { computeCategoryTotals } from "@/lib/compute-category-totals"
 
-import { MonthlyTrend } from "@/components/monthly-trend"
+// Lazy-load the chart component — Recharts is ~200KB and not needed for initial render
+const MonthlyTrend = dynamic(
+  () => import("@/components/monthly-trend").then(mod => ({ default: mod.MonthlyTrend })),
+  {
+    loading: () => (
+      <div className="border rounded-lg p-6">
+        <Skeleton className="h-6 w-32 mb-2" />
+        <Skeleton className="h-4 w-48 mb-4" />
+        <Skeleton className="h-48 w-full" />
+      </div>
+    ),
+    ssr: false,
+  }
+)
 
 interface DashboardData {
   currentMonthTransactions: any[]
