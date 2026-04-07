@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { performAutoSync } from '@/lib/auto-sync';
 import { isPWAOrMobile, cache } from '@/lib/capacitor';
+import { useAppData } from '@/contexts/app-data-context';
 
 /**
  * Background service that automatically syncs transactions and balances
@@ -16,6 +17,7 @@ import { isPWAOrMobile, cache } from '@/lib/capacitor';
  */
 export function AutoSyncService() {
   const router = useRouter();
+  const appData = useAppData();
 
   useEffect(() => {
     // Only run auto-sync in PWA or mobile app, not in regular browser
@@ -60,6 +62,7 @@ export function AutoSyncService() {
         await cache.removePattern('dashboard-');
         await cache.removePattern('budgets-');
         await cache.remove('transactions-page');
+        appData.invalidate(); // Clear in-memory cache too
 
         // Trigger a soft refresh via Next.js router instead of full page reload.
         // This re-runs server components and preserves client state/scroll position.

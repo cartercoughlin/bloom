@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { createClient } from "@/lib/supabase/client"
@@ -9,6 +9,7 @@ import { BudgetOverview } from "@/components/budget-overview"
 import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMonth } from "@/contexts/month-context"
+import { useAppData } from "@/contexts/app-data-context"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 import { computeCategoryTotals } from "@/lib/compute-category-totals"
 
@@ -37,19 +38,22 @@ interface DashboardData {
 }
 
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
+const EMPTY_DATA: DashboardData = {
+  currentMonthTransactions: [],
+  trendTransactions: [],
+  budgets: [],
+  categories: [],
+  rolloverByCategory: {},
+  historicalRecurring: EMPTY_HISTORICAL,
+}
 
 export default function DashboardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<DashboardData>({
-    currentMonthTransactions: [],
-    trendTransactions: [],
-    budgets: [],
-    categories: [],
-    rolloverByCategory: {},
-    historicalRecurring: EMPTY_HISTORICAL,
-  })
+  const [data, setData] = useState<DashboardData>(EMPTY_DATA)
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
+  const appData = useAppData()
+  const fetchingRef = useRef(false)
 
   // Memoize the category totals computation so it only reruns when transactions change
   const netByCategory = useMemo(
@@ -57,8 +61,23 @@ export default function DashboardPage() {
     [data.currentMonthTransactions]
   )
 
+  const cacheKey = `dashboard-${selectedYear}-${selectedMonth}`
+
   useEffect(() => {
     async function loadData() {
+      // Check in-memory context first (instant, no flicker)
+      const cached = appData.get(cacheKey)
+      if (cached) {
+        setData(cached)
+        setLoading(false)
+        // If data is fresh enough, skip refetch entirely
+        if (!appData.isStale(cacheKey)) return
+      }
+
+      // Prevent duplicate fetches
+      if (fetchingRef.current) return
+      fetchingRef.current = true
+
       try {
         const supabase = createClient()
 
@@ -69,19 +88,20 @@ export default function DashboardPage() {
           return
         }
 
-        // Try to load from cache first for instant display
-        const cacheKey = `dashboard-${selectedYear}-${selectedMonth}`
-        const cachedData = await cache.getJSON<any>(cacheKey)
-        if (cachedData) {
-          setData({
-            currentMonthTransactions: cachedData.currentMonthTransactions || [],
-            trendTransactions: cachedData.trendTransactions || [],
-            budgets: cachedData.budgets || [],
-            categories: cachedData.categories || [],
-            rolloverByCategory: cachedData.rolloverByCategory || {},
-            historicalRecurring: cachedData.historicalRecurring || EMPTY_HISTORICAL,
-          })
-          setLoading(false)
+        // If no in-memory cache, try disk cache for instant display
+        if (!cached) {
+          const diskCached = await cache.getJSON<any>(cacheKey)
+          if (diskCached) {
+            setData({
+              currentMonthTransactions: diskCached.currentMonthTransactions || [],
+              trendTransactions: diskCached.trendTransactions || [],
+              budgets: diskCached.budgets || [],
+              categories: diskCached.categories || [],
+              rolloverByCategory: diskCached.rolloverByCategory || {},
+              historicalRecurring: diskCached.historicalRecurring || EMPTY_HISTORICAL,
+            })
+            setLoading(false)
+          }
         }
 
         // Get selected month date range
@@ -149,19 +169,15 @@ export default function DashboardPage() {
             .eq("user_id", user.id)
             .order("name"),
 
-          // Server-side rollover: 2 DB queries instead of 12+ recursive ones
           fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`),
         ])
 
-        // Parse rollover response
         const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}
 
-        // Filter out savings goals from budgets
         const regularBudgets = (budgetsResult.data || []).filter(
           (budget: any) => !budget.categories?.is_rollover
         )
 
-        // Calculate historical recurring averages (only for current month)
         let historicalRecurringData: HistoricalRecurringData = EMPTY_HISTORICAL
         const now = new Date()
         if (selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear()) {
@@ -188,16 +204,19 @@ export default function DashboardPage() {
         setData(newData)
         setLoading(false)
 
-        // Cache for instant display on next visit
+        // Cache in both memory (instant nav) and disk (app restart)
+        appData.set(cacheKey, newData)
         await cache.setJSON(cacheKey, newData)
       } catch (error) {
         console.error("[Dashboard] Error loading data:", error)
         setLoading(false)
+      } finally {
+        fetchingRef.current = false
       }
     }
 
     loadData()
-  }, [router, selectedMonth, selectedYear])
+  }, [selectedMonth, selectedYear])
 
   if (loading && data.currentMonthTransactions.length === 0) {
     return (

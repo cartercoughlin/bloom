@@ -48,12 +48,13 @@ function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
     if (t.personal_finance_category && EXCLUDED_CATEGORIES.has(t.personal_finance_category)) {
       return true
     }
-    // 2. Old Plaid category_detailed field (e.g., "Transfer > Debit", "Payment > Credit Card")
+    // 2. Old Plaid category_detailed field
     if (t.category_detailed) {
       const lower = t.category_detailed.toLowerCase()
-      if (lower.startsWith("transfer") || lower === "payment > credit card") {
-        return true
-      }
+      // Transfers: "Transfer > Debit", "Transfer > Credit", etc.
+      if (lower.startsWith("transfer")) return true
+      // Credit card payments: "Payment > Credit Card"
+      if (lower.includes("credit card")) return true
     }
     // 3. Description keyword matching for older transactions without Plaid categories
     if (t.description && EXCLUDED_DESCRIPTION_PATTERNS.test(t.description)) {
