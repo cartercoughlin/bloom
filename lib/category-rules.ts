@@ -77,11 +77,52 @@ export async function assignCategoryByRules(transaction: Transaction, userId: st
 
   for (const rule of rules) {
     if (matchesRule(transaction, rule)) {
+      // For auto-learned rules, verify the pattern isn't ambiguous
+      // by checking if this description historically maps to multiple categories
+      if (rule.name.startsWith('Auto: ')) {
+        const isAmbiguous = await checkDescriptionAmbiguity(transaction.description, userId)
+        if (isAmbiguous) continue
+      }
       return rule.category_id
     }
   }
 
   return null
+}
+
+// Check if a transaction description is ambiguous — i.e., similar descriptions
+// have been categorized into multiple categories by the user.
+async function checkDescriptionAmbiguity(description: string, userId: string): Promise<boolean> {
+  const supabase = await createClient()
+
+  // Use significant words from the description to find similar transactions
+  const words = description.toLowerCase().split(' ').filter(w => w.length > 3)
+  if (words.length === 0) return false
+
+  // Search for categorized transactions matching the most significant word
+  // (first long word is usually the merchant name)
+  const { data: matches } = await supabase
+    .from('transactions')
+    .select('category_id')
+    .eq('user_id', userId)
+    .not('category_id', 'is', null)
+    .ilike('description', `%${words[0]}%`)
+    .limit(50)
+
+  if (!matches || matches.length < 3) return false
+
+  const categories = new Set(matches.map(m => m.category_id))
+
+  // If spread across 2+ categories and no single category has 80%+, it's ambiguous
+  if (categories.size < 2) return false
+
+  const categoryCounts = new Map<string, number>()
+  for (const m of matches) {
+    categoryCounts.set(m.category_id, (categoryCounts.get(m.category_id) || 0) + 1)
+  }
+
+  const maxCount = Math.max(...categoryCounts.values())
+  return maxCount / matches.length < 0.8
 }
 
 function matchesRule(transaction: Transaction, rule: CategoryRule): boolean {
@@ -162,42 +203,65 @@ function matchesRule(transaction: Transaction, rule: CategoryRule): boolean {
 
 export async function learnFromAssignment(transactionId: string, categoryId: string, userId: string) {
   const supabase = await createClient()
-  
+
   // Get transaction details
   const { data: transaction } = await supabase
     .from('transactions')
     .select('description')
     .eq('id', transactionId)
     .single()
-  
+
   if (!transaction) return
-  
+
   // Check if similar pattern exists
   const words = transaction.description.toLowerCase().split(' ')
   const significantWords = words.filter(word => word.length > 3)
-  
+
   for (const word of significantWords) {
-    // Check if we should create a rule for this pattern
-    const { data: similarTransactions } = await supabase
+    // Check how many categorized transactions contain this word across ALL categories
+    const { data: allMatches } = await supabase
       .from('transactions')
-      .select('id')
+      .select('id, category_id')
       .eq('user_id', userId)
-      .eq('category_id', categoryId)
+      .not('category_id', 'is', null)
       .ilike('description', `%${word}%`)
-    
-    if (similarTransactions && similarTransactions.length >= 3) {
-      // Create or update rule
+
+    if (!allMatches || allMatches.length < 3) continue
+
+    // Count how many distinct categories this word appears in
+    const categoryCounts = new Map<string, number>()
+    for (const match of allMatches) {
+      categoryCounts.set(match.category_id, (categoryCounts.get(match.category_id) || 0) + 1)
+    }
+
+    const targetCount = categoryCounts.get(categoryId) || 0
+    const totalCount = allMatches.length
+
+    // If this word's transactions are spread across multiple categories,
+    // it's ambiguous (e.g., "Amazon" -> wants, needs, gifts).
+    // Only create a rule if 80%+ of matches go to the same category.
+    if (targetCount < 3 || targetCount / totalCount < 0.8) {
+      // Ambiguous word — remove any existing auto-rule for it
       await supabase
         .from('category_rules')
-        .upsert({
-          user_id: userId,
-          name: `Auto: ${word}`,
-          description_pattern: word,
-          category_id: categoryId,
-          priority: 1,
-          is_active: true
-        })
+        .delete()
+        .eq('user_id', userId)
+        .like('name', `Auto: ${word}`)
+
+      continue
     }
+
+    // Create or update rule — this word reliably maps to one category
+    await supabase
+      .from('category_rules')
+      .upsert({
+        user_id: userId,
+        name: `Auto: ${word}`,
+        description_pattern: word,
+        category_id: categoryId,
+        priority: 1,
+        is_active: true
+      })
   }
 }
 
