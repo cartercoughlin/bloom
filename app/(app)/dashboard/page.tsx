@@ -30,8 +30,7 @@ const MonthlyTrend = dynamic(
 
 interface DashboardData {
   currentMonthTransactions: any[]
-  trendTransactions: any[]
-  trendAccounts: any[]
+  accounts: any[]
   budgets: any[]
   categories: any[]
   rolloverByCategory: Record<string, number>
@@ -41,8 +40,7 @@ interface DashboardData {
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
 const EMPTY_DATA: DashboardData = {
   currentMonthTransactions: [],
-  trendTransactions: [],
-  trendAccounts: [],
+  accounts: [],
   budgets: [],
   categories: [],
   rolloverByCategory: {},
@@ -96,8 +94,7 @@ export default function DashboardPage() {
           if (diskCached) {
             setData({
               currentMonthTransactions: diskCached.currentMonthTransactions || [],
-              trendTransactions: diskCached.trendTransactions || [],
-              trendAccounts: diskCached.trendAccounts || [],
+              accounts: diskCached.accounts || [],
               budgets: diskCached.budgets || [],
               categories: diskCached.categories || [],
               rolloverByCategory: diskCached.rolloverByCategory || {},
@@ -113,14 +110,8 @@ export default function DashboardPage() {
         const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
         const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
 
-        // Get trend start date (6 months prior)
-        const trendStartMonth = selectedMonth - 6
-        const trendStartYear = trendStartMonth <= 0 ? selectedYear - 1 : selectedYear
-        const trendMonth = trendStartMonth <= 0 ? trendStartMonth + 12 : trendStartMonth
-        const trendStartDay = `${trendStartYear}-${String(trendMonth).padStart(2, '0')}-01`
-
         // Fetch everything in parallel — including rollover via API route
-        const [transactionsResult, trendResult, budgetsResult, categoriesResult, rolloverResponse, accountsResponse] = await Promise.all([
+        const [transactionsResult, budgetsResult, categoriesResult, rolloverResponse, accountsResponse] = await Promise.all([
           supabase
             .from("transactions")
             .select(`
@@ -136,14 +127,6 @@ export default function DashboardPage() {
             .lt("date", nextMonthFirstDay)
             .or("deleted.is.null,deleted.eq.false")
             .order("date", { ascending: false }),
-
-          supabase
-            .from("transactions")
-            .select("date, amount, transaction_type")
-            .eq("user_id", user.id)
-            .gte("date", trendStartDay)
-            .lt("date", nextMonthFirstDay)
-            .or("deleted.is.null,deleted.eq.false"),
 
           supabase
             .from("budgets")
@@ -199,8 +182,7 @@ export default function DashboardPage() {
 
         const newData: DashboardData = {
           currentMonthTransactions: transactionsResult.data || [],
-          trendTransactions: trendResult.data || [],
-          trendAccounts: accountsData || [],
+          accounts: accountsData || [],
           budgets: regularBudgets,
           categories: categoriesResult.data || [],
           rolloverByCategory: rollover,
@@ -263,7 +245,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
           <CategorySummary transactions={data.currentMonthTransactions} />
-          <MonthlyTrend transactions={data.trendTransactions} accounts={data.trendAccounts} />
+          <MonthlyTrend accounts={data.accounts} />
         </div>
       </div>
     </div>

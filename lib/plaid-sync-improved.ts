@@ -95,6 +95,21 @@ export async function syncAccountBalances(accessToken: string, userId: string): 
         } else {
           console.log(`✅ Successfully synced ${accountName}`)
           syncedAccounts++
+
+          // Record a daily balance snapshot for historical net worth tracking
+          const today = new Date().toISOString().split('T')[0]
+          await supabase
+            .from('balance_snapshots')
+            .upsert({
+              user_id: userId,
+              snapshot_date: today,
+              account_name: accountName,
+              account_type: accountType,
+              balance: balance,
+              plaid_account_id: account.account_id,
+            }, {
+              onConflict: 'idx_balance_snapshots_unique',
+            })
         }
 
       } catch (accountError) {
