@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { performAutoSync } from '@/lib/auto-sync';
@@ -55,18 +55,16 @@ export function AutoSyncService() {
 
         toast.success(messages.join(', '));
 
-        // Clear all cached data to ensure fresh data loads
+        // Clear all cached data so next navigation fetches fresh data
         console.log('[AutoSync] Clearing cache...');
         await cache.removePattern('dashboard-');
+        await cache.removePattern('budgets-');
         await cache.remove('transactions-page');
 
-        // Reload the page to show updated data after a short delay
-        // This is necessary because the pages use client-side data fetching
-        // and router.refresh() doesn't trigger useEffect re-runs
-        setTimeout(() => {
-          console.log('[AutoSync] Refreshing page...');
-          window.location.reload();
-        }, 1500); // Give user time to see the notification
+        // Trigger a soft refresh via Next.js router instead of full page reload.
+        // This re-runs server components and preserves client state/scroll position.
+        console.log('[AutoSync] Refreshing via router...');
+        router.refresh();
       } else {
         console.log('[AutoSync] No new data to sync');
       }

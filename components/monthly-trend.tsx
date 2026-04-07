@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts"
@@ -18,7 +19,7 @@ interface MonthlyTrendProps {
   transactions: Transaction[]
 }
 
-export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
+function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
   const { privacyMode } = usePrivacy()
 
   // Group by month
@@ -31,28 +32,38 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
     }
   > = {}
 
-  // Filter out inter-account transfers so they don't inflate income/expense totals
-  const TRANSFER_CATEGORIES = new Set(["TRANSFER_IN", "TRANSFER_OUT"])
-  const TRANSFER_DESCRIPTION_PATTERNS = /\b(transfer|xfer|ach\s*(credit|debit|payment)|wire\s*(in|out)|internal\s*transfer|from\s*(checking|savings)|to\s*(checking|savings))\b/i
+  // Filter out inter-account transfers and credit card payments so they don't
+  // inflate income/expense totals. Credit card payments are double-counted the
+  // same way transfers are: checking shows a debit, card shows a credit.
+  const EXCLUDED_CATEGORIES = new Set([
+    "TRANSFER_IN",
+    "TRANSFER_OUT",
+    "LOAN_PAYMENTS",       // Plaid category for credit card / loan payments
+    "BANK_FEES",           // Internal bank fees (not real spending decisions)
+  ])
+  const EXCLUDED_DESCRIPTION_PATTERNS = /\b(transfer|xfer|ach\s*(credit|debit|payment)|wire\s*(in|out)|internal\s*transfer|from\s*(checking|savings)|to\s*(checking|savings)|payment\s*thank\s*you|autopay|card\s*payment|credit\s*card\s*payment)\b/i
 
-  function isTransfer(t: Transaction): boolean {
+  function isExcluded(t: Transaction): boolean {
     // 1. New Plaid personal_finance_category (most reliable)
-    if (t.personal_finance_category && TRANSFER_CATEGORIES.has(t.personal_finance_category)) {
+    if (t.personal_finance_category && EXCLUDED_CATEGORIES.has(t.personal_finance_category)) {
       return true
     }
-    // 2. Old Plaid category_detailed field (e.g., "Transfer > Debit", "Transfer > Credit")
-    if (t.category_detailed && t.category_detailed.toLowerCase().startsWith("transfer")) {
-      return true
+    // 2. Old Plaid category_detailed field (e.g., "Transfer > Debit", "Payment > Credit Card")
+    if (t.category_detailed) {
+      const lower = t.category_detailed.toLowerCase()
+      if (lower.startsWith("transfer") || lower.startsWith("payment")) {
+        return true
+      }
     }
     // 3. Description keyword matching for older transactions without Plaid categories
-    if (t.description && TRANSFER_DESCRIPTION_PATTERNS.test(t.description)) {
+    if (t.description && EXCLUDED_DESCRIPTION_PATTERNS.test(t.description)) {
       return true
     }
     return false
   }
 
   transactions.forEach((t) => {
-    if (isTransfer(t)) {
+    if (isExcluded(t)) {
       return
     }
 
@@ -136,3 +147,5 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
     </Card>
   )
 }
+
+export const MonthlyTrend = memo(MonthlyTrendInner)

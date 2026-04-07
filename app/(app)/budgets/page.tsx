@@ -111,107 +111,7 @@ export default function BudgetsPage() {
   }
 
   // Calculate rollover from previous month (cumulative)
-  const calculateRollover = useCallback(async (supabase: any, userId: string, targetMonth: number, targetYear: number, depth = 0): Promise<Record<string, number>> => {
-    // Limit recursion to 12 months to avoid infinite loops and performance issues
-    if (depth > 12) return {}
-
-    const prevMonth = targetMonth === 1 ? 12 : targetMonth - 1
-    const prevYear = targetMonth === 1 ? targetYear - 1 : targetYear
-
-    // Get rollover from the month BEFORE the previous month
-    const previousMonthsRollover = await calculateRollover(supabase, userId, prevMonth, prevYear, depth + 1)
-
-    // Get previous month's budgets with rollover settings
-    // Try with enable_rollover first, fall back to without if column doesn't exist yet
-    let prevBudgets: any[] | null = null
-    let budgetsResult = await supabase
-      .from("budgets")
-      .select("category_id, amount, enable_rollover")
-      .eq("user_id", userId)
-      .eq("month", prevMonth)
-      .eq("year", prevYear)
-
-    if (budgetsResult.error) {
-      // Column might not exist yet, try without it
-      budgetsResult = await supabase
-        .from("budgets")
-        .select("category_id, amount")
-        .eq("user_id", userId)
-        .eq("month", prevMonth)
-        .eq("year", prevYear)
-    }
-
-    prevBudgets = budgetsResult.data
-
-    // Only process categories that have rollover enabled
-    const rolloverEnabledCategories = (prevBudgets || [])
-      .filter((b: any) => b.enable_rollover !== false) // Default to true if not set
-      .map((b: any) => b.category_id)
-
-    // Calculate rollover even if no budgets exist in prev month (we might have balance from month before)
-    const rolloverCategories = new Set([
-      ...rolloverEnabledCategories,
-      ...Object.keys(previousMonthsRollover)
-    ])
-
-    if (rolloverCategories.size === 0) {
-      return {}
-    }
-
-    // Get previous month's transactions
-    const prevFirstDay = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`
-    const prevNextMonth = prevMonth === 12 ? 1 : prevMonth + 1
-    const prevNextYear = prevMonth === 12 ? prevYear + 1 : prevYear
-    const prevNextMonthFirstDay = `${prevNextYear}-${String(prevNextMonth).padStart(2, '0')}-01`
-
-    const { data: prevTransactions } = await supabase
-      .from("transactions")
-      .select("category_id, amount, transaction_type, hidden")
-      .eq("user_id", userId)
-      .gte("date", prevFirstDay)
-      .lt("date", prevNextMonthFirstDay)
-      .not("deleted", "eq", true)
-
-    // Calculate spending by category for the previous month
-    const prevSpending: Record<string, number> = {}
-    prevTransactions?.forEach((tx: any) => {
-      if (tx.hidden) return
-      if (tx.category_id) {
-        if (!prevSpending[tx.category_id]) {
-          prevSpending[tx.category_id] = 0
-        }
-        if (tx.transaction_type === 'debit') {
-          prevSpending[tx.category_id] += Number(tx.amount)
-        } else if (tx.transaction_type === 'credit') {
-          prevSpending[tx.category_id] -= Number(tx.amount)
-        }
-      }
-    })
-
-    // Calculate rollover: (Base Budget + Previous Rollover) - Spending
-    // Allow both positive AND negative rollover amounts
-    const rollover: Record<string, number> = {}
-    rolloverCategories.forEach(catId => {
-      const budget = (prevBudgets || []).find((b: any) => b.category_id === catId)
-      const budgetAmount = budget?.amount || 0
-      const rolloverEnabled = budget?.enable_rollover !== false // Default to true
-
-      // Skip if rollover is explicitly disabled for this budget
-      if (!rolloverEnabled) return
-
-      const spent = prevSpending[catId] || 0
-      const prevRollover = previousMonthsRollover[catId] || 0
-      const totalAvailable = Number(budgetAmount) + prevRollover
-      const remaining = totalAvailable - spent
-
-      // Include both positive and negative amounts
-      if (remaining !== 0) {
-        rollover[catId] = remaining
-      }
-    })
-
-    return rollover
-  }, [])
+  // Rollover is now calculated server-side via /api/rollover
 
   const loadData = useCallback(async (showLoading = true) => {
     if (showLoading) setLoading(true)
@@ -244,9 +144,6 @@ export default function BudgetsPage() {
       // Auto-create budgets from previous month if needed
       await autoCreateBudgetsFromPreviousMonth(supabase, user.id)
 
-      // Calculate rollover from previous month (cumulative)
-      const rollover = await calculateRollover(supabase, user.id, selectedMonth, selectedYear)
-
       // Get transactions for selected month
       const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
       const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
@@ -255,8 +152,8 @@ export default function BudgetsPage() {
 
       console.log(`Querying transactions for range: ${firstDay} to ${nextMonthFirstDay}`)
 
-      // Fetch fresh data
-      const [budgetsResult, categoriesResult, transactionsResult] = await Promise.all([
+      // Fetch fresh data — including rollover via server-side API route
+      const [budgetsResult, categoriesResult, transactionsResult, rolloverResponse] = await Promise.all([
         supabase
           .from("budgets")
           .select(`
@@ -286,8 +183,13 @@ export default function BudgetsPage() {
           .eq("user_id", user.id)
           .gte("date", firstDay)
           .lt("date", nextMonthFirstDay)
-          .not("deleted", "eq", true) // More robust way to say "not deleted"
+          .not("deleted", "eq", true),
+
+        // Server-side rollover: 2 DB queries instead of 12+ recursive ones
+        fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`),
       ])
+
+      const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}
 
       if (transactionsResult.error) {
         console.error("Error fetching transactions:", transactionsResult.error)

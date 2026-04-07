@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { TrendingDown, TrendingUp, DollarSign, Target } from "lucide-react"
@@ -42,7 +42,7 @@ interface BudgetOverviewProps {
   year: number
 }
 
-export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, month, year }: BudgetOverviewProps) {
+export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, month, year }: BudgetOverviewProps) {
   const { privacyMode } = usePrivacy()
   const [showDetailModal, setShowDetailModal] = useState(false)
 
@@ -393,4 +393,4 @@ export function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}
     </Dialog>
   </>
   )
-}
+})
