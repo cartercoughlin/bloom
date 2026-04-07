@@ -197,7 +197,7 @@ export default function BudgetsPage() {
       const rolloverEnabled = budget?.enable_rollover !== false // Default to true
 
       // Skip if rollover is explicitly disabled for this budget
-      if (!rolloverEnabled && !previousMonthsRollover[catId]) return
+      if (!rolloverEnabled) return
 
       const spent = prevSpending[catId] || 0
       const prevRollover = previousMonthsRollover[catId] || 0
