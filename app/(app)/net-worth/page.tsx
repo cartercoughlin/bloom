@@ -1,98 +1,84 @@
-import { redirect } from "next/navigation"
-import { createClient } from "@/lib/supabase/server"
+'use client'
+
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useAppData } from "@/contexts/app-data-context"
 
-// Force dynamic rendering - don't cache this page
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+interface AccountBalance {
+  account_name: string
+  account_type: string
+  balance: number
+}
 
-export default async function NetWorthPage() {
-  const supabase = await createClient()
+export default function NetWorthPage() {
+  const router = useRouter()
+  const [accounts, setAccounts] = useState<AccountBalance[]>([])
+  const [loading, setLoading] = useState(true)
+  const appData = useAppData()
+  const fetchingRef = useRef(false)
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    redirect("/auth/login")
-  }
-
-  // Get all account balances from database
-  const { data: allAccounts } = await supabase
-    .from("account_balances")
-    .select("account_name, account_type, balance, plaid_account_id")
-    .eq("user_id", user.id)
-
-  // Filter accounts based on sync settings (same logic as API endpoint)
-  let accounts: Array<{ account_name: string; account_type: string; balance: number }> = []
-
-  if (allAccounts && allAccounts.length > 0) {
-    const plaidAccountIds = allAccounts.filter(acc => acc.plaid_account_id).map(acc => acc.plaid_account_id)
-
-    if (plaidAccountIds.length > 0) {
-      // Get Plaid items with their sync settings
-      const { data: plaidItems } = await supabase
-        .from('plaid_items')
-        .select('access_token, sync_balances')
-        .eq('user_id', user.id)
-
-      if (plaidItems && plaidItems.length > 0) {
-        // Build set of active account IDs from items with sync_balances enabled
-        const { plaidClient } = await import('@/lib/plaid')
-        const activeAccountIds = new Set<string>()
-
-        for (const item of plaidItems.filter(i => i.sync_balances)) {
-          try {
-            const response = await plaidClient.accountsGet({ access_token: item.access_token })
-            response.data.accounts.forEach(acc => activeAccountIds.add(acc.account_id))
-          } catch (err) {
-            console.error('Error fetching accounts for filtering:', err)
-          }
-        }
-
-        // Filter accounts: include manual accounts and plaid accounts from synced connections
-        accounts = allAccounts.filter(acc => {
-          if (!acc.plaid_account_id) {
-            return true // Always include manual accounts
-          }
-          // Include Plaid accounts that are active OR if we have sync enabled but couldn't fetch
-          return activeAccountIds.size === 0 ?
-            plaidItems.some(i => i.sync_balances) :
-            activeAccountIds.has(acc.plaid_account_id!)
-        })
-      } else {
-        // No plaid items, only show manual accounts
-        accounts = allAccounts.filter(acc => !acc.plaid_account_id)
+  useEffect(() => {
+    async function loadData() {
+      // Check in-memory cache first
+      const cached = appData.get('net-worth')
+      if (cached) {
+        setAccounts(cached)
+        setLoading(false)
+        if (!appData.isStale('net-worth')) return
       }
-    } else {
-      // No plaid accounts, show all
-      accounts = allAccounts
+
+      if (fetchingRef.current) return
+      fetchingRef.current = true
+
+      try {
+        const response = await fetch('/api/account-balances')
+        if (!response.ok) throw new Error('Failed to fetch')
+        const data = await response.json()
+
+        // Sort by account type, then balance
+        const sorted = (data || []).sort((a: AccountBalance, b: AccountBalance) => {
+          if (a.account_type !== b.account_type) {
+            return a.account_type.localeCompare(b.account_type)
+          }
+          return b.balance - a.balance
+        })
+
+        setAccounts(sorted)
+        appData.set('net-worth', sorted)
+      } catch (error) {
+        console.error('Error loading net worth data:', error)
+      } finally {
+        setLoading(false)
+        fetchingRef.current = false
+      }
     }
 
-    // Sort by account type, then balance
-    accounts.sort((a, b) => {
-      if (a.account_type !== b.account_type) {
-        return a.account_type.localeCompare(b.account_type)
-      }
-      return b.balance - a.balance
-    })
-  }
+    loadData()
+  }, [])
 
-  // Calculate totals by type
-  let totalAssets = 0
-  let totalLiabilities = 0
-
-  const assets = accounts?.filter((a) => a.account_type !== "liability") || []
-  const liabilities = accounts?.filter((a) => a.account_type === "liability") || []
-
-  assets.forEach((account) => {
-    totalAssets += Number(account.balance)
-  })
-
-  liabilities.forEach((account) => {
-    totalLiabilities += Math.abs(Number(account.balance))
-  })
-
+  const assets = accounts.filter((a) => a.account_type !== "liability")
+  const liabilities = accounts.filter((a) => a.account_type === "liability")
+  const totalAssets = assets.reduce((sum, a) => sum + Number(a.balance), 0)
+  const totalLiabilities = liabilities.reduce((sum, a) => sum + Math.abs(Number(a.balance)), 0)
   const netWorth = totalAssets - totalLiabilities
+
+  if (loading && accounts.length === 0) {
+    return (
+      <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
+        <div className="mb-4 md:mb-8">
+          <Skeleton className="h-8 w-32 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+        <Skeleton className="h-48 w-full mt-6" />
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">

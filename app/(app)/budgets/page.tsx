@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { FolderKanban } from "lucide-react"
 import { useMonth } from "@/contexts/month-context"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
+import { useAppData } from "@/contexts/app-data-context"
 
 export default function BudgetsPage() {
   const router = useRouter()
@@ -26,6 +27,8 @@ export default function BudgetsPage() {
   const [editBudgetId, setEditBudgetId] = useState<string | null>(null)
   const [historicalRecurring, setHistoricalRecurring] = useState<HistoricalRecurringData>({ byCategory: {}, total: 0, monthsUsed: 0 })
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
+  const appData = useAppData()
+  const fetchingRef = useRef(false)
 
   // Auto-create budgets for new month from previous month
   const autoCreateBudgetsFromPreviousMonth = async (supabase: any, userId: string) => {
@@ -114,6 +117,27 @@ export default function BudgetsPage() {
   // Rollover is now calculated server-side via /api/rollover
 
   const loadData = useCallback(async (showLoading = true) => {
+    const budgetCacheKey = `budgets-${selectedYear}-${selectedMonth}`
+
+    // Check in-memory cache first (instant, no flicker on tab switch)
+    if (showLoading) {
+      const memCached = appData.get(budgetCacheKey)
+      if (memCached) {
+        setBudgets(memCached.budgets || [])
+        setSavingsGoals(memCached.savingsGoals || [])
+        setCategories(memCached.categories || [])
+        setNetByCategory(memCached.netByCategory || {})
+        setSpendingByCategory(memCached.spendingByCategory || {})
+        setRolloverByCategory(memCached.rolloverByCategory || {})
+        setHistoricalRecurring(memCached.historicalRecurring || { byCategory: {}, total: 0, monthsUsed: 0 })
+        setLoading(false)
+        if (!appData.isStale(budgetCacheKey)) return
+      }
+    }
+
+    if (fetchingRef.current) return
+    fetchingRef.current = true
+
     if (showLoading) setLoading(true)
     try {
       const supabase = createClient()
@@ -125,10 +149,9 @@ export default function BudgetsPage() {
         return
       }
 
-      // Try to load from cache first for instant display
-      if (showLoading) {
-        const cacheKey = `budgets-${selectedYear}-${selectedMonth}`
-        const cachedData = await cache.getJSON<any>(cacheKey)
+      // If no in-memory cache, try disk cache for instant display
+      if (showLoading && !appData.get(budgetCacheKey)) {
+        const cachedData = await cache.getJSON<any>(budgetCacheKey)
         if (cachedData) {
           setBudgets(cachedData.budgets || [])
           setSavingsGoals(cachedData.savingsGoals || [])
@@ -315,12 +338,13 @@ export default function BudgetsPage() {
       setRolloverByCategory(newData.rolloverByCategory)
       setHistoricalRecurring(newData.historicalRecurring)
 
-      const cacheKey = `budgets-${selectedYear}-${selectedMonth}`
-      await cache.setJSON(cacheKey, newData)
+      appData.set(budgetCacheKey, newData)
+      await cache.setJSON(budgetCacheKey, newData)
     } catch (error) {
       console.error("Error loading budgets:", error)
     } finally {
       setLoading(false)
+      fetchingRef.current = false
     }
   }, [router, selectedMonth, selectedYear])
 

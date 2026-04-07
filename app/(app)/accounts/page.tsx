@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ConnectedAccounts } from '@/components/connected-accounts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 import { TrendingUp, TrendingDown, EyeOff, Eye } from 'lucide-react'
 import { usePrivacy } from '@/contexts/privacy-context'
 import { PrivateAmount } from '@/components/private-amount'
+import { useAppData } from '@/contexts/app-data-context'
 
 interface AccountBalance {
   account_name: string
@@ -22,6 +23,8 @@ export default function AccountsPage() {
   const [balances, setBalances] = useState<AccountBalance[]>([])
   const [loading, setLoading] = useState(true)
   const { privacyMode, togglePrivacyMode } = usePrivacy()
+  const appData = useAppData()
+  const fetchingRef = useRef(false)
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -51,21 +54,32 @@ export default function AccountsPage() {
 
   useEffect(() => {
     const loadBalances = async () => {
+      // Check in-memory cache first
+      const cached = appData.get('accounts')
+      if (cached) {
+        setBalances(cached)
+        setLoading(false)
+        if (!appData.isStale('accounts')) return
+      }
+
+      if (fetchingRef.current) return
+      fetchingRef.current = true
+
       try {
-        // Use the API endpoint which has proper filtering logic
         const response = await fetch('/api/account-balances')
         if (!response.ok) {
           throw new Error('Failed to fetch account balances')
         }
         const data = await response.json()
 
-        // Sort by balance descending
         const sortedData = (data || []).sort((a: AccountBalance, b: AccountBalance) => b.balance - a.balance)
         setBalances(sortedData)
+        appData.set('accounts', sortedData)
       } catch (error) {
         console.error('Error loading balances:', error)
       } finally {
         setLoading(false)
+        fetchingRef.current = false
       }
     }
 
