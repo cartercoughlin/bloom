@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, memo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { PrivateAmount } from "./private-amount"
@@ -21,7 +21,7 @@ interface CategorySummaryProps {
   transactions: Transaction[]
 }
 
-export function CategorySummary({ transactions }: CategorySummaryProps) {
+export const CategorySummary = memo(function CategorySummary({ transactions }: CategorySummaryProps) {
   const [showAll, setShowAll] = useState(false)
 
   // Calculate net amount (income - expense) by category
@@ -126,4 +126,4 @@ export function CategorySummary({ transactions }: CategorySummaryProps) {
       </CardContent>
     </Card>
   )
-}
+})

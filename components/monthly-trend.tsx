@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend } from "recharts"
@@ -18,7 +19,7 @@ interface MonthlyTrendProps {
   transactions: Transaction[]
 }
 
-export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
+function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
   const { privacyMode } = usePrivacy()
 
   // Group by month
@@ -136,3 +137,5 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
     </Card>
   )
 }
+
+export const MonthlyTrend = memo(MonthlyTrendInner)

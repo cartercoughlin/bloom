@@ -70,6 +70,7 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
   })
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const [categoryJustChanged, setCategoryJustChanged] = useState<string | null>(null)
+  const [visibleDays, setVisibleDays] = useState(14)
 
   // Save showUncategorized to localStorage when it changes
   useEffect(() => {
@@ -511,16 +512,16 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
         )}
 
         <div className="w-full space-y-4">
-          {groupedTransactions.map(({ date, transactions: dayTransactions }) => (
+          {groupedTransactions.slice(0, visibleDays).map(({ date, transactions: dayTransactions }) => (
             <div key={date}>
               {/* Date Divider */}
               <div className="flex items-center gap-3 mb-3">
                 <div className="text-sm md:text-base font-medium text-muted-foreground">
-                  {new Date(date).toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
+                  {new Date(date).toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
                   })}
                 </div>
                 <div className="flex-1 h-px bg-border"></div>
@@ -543,9 +544,10 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
                     >
                       {/* Logo - Desktop only */}
                       {tx.logo_url && (
-                        <img 
-                          src={tx.logo_url} 
+                        <img
+                          src={tx.logo_url}
                           alt={tx.merchant_name || tx.description}
+                          loading="lazy"
                           className="hidden md:block w-8 h-8 rounded-full object-cover flex-shrink-0"
                           onError={(e) => {
                             e.currentTarget.style.display = 'none'
@@ -609,6 +611,19 @@ export function TransactionsTable({ transactions: initialTransactions, categorie
             </div>
           ))}
           
+          {groupedTransactions.length > visibleDays && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setVisibleDays(prev => prev + 14)}
+                className="text-xs md:text-sm"
+              >
+                Show more ({groupedTransactions.length - visibleDays} days remaining)
+              </Button>
+            </div>
+          )}
+
           {groupedTransactions.length === 0 && (
             <div className="text-center py-8">
               <p className="text-muted-foreground">No transactions found</p>
