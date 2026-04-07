@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     const authHeader = request.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET
 
-    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    if (authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     // Get all users with daily digest enabled
     const { data: usersWithDigest, error: usersError } = await supabase
       .from('email_preferences')
-      .select('user_id, users:user_id(email)')
+      .select('user_id')
       .eq('daily_digest_enabled', true)
 
     if (usersError) {
@@ -88,10 +88,14 @@ export async function GET(request: Request) {
     for (const userPref of usersWithDigest) {
       try {
         const userId = userPref.user_id
-        const userEmail = (userPref.users as any)?.email
 
-        if (!userEmail) {
-          console.warn(`[DailyDigest] No email for user ${userId}`)
+        // Fetch user email via Auth admin API (auth.users is not
+        // accessible via PostgREST joins reliably)
+        const { data: { user: authUser }, error: authError } = await supabase.auth.admin.getUserById(userId)
+        const userEmail = authUser?.email
+
+        if (authError || !userEmail) {
+          console.warn(`[DailyDigest] No email for user ${userId}:`, authError?.message)
           results.skipped++
           continue
         }
