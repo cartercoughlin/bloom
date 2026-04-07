@@ -322,7 +322,7 @@ export default function BudgetsPage() {
     } finally {
       setLoading(false)
     }
-  }, [router, selectedMonth, selectedYear, calculateRollover])
+  }, [router, selectedMonth, selectedYear])
 
   useEffect(() => {
     loadData()
