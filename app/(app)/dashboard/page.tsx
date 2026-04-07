@@ -222,7 +222,7 @@ export default function DashboardPage() {
 
           supabase
             .from("transactions")
-            .select("date, amount, transaction_type, hidden, personal_finance_category")
+            .select("date, amount, transaction_type, hidden, personal_finance_category, category_detailed, description")
             .eq("user_id", user.id)
             .gte("date", trendStartDay)
             .lt("date", nextMonthFirstDay)
