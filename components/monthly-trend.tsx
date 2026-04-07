@@ -43,7 +43,7 @@ function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
   ])
   const EXCLUDED_DESCRIPTION_PATTERNS = /\b(transfer|xfer|ach\s*(credit|debit|payment)|wire\s*(in|out)|internal\s*transfer|from\s*(checking|savings)|to\s*(checking|savings)|payment\s*thank\s*you|autopay|card\s*payment|credit\s*card\s*payment)\b/i
 
-  function isExcluded(t: Transaction): boolean {
+  function isExcludedByCategory(t: Transaction): boolean {
     // 1. New Plaid personal_finance_category (most reliable)
     if (t.personal_finance_category && EXCLUDED_CATEGORIES.has(t.personal_finance_category)) {
       return true
@@ -63,8 +63,32 @@ function MonthlyTrendInner({ transactions }: MonthlyTrendProps) {
     return false
   }
 
+  // Detect matching pairs: same amount on same date with opposite types
+  // (one credit, one debit) — these are inter-account transfers that
+  // weren't tagged by Plaid categories or description patterns.
+  const transferAmounts = new Set<string>()
+  const dateAmountPairs = new Map<string, { hasCredit: boolean; hasDebit: boolean }>()
   transactions.forEach((t) => {
-    if (isExcluded(t)) {
+    const key = `${t.date}_${Number(t.amount).toFixed(2)}`
+    const entry = dateAmountPairs.get(key) || { hasCredit: false, hasDebit: false }
+    if (t.transaction_type === "credit") entry.hasCredit = true
+    else entry.hasDebit = true
+    dateAmountPairs.set(key, entry)
+  })
+  dateAmountPairs.forEach((entry, key) => {
+    if (entry.hasCredit && entry.hasDebit) {
+      transferAmounts.add(key)
+    }
+  })
+
+  transactions.forEach((t) => {
+    if (isExcludedByCategory(t)) {
+      return
+    }
+
+    // Exclude matched pairs (same date + amount with both credit and debit)
+    const pairKey = `${t.date}_${Number(t.amount).toFixed(2)}`
+    if (transferAmounts.has(pairKey)) {
       return
     }
 
