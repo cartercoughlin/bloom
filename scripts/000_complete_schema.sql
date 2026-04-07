@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   logo_url TEXT,
   website TEXT,
   category_detailed TEXT,
+  personal_finance_category TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

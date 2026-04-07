@@ -9,6 +9,9 @@ interface Transaction {
   date: string
   amount: number
   transaction_type: string
+  personal_finance_category?: string | null
+  category_detailed?: string | null
+  description?: string | null
 }
 
 interface MonthlyTrendProps {
@@ -28,7 +31,31 @@ export function MonthlyTrend({ transactions }: MonthlyTrendProps) {
     }
   > = {}
 
+  // Filter out inter-account transfers so they don't inflate income/expense totals
+  const TRANSFER_CATEGORIES = new Set(["TRANSFER_IN", "TRANSFER_OUT"])
+  const TRANSFER_DESCRIPTION_PATTERNS = /\b(transfer|xfer|ach\s*(credit|debit|payment)|wire\s*(in|out)|internal\s*transfer|from\s*(checking|savings)|to\s*(checking|savings))\b/i
+
+  function isTransfer(t: Transaction): boolean {
+    // 1. New Plaid personal_finance_category (most reliable)
+    if (t.personal_finance_category && TRANSFER_CATEGORIES.has(t.personal_finance_category)) {
+      return true
+    }
+    // 2. Old Plaid category_detailed field (e.g., "Transfer > Debit", "Transfer > Credit")
+    if (t.category_detailed && t.category_detailed.toLowerCase().startsWith("transfer")) {
+      return true
+    }
+    // 3. Description keyword matching for older transactions without Plaid categories
+    if (t.description && TRANSFER_DESCRIPTION_PATTERNS.test(t.description)) {
+      return true
+    }
+    return false
+  }
+
   transactions.forEach((t) => {
+    if (isTransfer(t)) {
+      return
+    }
+
     const date = new Date(t.date)
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
     const monthLabel = date.toLocaleString("default", { month: "short", year: "numeric" })

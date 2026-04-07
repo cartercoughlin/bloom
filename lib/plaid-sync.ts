@@ -493,6 +493,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       logo_url: transaction.logo_url || null,
       website: transaction.website || null,
       category_detailed: transaction.category?.join(' > ') || null,
+      personal_finance_category: transaction.personal_finance_category?.primary || null,
     }
 
     console.log('Inserting new transaction:', transactionData)
