@@ -43,10 +43,10 @@ export async function GET(request: Request) {
       auth: { autoRefreshToken: false, persistSession: false }
     })
 
-    // Get opted-in users
+    // Get opted-in users with their additional emails
     const { data: usersWithDigest, error: usersError } = await supabase
       .from('email_preferences')
-      .select('user_id')
+      .select('user_id, additional_emails')
       .eq('daily_digest_enabled', true)
 
     if (usersError) {
@@ -86,6 +86,9 @@ export async function GET(request: Request) {
 
         const htmlContent = generateBudgetDigestHTML(digestData)
 
+        // Build recipient list: account email + any additional emails
+        const recipients = [authUser.email, ...(userPref.additional_emails || [])]
+
         // Send via Resend
         const emailRes = await fetch('https://api.resend.com/emails', {
           method: 'POST',
@@ -95,7 +98,7 @@ export async function GET(request: Request) {
           },
           body: JSON.stringify({
             from: process.env.EMAIL_FROM || 'Budget Digest <digest@yourdomain.com>',
-            to: [authUser.email],
+            to: recipients,
             subject: `Your Daily Budget Digest - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
             html: htmlContent,
           }),
@@ -103,12 +106,12 @@ export async function GET(request: Request) {
 
         if (!emailRes.ok) {
           const err = await emailRes.text()
-          console.error(`[DailyDigest] Resend error for ${authUser.email}: ${err}`)
+          console.error(`[DailyDigest] Resend error for ${recipients.join(', ')}: ${err}`)
           results.failed++
-          results.errors.push(`${authUser.email}: ${err}`)
+          results.errors.push(`${recipients.join(', ')}: ${err}`)
         } else {
           const { id } = await emailRes.json()
-          console.log(`[DailyDigest] Sent to ${authUser.email}: ${id}`)
+          console.log(`[DailyDigest] Sent to ${recipients.join(', ')}: ${id}`)
           results.sent++
         }
       } catch (err) {
