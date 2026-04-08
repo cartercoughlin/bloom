@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     // Check if user has email notifications enabled
     const { data: preferences } = await supabase
       .from('email_preferences')
-      .select('daily_digest_enabled')
+      .select('daily_digest_enabled, additional_emails')
       .eq('user_id', user.id)
       .single()
 
@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         from: process.env.EMAIL_FROM || 'Budget Digest <digest@yourdomain.com>',
-        to: [userEmail],
+        to: [userEmail, ...(preferences?.additional_emails || [])],
         subject: `Your Daily Budget Digest - ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
         html: htmlContent
       })

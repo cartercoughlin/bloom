@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Loader2, Mail, Send } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Loader2, Mail, Send, Plus, X } from "lucide-react"
 import { toast } from "sonner"
 
 export function EmailPreferences() {
@@ -14,6 +15,9 @@ export function EmailPreferences() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [dailyDigestEnabled, setDailyDigestEnabled] = useState(false)
+  const [additionalEmails, setAdditionalEmails] = useState<string[]>([])
+  const [newEmail, setNewEmail] = useState("")
+  const [addingEmail, setAddingEmail] = useState(false)
 
   useEffect(() => {
     loadPreferences()
@@ -26,19 +30,17 @@ export function EmailPreferences() {
 
       if (!user) return
 
-      // Try to get existing preferences
       let { data: prefs, error } = await supabase
         .from('email_preferences')
-        .select('daily_digest_enabled')
+        .select('daily_digest_enabled, additional_emails')
         .eq('user_id', user.id)
         .single()
 
-      // If no preferences exist, create default ones
       if (error && error.code === 'PGRST116') {
         const { data: newPrefs } = await supabase
           .from('email_preferences')
-          .insert({ user_id: user.id, daily_digest_enabled: false })
-          .select('daily_digest_enabled')
+          .insert({ user_id: user.id, daily_digest_enabled: false, additional_emails: [] })
+          .select('daily_digest_enabled, additional_emails')
           .single()
 
         prefs = newPrefs
@@ -46,6 +48,7 @@ export function EmailPreferences() {
 
       if (prefs) {
         setDailyDigestEnabled(prefs.daily_digest_enabled)
+        setAdditionalEmails(prefs.additional_emails || [])
       }
     } catch (error) {
       console.error('Error loading email preferences:', error)
@@ -75,10 +78,73 @@ export function EmailPreferences() {
     } catch (error) {
       console.error('Error saving preferences:', error)
       toast.error('Failed to save preferences')
-      // Revert the switch
       setDailyDigestEnabled(!enabled)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const addEmail = async () => {
+    const email = newEmail.trim().toLowerCase()
+    if (!email) return
+
+    // Basic email validation
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error('Please enter a valid email address')
+      return
+    }
+
+    if (additionalEmails.includes(email)) {
+      toast.error('This email is already added')
+      return
+    }
+
+    setAddingEmail(true)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const updated = [...additionalEmails, email]
+
+      const { error } = await supabase
+        .from('email_preferences')
+        .update({ additional_emails: updated })
+        .eq('user_id', user.id)
+
+      if (error) throw error
+
+      setAdditionalEmails(updated)
+      setNewEmail("")
+      toast.success(`Added ${email}`)
+    } catch (error) {
+      console.error('Error adding email:', error)
+      toast.error('Failed to add email')
+    } finally {
+      setAddingEmail(false)
+    }
+  }
+
+  const removeEmail = async (email: string) => {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      const updated = additionalEmails.filter(e => e !== email)
+
+      const { error } = await supabase
+        .from('email_preferences')
+        .update({ additional_emails: updated })
+        .eq('user_id', user.id)
+
+      if (error) throw error
+
+      setAdditionalEmails(updated)
+      toast.success(`Removed ${email}`)
+    } catch (error) {
+      console.error('Error removing email:', error)
+      toast.error('Failed to remove email')
     }
   }
 
@@ -146,7 +212,7 @@ export function EmailPreferences() {
           <div className="flex-1 space-y-1">
             <Label htmlFor="daily-digest" className="text-base">Daily Budget Digest</Label>
             <p className="text-sm text-muted-foreground">
-              Receive a daily email with your budget progress, recent transactions, and category breakdown at 8:00 AM
+              Receive a daily email with your budget progress, recent transactions, and category breakdown at noon
             </p>
           </div>
           <Switch
@@ -158,41 +224,101 @@ export function EmailPreferences() {
         </div>
 
         {dailyDigestEnabled && (
-          <div className="flex flex-col gap-2 pt-4 border-t">
-            <p className="text-sm text-muted-foreground mb-2">
-              Test your daily digest email:
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={previewDigest}
-                className="flex-1"
+          <>
+            {/* Additional Emails */}
+            <div className="pt-4 border-t space-y-3">
+              <div>
+                <Label className="text-sm font-medium">Additional Email Addresses</Label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  The digest is sent to your account email. Add more addresses to send it to others too.
+                </p>
+              </div>
+
+              {additionalEmails.length > 0 && (
+                <div className="space-y-2">
+                  {additionalEmails.map((email) => (
+                    <div key={email} className="flex items-center gap-2 text-sm">
+                      <span className="flex-1 truncate text-muted-foreground">{email}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeEmail(email)}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <form
+                className="flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  addEmail()
+                }}
               >
-                <Mail className="h-4 w-4 mr-2" />
-                Preview
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={sendTestEmail}
-                disabled={sending}
-                className="flex-1"
-              >
-                {sending ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send Test
-                  </>
-                )}
-              </Button>
+                <Input
+                  type="email"
+                  placeholder="email@example.com"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="h-9 text-sm"
+                />
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="sm"
+                  disabled={addingEmail || !newEmail.trim()}
+                  className="h-9"
+                >
+                  {addingEmail ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                </Button>
+              </form>
             </div>
-          </div>
+
+            {/* Test Controls */}
+            <div className="flex flex-col gap-2 pt-4 border-t">
+              <p className="text-sm text-muted-foreground mb-2">
+                Test your daily digest email:
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={previewDigest}
+                  className="flex-1"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Preview
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={sendTestEmail}
+                  disabled={sending}
+                  className="flex-1"
+                >
+                  {sending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4 mr-2" />
+                      Send Test
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
