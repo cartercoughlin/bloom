@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { generateDigestData } from '@/lib/email/generate-digest-data'
 import { generateBudgetDigestHTML } from '@/lib/email/budget-digest-template'
+import { syncPlaidTransactions } from '@/lib/plaid-sync'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -74,6 +75,37 @@ export async function GET(request: Request) {
           console.warn(`[DailyDigest] No email for ${userId}`)
           results.skipped++
           continue
+        }
+
+        // Refresh transactions before generating the digest so data is up-to-date.
+        // Only sync transactions (not balances) to keep the run fast and within
+        // the Hobby plan's 60s maxDuration budget.
+        try {
+          const { data: plaidItems } = await supabase
+            .from('plaid_items')
+            .select('access_token')
+            .eq('user_id', userId)
+
+          if (plaidItems && plaidItems.length > 0) {
+            console.log(`[DailyDigest] Syncing ${plaidItems.length} Plaid item(s) for ${userId}`)
+            for (const item of plaidItems) {
+              if (!item.access_token) continue
+              const syncResult = await syncPlaidTransactions(item.access_token, {
+                userId,
+                supabaseClient: supabase,
+                syncTransactions: true,
+                syncBalances: false,
+              })
+              if (!syncResult.success) {
+                console.warn(`[DailyDigest] Sync warning for ${userId}: ${syncResult.error}`)
+              } else {
+                console.log(`[DailyDigest] Synced ${syncResult.newTransactions} new, ${syncResult.updatedTransactions} updated for ${userId}`)
+              }
+            }
+          }
+        } catch (syncErr) {
+          const msg = syncErr instanceof Error ? syncErr.message : 'Unknown sync error'
+          console.warn(`[DailyDigest] Sync failed for ${userId}, continuing with existing data: ${msg}`)
         }
 
         // Generate digest

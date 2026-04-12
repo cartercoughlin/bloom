@@ -19,7 +19,15 @@ export interface SyncResult {
   error?: string
 }
 
-export async function syncPlaidTransactions(accessToken: string, options?: { syncTransactions?: boolean; syncBalances?: boolean }): Promise<SyncResult> {
+export async function syncPlaidTransactions(
+  accessToken: string,
+  options?: {
+    syncTransactions?: boolean
+    syncBalances?: boolean
+    userId?: string
+    supabaseClient?: any
+  }
+): Promise<SyncResult> {
   try {
     if (!accessToken) {
       return {
@@ -31,15 +39,23 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
       }
     }
 
-    const { syncTransactions = true, syncBalances = true } = options || {}
+    const { syncTransactions = true, syncBalances = true, userId, supabaseClient } = options || {}
 
     console.log('Starting Plaid sync with access token:', accessToken.substring(0, 10) + '...')
     console.log('Sync options:', { syncTransactions, syncBalances })
-    
-    const supabase = await createClient()
-    
-    // Get current user
-    const { data: { user } } = await supabase.auth.getUser()
+
+    // Use provided supabase client (for cron/server context) or create one from cookies
+    const supabase = supabaseClient || await createClient()
+
+    // Use provided userId (for cron/server context) or fetch from auth
+    let user: { id: string } | null = null
+    if (userId) {
+      user = { id: userId }
+    } else {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      user = authUser
+    }
+
     if (!user) {
       return {
         success: false,
@@ -222,7 +238,7 @@ export async function syncPlaidTransactions(accessToken: string, options?: { syn
     // Sync transactions only if enabled
     if (syncTransactions) {
       console.log('Syncing transactions...')
-      const result = await syncTransactionsForAccounts(accessToken, accounts, user.id, syncedAccountsCount, institutionName)
+      const result = await syncTransactionsForAccounts(accessToken, accounts, user.id, syncedAccountsCount, institutionName, supabaseClient)
       return {
         ...result,
         accountIds: accounts.map(acc => acc.account_id)
@@ -278,12 +294,12 @@ function getMerchantPrefix(description: string): string {
   return words.slice(0, Math.min(3, words.length)).join(' ')
 }
 
-async function syncTransactionsForAccounts(accessToken: string, accounts: any[], userId: string, syncedAccountsCount: number, institutionName: string): Promise<SyncResult> {
-  const supabase = await createClient()
+async function syncTransactionsForAccounts(accessToken: string, accounts: any[], userId: string, syncedAccountsCount: number, institutionName: string, supabaseClient?: any): Promise<SyncResult> {
+  const supabase = supabaseClient || await createClient()
 
   // Get existing categories
   const { data: categories } = await supabase.from('categories').select('id, name').eq('user_id', userId)
-  const categoryMap = new Map(categories?.map(c => [c.name.toLowerCase(), c.id]) || [])
+  const categoryMap = new Map(categories?.map((c: any) => [c.name.toLowerCase(), c.id]) || [])
 
   // Get existing transactions from last 90 days to avoid duplicates
   // Extended to 90 days to catch older categorized transactions
@@ -303,7 +319,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   const existingByNormalizedFingerprint = new Map<string, any>()
   const existingByMerchantPrefix = new Map<string, any>()
 
-  existingTransactions?.forEach(t => {
+  existingTransactions?.forEach((t: any) => {
     // Plaid ID lookup (primary)
     if (t.plaid_transaction_id) {
       existingByPlaidId.set(t.plaid_transaction_id, t)
