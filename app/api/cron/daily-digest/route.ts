@@ -85,6 +85,7 @@ export async function GET(request: Request) {
             .from('plaid_items')
             .select('access_token')
             .eq('user_id', userId)
+            .eq('sync_transactions', true)
 
           if (plaidItems && plaidItems.length > 0) {
             console.log(`[DailyDigest] Syncing ${plaidItems.length} Plaid item(s) for ${userId}`)

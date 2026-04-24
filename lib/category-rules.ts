@@ -45,8 +45,8 @@ export async function createCategoryRule(rule: Omit<CategoryRule, 'id'>): Promis
   return data
 }
 
-export async function getCategoryRules(userId: string): Promise<CategoryRule[]> {
-  const supabase = await createClient()
+export async function getCategoryRules(userId: string, supabaseClient?: any): Promise<CategoryRule[]> {
+  const supabase = supabaseClient || await createClient()
 
   const { data, error } = await supabase
     .from('category_rules')
@@ -72,15 +72,13 @@ interface Transaction {
   institution?: string
 }
 
-export async function assignCategoryByRules(transaction: Transaction, userId: string): Promise<string | null> {
-  const rules = await getCategoryRules(userId)
+export async function assignCategoryByRules(transaction: Transaction, userId: string, supabaseClient?: any): Promise<string | null> {
+  const rules = await getCategoryRules(userId, supabaseClient)
 
   for (const rule of rules) {
     if (matchesRule(transaction, rule)) {
-      // For auto-learned rules, verify the pattern isn't ambiguous
-      // by checking if this description historically maps to multiple categories
       if (rule.name.startsWith('Auto: ')) {
-        const isAmbiguous = await checkDescriptionAmbiguity(transaction.description, userId)
+        const isAmbiguous = await checkDescriptionAmbiguity(transaction.description, userId, supabaseClient)
         if (isAmbiguous) continue
       }
       return rule.category_id
@@ -92,8 +90,8 @@ export async function assignCategoryByRules(transaction: Transaction, userId: st
 
 // Check if a transaction description is ambiguous — i.e., similar descriptions
 // have been categorized into multiple categories by the user.
-async function checkDescriptionAmbiguity(description: string, userId: string): Promise<boolean> {
-  const supabase = await createClient()
+async function checkDescriptionAmbiguity(description: string, userId: string, supabaseClient?: any): Promise<boolean> {
+  const supabase = supabaseClient || await createClient()
 
   // Use significant words from the description to find similar transactions
   const words = description.toLowerCase().split(' ').filter(w => w.length > 3)
@@ -111,7 +109,7 @@ async function checkDescriptionAmbiguity(description: string, userId: string): P
 
   if (!matches || matches.length < 3) return false
 
-  const categories = new Set(matches.map(m => m.category_id))
+  const categories = new Set(matches.map((m: any) => m.category_id))
 
   // If spread across 2+ categories and no single category has 80%+, it's ambiguous
   if (categories.size < 2) return false

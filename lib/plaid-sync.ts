@@ -504,7 +504,8 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
         transaction_type,
         bank: bankName,
       },
-      userId
+      userId,
+      supabaseClient
     )
 
     const transactionData = {
