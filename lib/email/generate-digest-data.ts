@@ -177,8 +177,6 @@ export async function generateDigestData(
 
     // Calculate total budget progress
     const totalBudget = categoryBreakdown.reduce((sum, cat) => sum + cat.budgetAmount, 0)
-    const baseBudget = regularBudgets.reduce((sum, b: any) => sum + Number(b.amount), 0)
-    const totalRollover = totalBudget - baseBudget  // Rollover is the difference between total and base
     const totalSpent = categoryBreakdown.reduce((sum, cat) => sum + cat.spent, 0)
     const totalRemaining = totalBudget - totalSpent
     const percentageUsed = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0
@@ -207,22 +205,20 @@ export async function generateDigestData(
     let expectedSpending: number
     if (historicalRecurring.monthsUsed > 0) {
       const historicalRecurringTotal = historicalRecurring.total
-      // Use baseBudget (not totalBudget) so rollover isn't scaled
-      const historicalVariableFromBase = Math.max(0, baseBudget - historicalRecurringTotal)
+      // Variable budget = totalBudget (base + rollover) minus recurring
+      const variableBudget = Math.max(0, totalBudget - historicalRecurringTotal)
 
       // Expected recurring: whichever is higher - what's already hit or baseline expectation
       const expectedRecurringBaseline = historicalRecurringTotal * (percentageThroughMonth / 100)
       const expectedRecurring = Math.max(totalRecurringSpent, expectedRecurringBaseline)
 
-      // Expected variable: scales linearly through the month (from base budget only)
-      const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
+      // Expected variable: scales linearly through the month
+      const expectedVariable = variableBudget * (percentageThroughMonth / 100)
 
-      // Rollover is available immediately from day 1, so add the full amount
-      expectedSpending = expectedRecurring + expectedVariable + totalRollover
+      expectedSpending = expectedRecurring + expectedVariable
     } else {
-      // Fallback: simple linear scaling of base budget only
-      // Rollover is available immediately from day 1, so add the full amount
-      expectedSpending = baseBudget * (percentageThroughMonth / 100) + totalRollover
+      // Fallback: simple linear scaling of total budget
+      expectedSpending = totalBudget * (percentageThroughMonth / 100)
     }
 
     const pacingDifference = totalSpent - expectedSpending
