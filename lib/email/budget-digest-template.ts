@@ -13,6 +13,10 @@ interface DigestData {
     totalRemaining: number
     percentageUsed: number
     isOverBudget: boolean
+    percentageThroughMonth: number
+    expectedSpending: number
+    pacingDifference: number
+    isPacingOver: boolean
   }
   categoryBreakdown: Array<{
     categoryName: string

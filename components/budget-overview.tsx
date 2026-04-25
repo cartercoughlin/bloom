@@ -102,39 +102,9 @@ export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCateg
 
   const percentageThroughMonth = getPercentageThroughMonth()
 
-  // Calculate expected spending using historical recurring data when available
-  // Historical data tells us what recurring expenses to expect for the full month,
-  // even if they haven't hit yet (e.g., phone bill on the 20th)
-  const calculateExpectedSpending = () => {
-    if (percentageThroughMonth === null) return 0
-
-    // If we have historical data, use hybrid approach:
-    // - Take MAX of (actual recurring so far) vs (historical recurring × % through month)
-    // - This acknowledges front-loaded recurring (like rent) while also expecting future recurring
-    // - Scale variable expenses linearly based on BASE budget (excluding rollover)
-    // - Rollover is available immediately, not scaled through the month
-    if (historicalRecurring && historicalRecurring.monthsUsed > 0) {
-      const historicalRecurringTotal = historicalRecurring.total
-      // Variable budget = totalBudget (base + rollover) minus recurring
-      const variableBudget = Math.max(0, totalBudget - historicalRecurringTotal)
-
-      // Expected recurring: whichever is higher - what's already hit or baseline expectation
-      const expectedRecurringBaseline = historicalRecurringTotal * (percentageThroughMonth / 100)
-      const expectedRecurring = Math.max(totalRecurring, expectedRecurringBaseline)
-
-      // Expected variable: scales linearly through the month
-      const expectedVariable = variableBudget * (percentageThroughMonth / 100)
-
-      return expectedRecurring + expectedVariable
-    }
-
-    // Fallback: no historical data available
-    // Use actual recurring spent so far as the baseline, scale remaining budget linearly
-    const remainingBudget = Math.max(0, totalBudget - totalRecurring)
-    return totalRecurring + (remainingBudget * (percentageThroughMonth / 100))
-  }
-
-  const expectedSpending = calculateExpectedSpending()
+  const expectedSpending = percentageThroughMonth !== null
+    ? totalBudget * (percentageThroughMonth / 100)
+    : 0
 
   const difference = totalBudget - totalSpent
   const differencePercent = totalBudget > 0 ? (difference / totalBudget) * 100 : 0
