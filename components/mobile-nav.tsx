@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Receipt, Target, TrendingUp, FolderOpen, CreditCard, Settings } from "lucide-react"
+import { Home, Receipt, Target, TrendingUp, FolderOpen, CreditCard, Settings, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export function MobileNav() {
@@ -25,9 +25,9 @@ export function MobileNav() {
       icon: Receipt,
     },
     {
-      href: "/accounts",
-      label: "Accounts",
-      icon: CreditCard,
+      href: "/chat",
+      label: "Chat",
+      icon: Sparkles,
     },
     {
       href: "/settings",
