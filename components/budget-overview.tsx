@@ -103,7 +103,29 @@ export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCateg
   const percentageThroughMonth = getPercentageThroughMonth()
 
   const expectedSpending = percentageThroughMonth !== null
-    ? (baseBudget * (percentageThroughMonth / 100)) + totalRollover
+    ? budgets.reduce((total, budget) => {
+        const categoryData = netByCategory?.[budget.category_id || '']
+        const recurringExpenses = categoryData?.recurringExpenses || 0
+        const categoryIncome = categoryData?.income || 0
+        const netRecurringExpenses = Math.max(0, recurringExpenses - categoryIncome)
+
+        const rollover = rolloverByCategory[budget.category_id] || 0
+        const catBaseBudget = Number(budget.amount)
+
+        const historicalRecurringForCategory = historicalRecurring?.byCategory?.[budget.category_id] || 0
+        const hasHistoricalData = historicalRecurring && historicalRecurring.monthsUsed > 0 && historicalRecurringForCategory > 0
+
+        if (hasHistoricalData) {
+          const historicalVariableFromBase = Math.max(0, catBaseBudget - historicalRecurringForCategory)
+          const expectedRecurringBaseline = historicalRecurringForCategory * (percentageThroughMonth / 100)
+          const expectedRecurring = Math.max(netRecurringExpenses, expectedRecurringBaseline)
+          const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
+          return total + expectedRecurring + expectedVariable + rollover
+        }
+
+        const remainingBaseBudget = Math.max(0, catBaseBudget - netRecurringExpenses)
+        return total + netRecurringExpenses + (remainingBaseBudget * (percentageThroughMonth / 100)) + rollover
+      }, 0)
     : 0
 
   const difference = totalBudget - totalSpent
