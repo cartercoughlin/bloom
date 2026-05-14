@@ -103,7 +103,7 @@ export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCateg
   const percentageThroughMonth = getPercentageThroughMonth()
 
   const expectedSpending = percentageThroughMonth !== null
-    ? totalBudget * (percentageThroughMonth / 100)
+    ? (baseBudget * (percentageThroughMonth / 100)) + totalRollover
     : 0
 
   const difference = totalBudget - totalSpent
