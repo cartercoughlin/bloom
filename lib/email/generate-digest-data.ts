@@ -6,6 +6,7 @@
 
 import { SupabaseClient } from '@supabase/supabase-js'
 import { calculateRolloverEfficient } from '@/lib/budget/calculate-rollover'
+import { calculateHistoricalRecurring } from '@/lib/budget/historical-recurring'
 
 export interface DigestData {
   userName: string
@@ -114,6 +115,7 @@ export async function generateDigestData(
         date,
         category_id,
         transaction_type,
+        recurring,
         hidden,
         categories (
           name,
@@ -130,17 +132,26 @@ export async function generateDigestData(
     // Calculate rollover efficiently (2 queries instead of 12+ recursive)
     const rollover = await calculateRolloverEfficient(supabase, userId, currentMonth, currentYear)
 
+    // Fetch historical recurring data for accurate pacing
+    const budgetCategoryIds = regularBudgets.map((b: any) => b.category_id)
+    const historicalRecurring = await calculateHistoricalRecurring(
+      supabase, userId, currentMonth, currentYear, budgetCategoryIds, 3
+    )
+
     // Calculate spending by category
-    const spendingByCategory: Record<string, { spent: number; income: number }> = {}
+    const spendingByCategory: Record<string, { spent: number; income: number; recurringExpenses: number }> = {}
     transactions?.forEach((tx: any) => {
       if (tx.hidden || !tx.category_id) return
 
       if (!spendingByCategory[tx.category_id]) {
-        spendingByCategory[tx.category_id] = { spent: 0, income: 0 }
+        spendingByCategory[tx.category_id] = { spent: 0, income: 0, recurringExpenses: 0 }
       }
 
       if (tx.transaction_type === 'debit') {
         spendingByCategory[tx.category_id].spent += Number(tx.amount)
+        if (tx.recurring) {
+          spendingByCategory[tx.category_id].recurringExpenses += Number(tx.amount)
+        }
       } else if (tx.transaction_type === 'credit') {
         spendingByCategory[tx.category_id].income += Number(tx.amount)
       }
@@ -179,9 +190,25 @@ export async function generateDigestData(
     const daysElapsed = now.getDate()
     const percentageThroughMonth = (daysElapsed / daysInMonth) * 100
 
-    // Calculate expected spending: linear proportion of total budget through the month.
-    // At X% through the month, you'd expect to have spent X% of your budget.
-    const expectedSpending = totalBudget * (percentageThroughMonth / 100)
+    const expectedSpending = regularBudgets.reduce((total: number, budget: any) => {
+      const catData = spendingByCategory[budget.category_id] || { spent: 0, income: 0, recurringExpenses: 0 }
+      const netRecurringExpenses = Math.max(0, catData.recurringExpenses - catData.income)
+      const rolloverAmount = budget.enable_rollover !== false ? (rollover[budget.category_id] || 0) : 0
+      const catBaseBudget = Number(budget.amount)
+
+      const historicalRecurringForCategory = historicalRecurring?.byCategory?.[budget.category_id] || 0
+      const hasHistoricalData = historicalRecurring.monthsUsed > 0 && historicalRecurringForCategory > 0
+
+      if (hasHistoricalData) {
+        const historicalVariableFromBase = Math.max(0, catBaseBudget - historicalRecurringForCategory)
+        const expectedRecurring = Math.max(netRecurringExpenses, historicalRecurringForCategory * (percentageThroughMonth / 100))
+        const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
+        return total + expectedRecurring + expectedVariable + rolloverAmount
+      }
+
+      const remainingBaseBudget = Math.max(0, catBaseBudget - netRecurringExpenses)
+      return total + netRecurringExpenses + (remainingBaseBudget * (percentageThroughMonth / 100)) + rolloverAmount
+    }, 0)
 
     const pacingDifference = totalSpent - expectedSpending
     const isPacingOver = pacingDifference > 0
