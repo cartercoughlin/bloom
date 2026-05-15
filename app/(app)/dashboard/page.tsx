@@ -14,8 +14,8 @@ import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/bud
 import { computeCategoryTotals } from "@/lib/compute-category-totals"
 
 // Lazy-load the chart component — Recharts is ~200KB and not needed for initial render
-const MonthlyTrend = dynamic(
-  () => import("@/components/monthly-trend").then(mod => ({ default: mod.MonthlyTrend })),
+const MonthlySpendingComparison = dynamic(
+  () => import("@/components/monthly-spending-comparison").then(mod => ({ default: mod.MonthlySpendingComparison })),
   {
     loading: () => (
       <div className="border rounded-lg p-6">
@@ -30,7 +30,7 @@ const MonthlyTrend = dynamic(
 
 interface DashboardData {
   currentMonthTransactions: any[]
-  accounts: any[]
+  previousMonthTransactions: any[]
   budgets: any[]
   categories: any[]
   rolloverByCategory: Record<string, number>
@@ -40,7 +40,7 @@ interface DashboardData {
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
 const EMPTY_DATA: DashboardData = {
   currentMonthTransactions: [],
-  accounts: [],
+  previousMonthTransactions: [],
   budgets: [],
   categories: [],
   rolloverByCategory: {},
@@ -94,7 +94,7 @@ export default function DashboardPage() {
           if (diskCached) {
             setData({
               currentMonthTransactions: diskCached.currentMonthTransactions || [],
-              accounts: diskCached.accounts || [],
+              previousMonthTransactions: diskCached.previousMonthTransactions || [],
               budgets: diskCached.budgets || [],
               categories: diskCached.categories || [],
               rolloverByCategory: diskCached.rolloverByCategory || {},
@@ -109,9 +109,12 @@ export default function DashboardPage() {
         const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
         const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
         const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+        const previousMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
+        const previousYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
+        const previousFirstDay = `${previousYear}-${String(previousMonth).padStart(2, '0')}-01`
 
         // Fetch everything in parallel — including rollover via API route
-        const [transactionsResult, budgetsResult, categoriesResult, rolloverResponse, accountsResponse] = await Promise.all([
+        const [transactionsResult, previousTransactionsResult, budgetsResult, categoriesResult, rolloverResponse] = await Promise.all([
           supabase
             .from("transactions")
             .select(`
@@ -125,6 +128,22 @@ export default function DashboardPage() {
             .eq("user_id", user.id)
             .gte("date", firstDay)
             .lt("date", nextMonthFirstDay)
+            .or("deleted.is.null,deleted.eq.false")
+            .order("date", { ascending: false }),
+
+          supabase
+            .from("transactions")
+            .select(`
+              *,
+              categories (
+                name,
+                color,
+                icon
+              )
+            `)
+            .eq("user_id", user.id)
+            .gte("date", previousFirstDay)
+            .lt("date", firstDay)
             .or("deleted.is.null,deleted.eq.false")
             .order("date", { ascending: false }),
 
@@ -155,12 +174,9 @@ export default function DashboardPage() {
             .order("name"),
 
           fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`),
-
-          fetch('/api/account-balances'),
         ])
 
         const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}
-        const accountsData = accountsResponse.ok ? await accountsResponse.json() : []
 
         const regularBudgets = (budgetsResult.data || []).filter(
           (budget: any) => !budget.categories?.is_rollover
@@ -182,7 +198,7 @@ export default function DashboardPage() {
 
         const newData: DashboardData = {
           currentMonthTransactions: transactionsResult.data || [],
-          accounts: accountsData || [],
+          previousMonthTransactions: previousTransactionsResult.data || [],
           budgets: regularBudgets,
           categories: categoriesResult.data || [],
           rolloverByCategory: rollover,
@@ -245,7 +261,13 @@ export default function DashboardPage() {
 
         <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
           <CategorySummary transactions={data.currentMonthTransactions} />
-          <MonthlyTrend accounts={data.accounts} />
+          <MonthlySpendingComparison
+            currentMonthTransactions={data.currentMonthTransactions}
+            previousMonthTransactions={data.previousMonthTransactions}
+            budgets={data.budgets}
+            month={selectedMonth}
+            year={selectedYear}
+          />
         </div>
       </div>
     </div>
