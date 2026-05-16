@@ -31,31 +31,45 @@ export async function GET() {
       return NextResponse.json([])
     }
 
-    // Group by date → compute net worth per snapshot date
-    const byDate = new Map<string, number>()
+    // Group by date → compute account totals per snapshot date
+    const byDate = new Map<string, { assets: number; liabilities: number }>()
     for (const snap of snapshots) {
       const bal = Number(snap.balance)
-      const value = snap.account_type === 'liability' ? -Math.abs(bal) : bal
-      byDate.set(snap.snapshot_date, (byDate.get(snap.snapshot_date) || 0) + value)
+      const existing = byDate.get(snap.snapshot_date) || { assets: 0, liabilities: 0 }
+
+      if (snap.account_type === 'liability') {
+        existing.liabilities += Math.abs(bal)
+      } else {
+        existing.assets += bal
+      }
+
+      byDate.set(snap.snapshot_date, existing)
     }
 
     // Pick the last snapshot per month (most accurate for that month)
-    const byMonth = new Map<string, { date: string; netWorth: number }>()
-    for (const [date, netWorth] of byDate) {
+    const byMonth = new Map<string, { date: string; assets: number; liabilities: number; netWorth: number }>()
+    for (const [date, totals] of byDate) {
       const monthKey = date.substring(0, 7) // "YYYY-MM"
       const existing = byMonth.get(monthKey)
       if (!existing || date > existing.date) {
-        byMonth.set(monthKey, { date, netWorth })
+        byMonth.set(monthKey, {
+          date,
+          assets: totals.assets,
+          liabilities: totals.liabilities,
+          netWorth: totals.assets - totals.liabilities,
+        })
       }
     }
 
     // Sort chronologically and format for the chart
     const result = Array.from(byMonth.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([monthKey, { netWorth }]) => {
+      .map(([monthKey, { assets, liabilities, netWorth }]) => {
         const [y, m] = monthKey.split('-').map(Number)
         return {
           month: new Date(y, m - 1).toLocaleString('default', { month: 'short', year: 'numeric' }),
+          assets: Math.round(assets * 100) / 100,
+          liabilities: Math.round(liabilities * 100) / 100,
           netWorth: Math.round(netWorth * 100) / 100,
         }
       })
