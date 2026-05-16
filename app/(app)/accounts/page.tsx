@@ -18,9 +18,60 @@ interface AccountBalance {
   balance: number
 }
 
+interface AccountHistoryPoint {
+  month: string
+  netWorth: number
+  assets: number
+  liabilities: number
+}
+
+interface SparklineProps {
+  data: number[]
+  className?: string
+}
+
+function Sparkline({ data, className = 'text-muted-foreground' }: SparklineProps) {
+  if (data.length < 2) {
+    return <div className="h-8 w-20 md:w-24" />
+  }
+
+  const width = 96
+  const height = 32
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
+  const points = data
+    .map((value, index) => {
+      const x = (index / (data.length - 1)) * width
+      const y = height - ((value - min) / range) * height
+      return `${x.toFixed(2)},${y.toFixed(2)}`
+    })
+    .join(' ')
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className={`h-8 w-20 md:w-24 ${className}`}
+      aria-hidden="true"
+      focusable="false"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
+  )
+}
+
 export default function AccountsPage() {
   const router = useRouter()
   const [balances, setBalances] = useState<AccountBalance[]>([])
+  const [history, setHistory] = useState<AccountHistoryPoint[]>([])
   const [loading, setLoading] = useState(true)
   const { privacyMode, togglePrivacyMode } = usePrivacy()
   const appData = useAppData()
@@ -56,25 +107,38 @@ export default function AccountsPage() {
     const loadBalances = async () => {
       // Check in-memory cache first
       const cached = appData.get('accounts')
+      const cachedHistory = appData.get('account-history')
       if (cached) {
         setBalances(cached)
+        if (cachedHistory) setHistory(cachedHistory)
         setLoading(false)
-        if (!appData.isStale('accounts')) return
+        if (!appData.isStale('accounts') && cachedHistory && !appData.isStale('account-history')) return
       }
 
       if (fetchingRef.current) return
       fetchingRef.current = true
 
       try {
-        const response = await fetch('/api/account-balances')
-        if (!response.ok) {
+        const [balancesResponse, historyResponse] = await Promise.all([
+          fetch('/api/account-balances'),
+          fetch('/api/net-worth-history'),
+        ])
+
+        if (!balancesResponse.ok) {
           throw new Error('Failed to fetch account balances')
         }
-        const data = await response.json()
+
+        const data = await balancesResponse.json()
 
         const sortedData = (data || []).sort((a: AccountBalance, b: AccountBalance) => b.balance - a.balance)
         setBalances(sortedData)
         appData.set('accounts', sortedData)
+
+        if (historyResponse.ok) {
+          const historyData = await historyResponse.json()
+          setHistory(historyData || [])
+          appData.set('account-history', historyData || [])
+        }
       } catch (error) {
         console.error('Error loading balances:', error)
       } finally {
@@ -86,9 +150,13 @@ export default function AccountsPage() {
     loadBalances()
   }, [])
 
-  const totalNetWorth = balances.reduce((sum, account) => sum + account.balance, 0)
-  const assets = balances.filter(acc => acc.balance > 0).reduce((sum, acc) => sum + acc.balance, 0)
-  const liabilities = Math.abs(balances.filter(acc => acc.balance < 0).reduce((sum, acc) => sum + acc.balance, 0))
+  const assets = balances.filter(acc => acc.account_type !== 'liability').reduce((sum, acc) => sum + Number(acc.balance), 0)
+  const liabilities = balances.filter(acc => acc.account_type === 'liability').reduce((sum, acc) => sum + Math.abs(Number(acc.balance)), 0)
+  const totalNetWorth = assets - liabilities
+  const recentHistory = history.slice(-6)
+  const netWorthSparkline = recentHistory.map(point => point.netWorth)
+  const assetsSparkline = recentHistory.map(point => point.assets)
+  const liabilitiesSparkline = recentHistory.map(point => point.liabilities)
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-7xl pb-20 md:pb-6">
@@ -144,15 +212,21 @@ export default function AccountsPage() {
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Net Worth</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 pb-2 md:pb-6">
-              <div className="flex items-center gap-1 md:gap-2">
-                {totalNetWorth >= 0 ? (
-                  <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
-                )}
-                <PrivateAmount
-                  amount={totalNetWorth}
-                  className={`text-lg md:text-2xl font-bold ${totalNetWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}
+              <div className="flex items-end justify-between gap-3">
+                <div className="flex items-center gap-1 md:gap-2">
+                  {totalNetWorth >= 0 ? (
+                    <TrendingUp className="h-3 w-3 md:h-4 md:w-4 text-green-600" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 md:h-4 md:w-4 text-red-600" />
+                  )}
+                  <PrivateAmount
+                    amount={totalNetWorth}
+                    className={`text-lg md:text-2xl font-bold ${totalNetWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                  />
+                </div>
+                <Sparkline
+                  data={netWorthSparkline}
+                  className={`${totalNetWorth >= 0 ? 'text-green-600' : 'text-red-600'} ${privacyMode ? 'blur-sm' : ''}`}
                 />
               </div>
             </CardContent>
@@ -163,10 +237,13 @@ export default function AccountsPage() {
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Assets</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 pb-2 md:pb-6">
-              <PrivateAmount
-                amount={assets}
-                className="text-lg md:text-2xl font-bold text-green-600"
-              />
+              <div className="flex items-end justify-between gap-3">
+                <PrivateAmount
+                  amount={assets}
+                  className="text-lg md:text-2xl font-bold text-green-600"
+                />
+                <Sparkline data={assetsSparkline} className={`text-green-600 ${privacyMode ? 'blur-sm' : ''}`} />
+              </div>
             </CardContent>
           </Card>
 
@@ -175,10 +252,13 @@ export default function AccountsPage() {
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Liabilities</CardTitle>
             </CardHeader>
             <CardContent className="pt-0 pb-2 md:pb-6">
-              <PrivateAmount
-                amount={liabilities}
-                className="text-lg md:text-2xl font-bold text-red-600"
-              />
+              <div className="flex items-end justify-between gap-3">
+                <PrivateAmount
+                  amount={liabilities}
+                  className="text-lg md:text-2xl font-bold text-red-600"
+                />
+                <Sparkline data={liabilitiesSparkline} className={`text-red-600 ${privacyMode ? 'blur-sm' : ''}`} />
+              </div>
             </CardContent>
           </Card>
         </div>
