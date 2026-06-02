@@ -38,6 +38,7 @@ interface DashboardData {
 }
 
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
+const DASHBOARD_CACHE_VERSION = "v3"
 const EMPTY_DATA: DashboardData = {
   currentMonthTransactions: [],
   previousMonthTransactions: [],
@@ -61,7 +62,7 @@ export default function DashboardPage() {
     [data.currentMonthTransactions]
   )
 
-  const cacheKey = `dashboard-${selectedYear}-${selectedMonth}`
+  const cacheKey = `dashboard-${selectedYear}-${selectedMonth}-${DASHBOARD_CACHE_VERSION}`
 
   useEffect(() => {
     async function loadData() {
@@ -173,7 +174,7 @@ export default function DashboardPage() {
             .eq("user_id", user.id)
             .order("name"),
 
-          fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`),
+          fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
         ])
 
         const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}

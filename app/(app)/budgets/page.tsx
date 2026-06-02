@@ -15,6 +15,8 @@ import { useMonth } from "@/contexts/month-context"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 import { useAppData } from "@/contexts/app-data-context"
 
+const BUDGET_CACHE_VERSION = "v3"
+
 export default function BudgetsPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
@@ -79,7 +81,7 @@ export default function BudgetsPage() {
     const [templateBudgetsResult, currentBudgetsResult] = await Promise.all([
       supabase
         .from("budgets")
-        .select("category_id, amount")
+        .select("category_id, amount, enable_rollover")
         .eq("user_id", userId)
         .eq("month", chosenTemplate.month)
         .eq("year", chosenTemplate.year),
@@ -106,6 +108,7 @@ export default function BudgetsPage() {
       user_id: userId,
       category_id: budget.category_id,
       amount: budget.amount,
+      enable_rollover: budget.enable_rollover ?? false,
       month: selectedMonth,
       year: selectedYear
     }))
@@ -117,7 +120,7 @@ export default function BudgetsPage() {
   // Rollover is now calculated server-side via /api/rollover
 
   const loadData = useCallback(async (showLoading = true) => {
-    const budgetCacheKey = `budgets-${selectedYear}-${selectedMonth}`
+    const budgetCacheKey = `budgets-${selectedYear}-${selectedMonth}-${BUDGET_CACHE_VERSION}`
 
     // Check in-memory cache first (instant, no flicker on tab switch)
     if (showLoading) {
@@ -209,7 +212,7 @@ export default function BudgetsPage() {
           .not("deleted", "eq", true),
 
         // Server-side rollover: 2 DB queries instead of 12+ recursive ones
-        fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`),
+        fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
       ])
 
       const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}

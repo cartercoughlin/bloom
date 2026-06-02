@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
 import { calculateRolloverEfficient } from "@/lib/budget/calculate-rollover"
 
+export const dynamic = "force-dynamic"
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
@@ -26,7 +28,11 @@ export async function GET(request: NextRequest) {
     }
 
     const rollover = await calculateRolloverEfficient(supabase, user.id, month, year)
-    return NextResponse.json(rollover)
+    return NextResponse.json(rollover, {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    })
   } catch (error) {
     console.error("Rollover API error:", error)
     return NextResponse.json(
