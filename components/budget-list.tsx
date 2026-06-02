@@ -127,6 +127,9 @@ export function BudgetList({
       if (category) {
         setIsSavingsGoal(category.is_rollover || false)
         setTargetAmount(category.target_amount?.toString() || "")
+        if (!editingBudget) {
+          setEnableRollover(category.is_rollover || false)
+        }
       }
     }
   }, [selectedCategoryId, categories])
@@ -134,6 +137,7 @@ export function BudgetList({
   // Handle savings goal toggle
   const handleSavingsGoalToggle = (checked: boolean) => {
     setIsSavingsGoal(checked)
+    setEnableRollover(checked)
     // Auto-fill target amount with budget amount when toggled ON
     if (checked && !targetAmount && amount) {
       setTargetAmount(amount)
@@ -203,7 +207,7 @@ export function BudgetList({
       setEditingBudget(null)
       setSelectedCategoryId("")
       setAmount("")
-      setEnableRollover(true) // Default to true for new budgets
+      setEnableRollover(false) // Normal budgets should not roll over by default
       setIsSavingsGoal(false)
       setTargetAmount("")
     }
@@ -596,7 +600,9 @@ export function BudgetList({
             const variableExpenses = categoryData.variableExpenses
 
             // Get rollover for this category
-            const rollover = rolloverByCategory[budget.category_id] || 0
+            const rollover = budget.enable_rollover !== false
+              ? rolloverByCategory[budget.category_id] || 0
+              : 0
 
             // Budget amount including rollover
             const baseBudget = Number(budget.amount)
