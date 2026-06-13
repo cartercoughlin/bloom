@@ -109,7 +109,9 @@ export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCateg
         const categoryIncome = categoryData?.income || 0
         const netRecurringExpenses = Math.max(0, recurringExpenses - categoryIncome)
 
-        const rollover = rolloverByCategory[budget.category_id] || 0
+        const rollover = budget.enable_rollover !== false
+          ? rolloverByCategory[budget.category_id] || 0
+          : 0
         const catBaseBudget = Number(budget.amount)
 
         const historicalRecurringForCategory = historicalRecurring?.byCategory?.[budget.category_id] || 0
