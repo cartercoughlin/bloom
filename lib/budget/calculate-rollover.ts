@@ -98,14 +98,11 @@ export async function calculateRolloverEfficient(
       const budgetAmount = budget?.amount ? Number(budget.amount) : 0
       const spent = Math.max(0, monthSpending[catId] || 0)
       const prevRollover = rollover[catId] || 0
+      const remaining = budgetAmount + prevRollover - spent
 
-      if (spent <= budgetAmount) {
-        const remaining = budgetAmount - spent + prevRollover
-        if (remaining > 0) {
-          nextRollover[catId] = remaining
-        }
+      if (remaining > 0) {
+        nextRollover[catId] = remaining
       }
-      // spent > budgetAmount: rollover resets to 0
     }
 
     rollover = nextRollover
