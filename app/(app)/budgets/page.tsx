@@ -108,7 +108,7 @@ export default function BudgetsPage() {
       user_id: userId,
       category_id: budget.category_id,
       amount: budget.amount,
-      enable_rollover: budget.enable_rollover ?? false,
+      enable_rollover: budget.enable_rollover ?? true,
       month: selectedMonth,
       year: selectedYear
     }))
