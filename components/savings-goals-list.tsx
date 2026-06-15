@@ -186,12 +186,11 @@ export function SavingsGoalsList({
           const income = categoryData.income
           const netSpending = expenses - income
 
-          // Get rollover from previous month
-          const rollover = rolloverByCategory[goal.category_id] || 0
-
-          // Calculate accumulated balance
           const monthlyContribution = Number(goal.amount)
-          const accumulatedBalance = rollover + monthlyContribution - netSpending
+
+          // API already returns the full bank account balance (all contributions minus all spending,
+          // including the current month), so use it directly.
+          const accumulatedBalance = rolloverByCategory[goal.category_id] ?? 0
 
           // Target amount
           const targetAmount = goal.categories?.target_amount
@@ -222,11 +221,6 @@ export function SavingsGoalsList({
                       <CardDescription className="text-xs md:text-sm">
                         Monthly: <PrivateAmount amount={monthlyContribution} className="inline" /> •
                         Balance: <PrivateAmount amount={accumulatedBalance} className="inline" />
-                        {rollover > 0 && (
-                          <span className="text-green-600 ml-2">
-                            • <PrivateAmount amount={rollover} prefix="$" className="inline" /> previous balance
-                          </span>
-                        )}
                       </CardDescription>
                     </div>
                   </div>

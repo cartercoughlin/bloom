@@ -15,7 +15,7 @@ import { useMonth } from "@/contexts/month-context"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 import { useAppData } from "@/contexts/app-data-context"
 
-const BUDGET_CACHE_VERSION = "v3"
+const BUDGET_CACHE_VERSION = "v4"
 
 export default function BudgetsPage() {
   const router = useRouter()
