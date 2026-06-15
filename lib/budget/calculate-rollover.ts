@@ -145,7 +145,9 @@ export async function calculateRolloverEfficient(
       const totalContributions = (savingsBudgetsResult.data || [])
         .filter((b: any) => {
           if (b.category_id !== catId) return false
-          return b.year < year || (b.year === year && b.month <= month)
+          const bYear = Number(b.year)
+          const bMonth = Number(b.month)
+          return bYear < year || (bYear === year && bMonth <= month)
         })
         .reduce((sum: number, b: any) => sum + (Number(b.amount) || 0), 0)
 
