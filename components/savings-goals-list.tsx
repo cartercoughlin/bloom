@@ -224,7 +224,7 @@ export function SavingsGoalsList({
                         Balance: <PrivateAmount amount={accumulatedBalance} className="inline" />
                         {rollover > 0 && (
                           <span className="text-green-600 ml-2">
-                            • <PrivateAmount amount={rollover} prefix="$" className="inline" /> from last month
+                            • <PrivateAmount amount={rollover} prefix="$" className="inline" /> previous balance
                           </span>
                         )}
                       </CardDescription>
