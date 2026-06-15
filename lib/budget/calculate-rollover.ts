@@ -114,10 +114,16 @@ export async function calculateRolloverEfficient(
     rollover = nextRollover
   }
 
-  // Bank account model for savings goals: sum ALL history up to (but not including) current month.
-  // This is correct regardless of how long the goal has been running — no 12-month cap.
+  // Bank account model for savings goals: sum ALL history including the current month.
+  // This way the returned balance is always the live total — no need for the UI to add
+  // the current month's allocation separately.
   if (savingsGoalCategoryIds.size > 0) {
     const catIdsArray = [...savingsGoalCategoryIds]
+
+    // End of the CURRENT month (first day of next month)
+    const nextMonth = month === 12 ? 1 : month + 1
+    const nextYear = month === 12 ? year + 1 : year
+    const savingsDateEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
 
     const [savingsBudgetsResult, savingsTransactionsResult] = await Promise.all([
       supabase
@@ -130,20 +136,20 @@ export async function calculateRolloverEfficient(
         .select('category_id, amount, transaction_type, hidden, date')
         .eq('user_id', userId)
         .in('category_id', catIdsArray)
-        .lt('date', dateEnd)
+        .lt('date', savingsDateEnd)
         .not('deleted', 'eq', true),
     ])
 
     for (const catId of savingsGoalCategoryIds) {
-      // Sum all budget contributions before the current month
+      // Sum all budget contributions up to and including the current month
       const totalContributions = (savingsBudgetsResult.data || [])
         .filter((b: any) => {
           if (b.category_id !== catId) return false
-          return b.year < year || (b.year === year && b.month < month)
+          return b.year < year || (b.year === year && b.month <= month)
         })
         .reduce((sum: number, b: any) => sum + (Number(b.amount) || 0), 0)
 
-      // Sum all spending before the current month
+      // Sum all spending up to end of the current month
       let totalSpending = 0
       for (const tx of (savingsTransactionsResult.data || [])) {
         if (tx.category_id !== catId || tx.hidden) continue
