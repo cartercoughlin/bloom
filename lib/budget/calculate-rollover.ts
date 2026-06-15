@@ -98,9 +98,7 @@ export async function calculateRolloverEfficient(
       const budgetAmount = budget?.amount ? Number(budget.amount) : 0
       const spent = Math.max(0, monthSpending[catId] || 0)
       const prevRollover = rollover[catId] || 0
-      // Cap usable rollover at one month's budget so overspending actually exhausts it
-      const usableRollover = Math.min(prevRollover, budgetAmount)
-      const remaining = budgetAmount + usableRollover - spent
+      const remaining = budgetAmount + prevRollover - spent
 
       if (remaining > 0) {
         nextRollover[catId] = remaining
