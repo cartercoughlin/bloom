@@ -25,8 +25,8 @@ export async function calculateRolloverEfficient(
   const dateEnd = `${year}-${String(month).padStart(2, '0')}-01`
   const yearsInRange = [...new Set(months.map((m) => m.year))]
 
-  // 2 parallel queries instead of 12+ recursive ones
-  const [budgetsResult, transactionsResult] = await Promise.all([
+  // 3 parallel queries: budgets, transactions, savings goal categories
+  const [budgetsResult, transactionsResult, savingsGoalsResult] = await Promise.all([
     supabase
       .from('budgets')
       .select('category_id, amount, enable_rollover, month, year')
@@ -39,10 +39,17 @@ export async function calculateRolloverEfficient(
       .gte('date', dateStart)
       .lt('date', dateEnd)
       .not('deleted', 'eq', true),
+    supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('is_rollover', true),
   ])
 
   const allBudgets = budgetsResult.data || []
   const allTransactions = transactionsResult.data || []
+  // Savings goal categories always accumulate rollover regardless of budget's enable_rollover flag
+  const savingsGoalIds = new Set((savingsGoalsResult.data || []).map((c: any) => c.id))
 
   // Index budgets by month
   const budgetsByMonth: Record<string, typeof allBudgets> = {}
@@ -80,19 +87,22 @@ export async function calculateRolloverEfficient(
     const monthSpending = spendingByMonth[key] || {}
 
     const rolloverEnabledCategories = monthBudgets
-      .filter((b: any) => b.enable_rollover !== false)
+      .filter((b: any) => b.enable_rollover !== false || savingsGoalIds.has(b.category_id))
       .map((b: any) => b.category_id)
 
     const rolloverCategories = new Set([
       ...rolloverEnabledCategories,
       ...Object.keys(rollover),
+      ...savingsGoalIds,  // savings goals stay in chain even if chain was broken
     ])
 
     const nextRollover: Record<string, number> = {}
 
     for (const catId of rolloverCategories) {
       const budget = monthBudgets.find((b: any) => b.category_id === catId)
-      const rolloverEnabled = budget ? budget.enable_rollover !== false : true
+      const rolloverEnabled = budget
+        ? (budget.enable_rollover !== false || savingsGoalIds.has(catId))
+        : true
       if (!rolloverEnabled) continue
 
       const budgetAmount = budget?.amount ? Number(budget.amount) : 0
