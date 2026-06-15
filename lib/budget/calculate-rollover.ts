@@ -1,16 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
-/**
- * Efficient rollover calculation using only 2 DB queries.
- * Looks back up to 12 months and forward-accumulates rollover.
- */
 export async function calculateRolloverEfficient(
   supabase: SupabaseClient,
   userId: string,
   month: number,
   year: number
 ): Promise<Record<string, number>> {
-  // Build 12-month lookback window
+  // Build 12-month lookback window (excludes current month)
   const months: { month: number; year: number }[] = []
   let m = month
   let y = year
@@ -25,7 +21,6 @@ export async function calculateRolloverEfficient(
   const dateEnd = `${year}-${String(month).padStart(2, '0')}-01`
   const yearsInRange = [...new Set(months.map((m) => m.year))]
 
-  // 3 parallel queries instead of 12+ recursive ones
   const [budgetsResult, transactionsResult, categoriesResult] = await Promise.all([
     supabase
       .from('budgets')
@@ -48,7 +43,7 @@ export async function calculateRolloverEfficient(
   const allBudgets = budgetsResult.data || []
   const allTransactions = transactionsResult.data || []
 
-  // Savings goal categories always accumulate rollover regardless of enable_rollover on the budget record
+  // Savings goal categories use the bank account model (simple running total)
   const savingsGoalCategoryIds = new Set(
     (categoriesResult.data || []).filter((c: any) => c.is_rollover).map((c: any) => c.id)
   )
@@ -80,7 +75,7 @@ export async function calculateRolloverEfficient(
     }
   }
 
-  // Forward pass accumulation
+  // Forward-pass rollover for regular (non-savings-goal) categories
   let rollover: Record<string, number> = {}
 
   for (const { month: m, year: y } of months) {
@@ -89,7 +84,7 @@ export async function calculateRolloverEfficient(
     const monthSpending = spendingByMonth[key] || {}
 
     const rolloverEnabledCategories = monthBudgets
-      .filter((b: any) => savingsGoalCategoryIds.has(b.category_id) || b.enable_rollover !== false)
+      .filter((b: any) => !savingsGoalCategoryIds.has(b.category_id) && b.enable_rollover !== false)
       .map((b: any) => b.category_id)
 
     const rolloverCategories = new Set([
@@ -100,8 +95,9 @@ export async function calculateRolloverEfficient(
     const nextRollover: Record<string, number> = {}
 
     for (const catId of rolloverCategories) {
+      if (savingsGoalCategoryIds.has(catId)) continue
       const budget = monthBudgets.find((b: any) => b.category_id === catId)
-      const rolloverEnabled = savingsGoalCategoryIds.has(catId) || (budget ? budget.enable_rollover !== false : true)
+      const rolloverEnabled = budget ? budget.enable_rollover !== false : true
       if (!rolloverEnabled) continue
 
       const budgetAmount = budget?.amount ? Number(budget.amount) : 0
@@ -115,6 +111,24 @@ export async function calculateRolloverEfficient(
     }
 
     rollover = nextRollover
+  }
+
+  // Bank account model for savings goals: running total with no month-boundary resets.
+  // Balance = sum(all contributions) - sum(all spending) over the lookback window.
+  for (const catId of savingsGoalCategoryIds) {
+    let totalContributions = 0
+    let totalSpending = 0
+
+    for (const { month: m, year: y } of months) {
+      const key = `${y}-${m}`
+      const budget = (budgetsByMonth[key] || []).find((b: any) => b.category_id === catId)
+      const monthSpending = spendingByMonth[key] || {}
+
+      totalContributions += budget?.amount ? Number(budget.amount) : 0
+      totalSpending += Math.max(0, monthSpending[catId] || 0)
+    }
+
+    rollover[catId] = totalContributions - totalSpending
   }
 
   return rollover
