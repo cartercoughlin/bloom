@@ -109,7 +109,7 @@ export async function calculateRolloverEfficient(
       const prevRollover = rollover[catId] || 0
       const remaining = budgetAmount + prevRollover - spent
 
-      if (remaining > 0) {
+      if (remaining !== 0) {
         nextRollover[catId] = remaining
       }
     }
