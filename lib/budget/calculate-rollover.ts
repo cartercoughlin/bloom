@@ -25,8 +25,8 @@ export async function calculateRolloverEfficient(
   const dateEnd = `${year}-${String(month).padStart(2, '0')}-01`
   const yearsInRange = [...new Set(months.map((m) => m.year))]
 
-  // 2 parallel queries instead of 12+ recursive ones
-  const [budgetsResult, transactionsResult] = await Promise.all([
+  // 3 parallel queries instead of 12+ recursive ones
+  const [budgetsResult, transactionsResult, categoriesResult] = await Promise.all([
     supabase
       .from('budgets')
       .select('category_id, amount, enable_rollover, month, year')
@@ -39,10 +39,19 @@ export async function calculateRolloverEfficient(
       .gte('date', dateStart)
       .lt('date', dateEnd)
       .not('deleted', 'eq', true),
+    supabase
+      .from('categories')
+      .select('id, is_rollover')
+      .eq('user_id', userId),
   ])
 
   const allBudgets = budgetsResult.data || []
   const allTransactions = transactionsResult.data || []
+
+  // Savings goal categories always accumulate rollover regardless of enable_rollover on the budget record
+  const savingsGoalCategoryIds = new Set(
+    (categoriesResult.data || []).filter((c: any) => c.is_rollover).map((c: any) => c.id)
+  )
 
   // Index budgets by month
   const budgetsByMonth: Record<string, typeof allBudgets> = {}
@@ -80,7 +89,7 @@ export async function calculateRolloverEfficient(
     const monthSpending = spendingByMonth[key] || {}
 
     const rolloverEnabledCategories = monthBudgets
-      .filter((b: any) => b.enable_rollover !== false)
+      .filter((b: any) => savingsGoalCategoryIds.has(b.category_id) || b.enable_rollover !== false)
       .map((b: any) => b.category_id)
 
     const rolloverCategories = new Set([
@@ -92,7 +101,7 @@ export async function calculateRolloverEfficient(
 
     for (const catId of rolloverCategories) {
       const budget = monthBudgets.find((b: any) => b.category_id === catId)
-      const rolloverEnabled = budget ? budget.enable_rollover !== false : true
+      const rolloverEnabled = savingsGoalCategoryIds.has(catId) || (budget ? budget.enable_rollover !== false : true)
       if (!rolloverEnabled) continue
 
       const budgetAmount = budget?.amount ? Number(budget.amount) : 0
