@@ -3,11 +3,12 @@
 import { memo, useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChevronRight, History, Loader2 } from "lucide-react"
+import { ChevronRight, History, Info, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PrivateAmount } from "@/components/private-amount"
 import { usePrivacy } from "@/contexts/privacy-context"
@@ -43,11 +44,14 @@ interface AccountEstimate {
   firstTransaction: string | null
 }
 
+// Range length in months; ALL shows every point the history API returns
+const ALL = 0
 const RANGES = [
   { label: "3M", months: 3 },
   { label: "6M", months: 6 },
   { label: "1Y", months: 12 },
   { label: "2Y", months: 24 },
+  { label: "All", months: ALL },
 ] as const
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
@@ -104,7 +108,7 @@ async function fetchNetWorth(): Promise<NetWorthData> {
   }
 
   // History is rebuilt backwards from exactly these balances, so it ends at today's numbers
-  const historyRes = await fetch("/api/net-worth-history?months=24", {
+  const historyRes = await fetch("/api/net-worth-history?months=120", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ accounts }),
@@ -124,12 +128,14 @@ async function fetchNetWorth(): Promise<NetWorthData> {
 
 function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" }) {
   const { privacyMode } = usePrivacy()
-  const [months, setMonths] = useState<number>(variant === "card" ? 6 : 12)
+  // The dashboard card has no range picker, so it shows all available history
+  const [months, setMonths] = useState<number>(variant === "card" ? ALL : 12)
   const fetcher = useCallback(fetchNetWorth, [])
-  const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v3`, fetcher)
+  const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v4`, fetcher)
 
   const dailyPoints = useMemo(() => {
     if (!data) return []
+    if (months === ALL) return data.points
     const cutoff = new Date()
     cutoff.setMonth(cutoff.getMonth() - months)
     return data.points.filter(p => parseDate(p.date) >= cutoff)
@@ -138,11 +144,19 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
   // Plot weekly averages: daily closes jump on every payday and bill
   const points = useMemo(() => weeklyAverages(dailyPoints), [dailyPoints])
 
-  // One x-axis label per month, at its first data point
-  const monthTicks = useMemo(
-    () => points.filter((p, i) => i === 0 || p.date.slice(0, 7) !== points[i - 1].date.slice(0, 7)).map(p => p.date),
-    [points]
-  )
+  // X-axis labels at the first data point of a month: every month for a
+  // year or less, then quarterly, then every January. Longer spans show the year.
+  const spanMonths = points.length > 1
+    ? (parseDate(points[points.length - 1].date).getTime() - parseDate(points[0].date).getTime()) / (30.44 * 86_400_000)
+    : 0
+  const showYear = spanMonths > 13
+  const monthTicks = useMemo(() => {
+    const step = spanMonths <= 13 ? 1 : spanMonths <= 30 ? 3 : 12
+    return points
+      .filter((p, i) => i === 0 || p.date.slice(0, 7) !== points[i - 1].date.slice(0, 7))
+      .filter((p, i) => i === 0 || (Number(p.date.slice(5, 7)) - 1) % step === 0)
+      .map(p => p.date)
+  }, [points, spanMonths])
 
   const yTicks = useMemo(() => zeroBasedTicks(points.map(p => p.netWorth)), [points])
 
@@ -151,51 +165,85 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
   const first = points[0]
   const change = latest && first && points.length > 1 ? latest.netWorth - first.netWorth : null
   const changePct = change !== null && first.netWorth !== 0 ? (change / Math.abs(first.netWorth)) * 100 : null
-  const rangeLabel = RANGES.find(r => r.months === months)?.label ?? `${months}M`
+  // When history starts after the range does, say so instead of claiming the full range
+  const rangeStart = new Date()
+  rangeStart.setMonth(rangeStart.getMonth() - months)
+  rangeStart.setDate(rangeStart.getDate() + 7)
+  const rangeLabel = dailyPoints[0] && (months === ALL || parseDate(dailyPoints[0].date) > rangeStart)
+    ? `since ${parseDate(dailyPoints[0].date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
+    : RANGES.find(r => r.months === months)?.label ?? `${months}M`
 
+  // How past values are estimated, behind the ⓘ next to the title
+  const estimated = data?.hasAccounts && points.some(p => p.estimated)
   const header = (
     <CardHeader className="pb-2">
-      <div className="flex items-start justify-between gap-2">
-        <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
           <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
-          {latest ? (
-            <div className="mt-1">
-              <PrivateAmount amount={latest.netWorth} decimals={0} className="text-2xl font-bold tabular-nums" />
-              {change !== null && (
-                <span className={cn("ml-2 text-xs font-medium", change >= 0 ? "text-green-600" : "text-red-600")}>
-                  <PrivateAmount amount={change} decimals={0} showSign />
-                  {changePct !== null && !privacyMode && ` (${changePct >= 0 ? "+" : ""}${changePct.toFixed(1)}%)`}
-                  <span className="text-muted-foreground font-normal"> · {rangeLabel}</span>
-                </span>
-              )}
-            </div>
-          ) : (
-            <CardDescription className="text-xs md:text-sm">Assets minus liabilities over time</CardDescription>
+          {estimated && data && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="-m-1.5 p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="How net worth history is estimated"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" collisionPadding={16} className="w-72 space-y-2 text-xs leading-snug text-muted-foreground">
+                <p>
+                  Past values are estimated by working back from today&apos;s balances through your transactions.
+                  {data.investmentAccountNames.length > 0 && (
+                    <> {data.investmentAccountNames.join(", ")} only {data.investmentAccountNames.length === 1 ? "reflects" : "reflect"} deposits and withdrawals{data.investmentTransferCount > 0 ? ` (${data.investmentTransferCount} found)` : ""}, not market gains or losses.</>
+                  )}
+                </p>
+                {data.coverageStart && (
+                  <p>History starts {formatMonth(data.coverageStart)}, the earliest date every account has transactions.</p>
+                )}
+              </PopoverContent>
+            </Popover>
           )}
         </div>
-        {variant === "card" ? (
+        {variant === "card" && (
           <Link href="/net-worth" className="flex items-center text-xs font-medium text-green-600 flex-shrink-0">
             Details <ChevronRight className="h-3 w-3" />
           </Link>
-        ) : (
-          <div className="flex rounded-lg bg-muted p-0.5 flex-shrink-0" role="tablist" aria-label="Time range">
-            {RANGES.map(r => (
-              <button
-                key={r.label}
-                role="tab"
-                aria-selected={months === r.months}
-                onClick={() => setMonths(r.months)}
-                className={cn(
-                  "px-2.5 py-1 text-xs font-medium rounded-md transition-colors",
-                  months === r.months ? "bg-background shadow-sm" : "text-muted-foreground"
-                )}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
         )}
       </div>
+      {latest ? (
+        // Wraps onto two lines on narrow screens instead of pushing past the card
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <PrivateAmount amount={latest.netWorth} decimals={0} className="text-2xl font-bold tabular-nums" />
+          {change !== null && (
+            <span className={cn("text-xs font-medium", change >= 0 ? "text-green-600" : "text-red-600")}>
+              <PrivateAmount amount={change} decimals={0} showSign />
+              {changePct !== null && !privacyMode && ` (${changePct >= 0 ? "+" : ""}${changePct.toFixed(1)}%)`}
+              <span className="text-muted-foreground font-normal"> · {rangeLabel}</span>
+            </span>
+          )}
+        </div>
+      ) : (
+        <CardDescription className="text-xs md:text-sm">Assets minus liabilities over time</CardDescription>
+      )}
+      {variant === "full" && (
+        <div className="grid grid-cols-5 rounded-lg bg-muted p-0.5 sm:w-72" role="tablist" aria-label="Time range">
+          {RANGES.map(r => (
+            <button
+              key={r.label}
+              role="tab"
+              aria-selected={months === r.months}
+              onClick={() => setMonths(r.months)}
+              className={cn(
+                "py-1 text-xs font-medium rounded-md transition-colors",
+                months === r.months ? "bg-background shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
     </CardHeader>
   )
 
@@ -253,7 +301,11 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
                 ticks={monthTicks}
                 interval="preserveStartEnd"
                 minTickGap={16}
-                tickFormatter={(d) => parseDate(d).toLocaleDateString("en-US", { month: "short" })}
+                tickFormatter={(d) => {
+                  const date = parseDate(d)
+                  const month = date.toLocaleDateString("en-US", { month: "short" })
+                  return showYear ? `${month} '${String(date.getFullYear()).slice(2)}` : month
+                }}
                 className="text-[10px] md:text-xs"
               />
               <YAxis
@@ -304,14 +356,6 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
               />
             </AreaChart>
           </ChartContainer>
-        )}
-        {points.some(p => p.estimated) && data && (
-          <p className="mt-2 px-1 text-[11px] leading-snug text-muted-foreground">
-            Past values are estimated by working back from today's balances through your transactions.
-            {data.investmentAccountNames.length > 0 && (
-              <> {data.investmentAccountNames.join(", ")} only {data.investmentAccountNames.length === 1 ? "reflects" : "reflect"} deposits and withdrawals{data.investmentTransferCount > 0 ? ` (${data.investmentTransferCount} found)` : ""}, not market gains or losses.</>
-            )}
-          </p>
         )}
         {variant === "full" && data?.hasAccounts && <HistoryDetails data={data} />}
       </CardContent>
@@ -377,10 +421,7 @@ function HistoryDetails({ data }: { data: NetWorthData }) {
 
   return (
     <div className="mt-3 space-y-2 px-1">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">
-          {data.coverageStart ? <>History starts {formatMonth(data.coverageStart)}, the earliest date every account has transactions.</> : null}
-        </p>
+      <div>
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={loadOlderHistory} disabled={progress !== null}>
           {progress ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <History className="mr-1 h-3 w-3" />}
           {progress ?? "Load older history"}

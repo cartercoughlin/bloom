@@ -6,10 +6,13 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
 /**
- * Vercel Cron Job: Daily transaction sync
+ * Vercel Cron Job: Daily transaction and balance sync
  * Runs at 2 AM UTC every day
  *
- * This is a server-side backup to the client-side auto-sync
+ * For each connection, syncs transactions and/or balances per its settings.
+ * Each balance sync records the day's balance snapshot for the net worth
+ * chart. Balances come from /accounts/get (Plaid's cached balances, free;
+ * refreshed by Plaid about daily), not the paid live /accounts/balance/get.
  */
 export async function GET(request: Request) {
   try {
@@ -19,7 +22,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('[Cron] Starting daily transaction sync...');
+    console.log('[Cron] Starting daily transaction and balance sync...');
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -37,8 +40,8 @@ export async function GET(request: Request) {
     // Get all users with Plaid items
     const { data: plaidItems, error: plaidError } = await supabase
       .from('plaid_items')
-      .select('user_id, access_token, sync_transactions')
-      .eq('sync_transactions', true);
+      .select('user_id, access_token, sync_transactions, sync_balances')
+      .or('sync_transactions.eq.true,sync_balances.eq.true');
 
     if (plaidError) {
       console.error('[Cron] Database error:', plaidError);
@@ -65,23 +68,25 @@ export async function GET(request: Request) {
 
     let totalSyncedUsers = 0;
     let totalNewTransactions = 0;
+    let totalSyncedAccounts = 0;
     const errors: string[] = [];
 
     // Sync for each user
     for (const [userId, items] of Object.entries(userGroups)) {
       try {
-        console.log(`[Cron] Syncing transactions for user ${userId}...`);
+        console.log(`[Cron] Syncing user ${userId}...`);
 
         for (const item of items) {
           const result = await syncPlaidTransactions(item.access_token, {
             userId,
             supabaseClient: supabase,
-            syncTransactions: true,
-            syncBalances: false,
+            syncTransactions: item.sync_transactions === true,
+            syncBalances: item.sync_balances === true,
           });
 
           if (result.success) {
             totalNewTransactions += result.newTransactions;
+            totalSyncedAccounts += result.syncedAccounts || 0;
           } else {
             errors.push(`User ${userId}: ${result.error}`);
           }
@@ -94,12 +99,13 @@ export async function GET(request: Request) {
       }
     }
 
-    console.log(`[Cron] Daily sync complete. Synced ${totalSyncedUsers} users, ${totalNewTransactions} new transactions`);
+    console.log(`[Cron] Daily sync complete. Synced ${totalSyncedUsers} users, ${totalNewTransactions} new transactions, ${totalSyncedAccounts} account balances`);
 
     return NextResponse.json({
       success: errors.length === 0,
       syncedUsers: totalSyncedUsers,
       newTransactions: totalNewTransactions,
+      syncedAccounts: totalSyncedAccounts,
       errors: errors.length > 0 ? errors : undefined,
     });
   } catch (error) {

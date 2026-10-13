@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
 export function MobileNav() {
   const pathname = usePathname()
 
-  const navItems = [
+  const navItems: { href: string; label: string; icon: typeof Home; also?: string[] }[] = [
     {
       href: "/dashboard",
       label: "Dashboard",
@@ -28,6 +28,8 @@ export function MobileNav() {
       href: "/accounts",
       label: "Accounts",
       icon: CreditCard,
+      // Net Worth opens from the Accounts tab, so keep the tab lit there
+      also: ["/net-worth"],
     },
     {
       href: "/settings",
@@ -45,7 +47,7 @@ export function MobileNav() {
       <div className="flex items-stretch h-[50px]">
         {navItems.map((item) => {
           const Icon = item.icon
-          const isActive = pathname?.startsWith(item.href)
+          const isActive = [item.href, ...(item.also || [])].some(href => pathname?.startsWith(href))
 
           return (
             <Link

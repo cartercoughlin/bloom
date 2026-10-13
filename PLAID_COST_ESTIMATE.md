@@ -58,7 +58,7 @@ Plaid uses a **per-product pricing model** based on API usage:
 
 #### Product Pricing (Actual Plaid Rates)
 - **Auth:** $1.50 per initial call (one-time when connecting account)
-- **Balance:** $0.10 per call (each time you fetch balances)
+- **Balance:** $0.10 per call to `/accounts/balance/get` (live, real-time balances). **Bloom doesn't use this endpoint.** Balance syncs call `/accounts/get`, which is free for Items with Transactions and returns Plaid's cached balances (refreshed about once a day).
 - **Transactions:** $0.30 per connected account/month (recurring)
 - **Investments Holdings:** $0.18 per connected account/month
 - **Investments Transactions:** $0.35 per connected account/month
@@ -93,18 +93,15 @@ Plaid uses a **per-product pricing model** based on API usage:
 
 **Calculated Monthly Costs:**
 - **Transactions product:** 12 accounts × $0.30 = **$3.60/month**
-- **Balance syncs:**
-  - Manual/monthly: 12 × 1 × $0.10 = **$1.20/month**
-  - Weekly syncs: 12 × 4 × $0.10 = **$4.80/month**
-  - Daily syncs: 12 × 30 × $0.10 = **$36/month**
+- **Balance syncs:** **$0**. The nightly cron syncs balances with `/accounts/get` (free, cached) and records a daily balance snapshot for the net worth chart. Only the paid `/accounts/balance/get` (not used) would cost $0.10/call.
 - **Auth (one-time):** 12 × $1.50 = **$18** (already paid when connecting accounts)
 
-**Calculated Total:** **$5-40/month** (depending on sync frequency)
+**Calculated Total:** **~$3.60/month**
 
 **⚠️ IMPORTANT:** If you're on pay-as-you-go with a **$500/month minimum**, you're paying the minimum regardless.
 - Check your actual Plaid invoice to confirm if the minimum applies
-- If paying $500/month: You're using only 1-8% of what you're paying for
-- If paying actual usage: You're paying $5-40/month (very reasonable!)
+- If paying $500/month: You're using about 1% of what you're paying for
+- If paying actual usage: You're paying ~$3.60/month (very reasonable!)
 
 ### Scenario 2: Development/Testing
 - **Users:** Any number
@@ -115,24 +112,24 @@ Plaid uses a **per-product pricing model** based on API usage:
 ### Scenario 3: Small Business (50-100 users)
 - **Active accounts:** 100-300 connected accounts (assuming ~2-3 per user)
 - **Transactions:** 100-300 × $0.30 = **$30-$90/month**
-- **Balance syncs (weekly):** 100-300 × 4 × $0.10 = **$40-$120/month**
+- **Balance syncs:** $0 (`/accounts/get`)
 - **Auth (one-time/new users):** ~$1.50 per new user
-- **Calculated Total:** **$70-$210/month**
+- **Calculated Total:** **$30-$90/month**
 - **If $500 minimum applies:** You pay **$500/month**
 - **Break-even:** ~1,667 accounts to justify $500 minimum
 
 ### Scenario 4: Medium Business (200-500 users)
 - **Active accounts:** 400-1,000 connected accounts
 - **Transactions:** 400-1,000 × $0.30 = **$120-$300/month**
-- **Balance syncs (weekly):** 400-1,000 × 4 × $0.10 = **$160-$400/month**
-- **Calculated Total:** **$280-$700/month**
+- **Balance syncs:** $0 (`/accounts/get`)
+- **Calculated Total:** **$120-$300/month**
 - **Likely paying:** $500/month minimum (for lower end) or actual usage (for higher end)
 
 ### Scenario 5: Large Scale (1,000+ users)
 - **Active accounts:** 2,000+ connected accounts
 - **Transactions:** 2,000 × $0.30 = **$600+/month**
-- **Balance syncs (weekly):** 2,000 × 4 × $0.10 = **$800+/month**
-- **Calculated Total:** **$1,400+/month**
+- **Balance syncs:** $0 (`/accounts/get`)
+- **Calculated Total:** **$600+/month**
 - **At this scale:** Negotiate custom/enterprise pricing for discounts
 
 ---
@@ -165,7 +162,7 @@ Per connected account:
 - `accountsGet` - 1 call
 
 **API Calls:** 1 call per Item per sync
-**Cost:** Included in monthly Item fee
+**Cost:** Free (`/accounts/get` returns cached balances; only the live `/accounts/balance/get` is billed per call). Runs nightly with the transaction sync.
 
 ---
 
@@ -279,21 +276,21 @@ Contact Plaid or check your Plaid Dashboard to see:
 - **Active accounts:** 12 connected accounts
 - **Calculated monthly cost:**
   - Transactions: $3.60/month
-  - Balance syncs: $1.20-$36/month (depending on frequency)
-  - **Total: $5-40/month**
+  - Balance syncs: $0 (nightly, via free `/accounts/get`)
+  - **Total: ~$3.60/month**
 
-**Critical Question:** Are you paying $500/month (minimum) or actual usage ($5-40)?
+**Critical Question:** Are you paying $500/month (minimum) or actual usage (~$3.60)?
 - **Check your Plaid invoice** to see if the minimum commitment applies
-- If paying **$500/month**: You're using only 1-8% of what you're paying for (not cost-effective)
-- If paying **$5-40/month**: This is very reasonable for personal use! (cost-effective)
+- If paying **$500/month**: You're using about 1% of what you're paying for (not cost-effective)
+- If paying **~$3.60/month**: This is very reasonable for personal use! (cost-effective)
 
 ### Cost Breakdown by Scale (With Actual Pricing)
 
-**Assuming weekly balance syncs:**
-- **Personal use (12 accounts):** $5-8/month calculated, **but may pay $500 minimum** ⚠️
-- **Small business (100-300 accounts):** $70-210/month calculated, **likely pay $500 minimum**
-- **Medium scale (400-800 accounts):** $280-560/month - may exceed minimum
-- **Large scale (1,000+ accounts):** $700-1,400+/month - definitely paying actual usage
+**Balance syncs are free (`/accounts/get`), so only Transactions counts:**
+- **Personal use (12 accounts):** ~$3.60/month calculated, **but may pay $500 minimum** ⚠️
+- **Small business (100-300 accounts):** $30-90/month calculated, **likely pay $500 minimum**
+- **Medium scale (400-1,000 accounts):** $120-300/month - likely pay $500 minimum
+- **Large scale (2,000+ accounts):** $600+/month - paying actual usage
 
 ### Alternatives for Personal Use
 

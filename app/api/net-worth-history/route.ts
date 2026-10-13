@@ -11,7 +11,7 @@ import {
 const localDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-// POST /api/net-worth-history?months=24[&group=month]
+// POST /api/net-worth-history?months=120[&group=month]
 // Body: { accounts: [{ plaid_account_id, account_name, account_type, balance }] }
 //   (the live balances the page shows, so history ends exactly at them)
 // GET falls back to the stored account_balances rows.
@@ -37,7 +37,8 @@ async function buildHistory(request: NextRequest, providedAccounts: CurrentAccou
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const months = Math.min(24, Math.max(1, Number(request.nextUrl.searchParams.get('months')) || 24))
+    // Up to 10 years; history starts at the oldest transaction or snapshot anyway
+    const months = Math.min(120, Math.max(1, Number(request.nextUrl.searchParams.get('months')) || 24))
     const now = new Date()
     const today = localDate(now)
     const start = new Date(now)

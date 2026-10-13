@@ -149,6 +149,10 @@ export function reconstructNetWorth({
   for (const [key, first] of firstTxDate) {
     if ((txCount.get(key) || 0) >= MIN_TX_FOR_COVERAGE && first > coverageStart) coverageStart = first
   }
+  // ...and no further back than the oldest data at all, so a wide window
+  // doesn't draw years of flat line before the first transaction or snapshot
+  const oldestData = [...firstTxDate.values(), ...snapshots.map(s => s.snapshot_date)].sort()[0] || today
+  if (coverageStart < oldestData) coverageStart = oldestData
   if (coverageStart > today) coverageStart = today
 
   const snapshotsByDay = new Map<string, Map<string, number>>()
