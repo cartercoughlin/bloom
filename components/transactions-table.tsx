@@ -4,47 +4,29 @@ import { useState, useMemo, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
-import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat, Trash2, AlertCircle, ChevronDown, ChevronUp, Search, ListChecks } from "lucide-react"
+import { CalendarIcon, Filter, X, Upload, EyeOff, Eye, Repeat, AlertCircle, ChevronDown, ChevronUp, Search, ListChecks } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import { CategoryPicker } from "./category-picker"
+import { TransactionDetails } from "./transaction-details"
+import { TransactionAvatar } from "./transaction-avatar"
 import Link from "next/link"
 import { PrivateAmount } from "./private-amount"
 import { cn } from "@/lib/utils"
+import { haptics } from "@/lib/capacitor"
+import {
+  Category,
+  Transaction,
+  accountLabel,
+  displayName,
+  locationLabel,
+  parseLocalDate,
+} from "@/lib/transaction-display"
 
-export interface Transaction {
-  id: string
-  date: string
-  description: string
-  amount: number
-  transaction_type: "credit" | "debit"
-  bank: string
-  category_id?: string | null
-  hidden?: boolean
-  recurring?: boolean
-  merchant_name?: string | null
-  logo_url?: string | null
-  website?: string | null
-  category_detailed?: string | null
-  categories?: {
-    name: string
-    color: string
-    icon?: string
-  } | null
-}
-
-export interface Category {
-  id: string
-  name: string
-  color: string
-  icon?: string
-}
+export type { Category, Transaction } from "@/lib/transaction-display"
 
 interface TransactionsTableProps {
   transactions: Transaction[]
@@ -55,20 +37,9 @@ interface TransactionsTableProps {
   onBudgetDataChanged: () => void
 }
 
-// Dates are stored as YYYY-MM-DD; `new Date("2024-03-05")` parses as UTC
-// midnight, which shows as the previous day in US timezones.
-function parseLocalDate(date: string): Date {
-  const [year, month, day] = date.slice(0, 10).split("-").map(Number)
-  return new Date(year, month - 1, day)
-}
-
 // Transactions from the same merchant, used for "apply to similar"
 function merchantKey(tx: Transaction): string {
   return (tx.merchant_name || tx.description).trim().toLowerCase()
-}
-
-function displayName(tx: Transaction): string {
-  return tx.merchant_name || tx.description
 }
 
 async function bulkUpdate(transactionIds: string[], updates: { categoryId?: string | null; hidden?: boolean }) {
@@ -138,7 +109,7 @@ export function TransactionsTable({
 
       if (search) {
         const categoryName = tx.category_id ? categoriesById.get(tx.category_id)?.name : ""
-        const haystack = [tx.description, tx.merchant_name, tx.bank, categoryName]
+        const haystack = [tx.description, tx.merchant_name, tx.bank, tx.account_name, categoryName, tx.plaid_details?.location?.city]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -203,10 +174,13 @@ export function TransactionsTable({
         const before = previous.get(tx.id)
         return before ? { ...tx, ...before } : tx
       }))
+      haptics.error()
       toast.error(error instanceof Error ? error.message : "Failed to update category")
       return false
     }
 
+    if (ids.length === 1) haptics.light()
+    else haptics.success()
     onBudgetDataChanged()
 
     // Teach the auto-categorizer from single, deliberate assignments
@@ -282,6 +256,7 @@ export function TransactionsTable({
     try {
       const response = await fetch(`/api/transactions/${transactionId}`, { method: "DELETE" })
       if (!response.ok) throw new Error()
+      haptics.warning()
       onTransactionsChange(prev => prev.filter(tx => tx.id !== transactionId))
       setSelectedTransactionId(null)
       onBudgetDataChanged()
@@ -295,6 +270,7 @@ export function TransactionsTable({
   }
 
   const toggleSelected = (id: string) => {
+    haptics.light()
     setSelectedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -603,7 +579,7 @@ export function TransactionsTable({
 
       {/* Bulk actions */}
       {selectMode && (
-        <div className="fixed left-4 right-4 bottom-[5.5rem] md:bottom-6 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[32rem] z-40 rounded-xl border bg-background shadow-lg p-2 flex items-center gap-2">
+        <div className="fixed left-4 right-4 bottom-[calc(58px+env(safe-area-inset-bottom))] md:bottom-6 md:left-1/2 md:right-auto md:-translate-x-1/2 md:w-[32rem] z-40 rounded-xl border bg-background shadow-lg p-2 flex items-center gap-2">
           <span className="text-sm font-medium px-2 flex-1">
             {selectedIds.size} selected
           </span>
@@ -639,111 +615,16 @@ export function TransactionsTable({
         </div>
       )}
 
-      {/* Transaction Detail Modal */}
-      <Dialog open={!!selectedTransaction} onOpenChange={(open) => { if (!open) setSelectedTransactionId(null) }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Transaction Details</DialogTitle>
-          </DialogHeader>
-          {selectedTransaction && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                {selectedTransaction.logo_url && (
-                  <img
-                    src={selectedTransaction.logo_url}
-                    alt={displayName(selectedTransaction)}
-                    className="w-8 h-8 rounded-full object-cover"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none'
-                    }}
-                  />
-                )}
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-medium">{displayName(selectedTransaction)}</h3>
-                  {selectedTransaction.merchant_name && selectedTransaction.description !== selectedTransaction.merchant_name && (
-                    <p className="text-sm text-muted-foreground">{selectedTransaction.description}</p>
-                  )}
-                  <p className="text-sm text-muted-foreground">
-                    {selectedTransaction.bank} · {parseLocalDate(selectedTransaction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
-                </div>
-                <PrivateAmount
-                  amount={selectedTransaction.amount}
-                  type={selectedTransaction.transaction_type}
-                  className={`text-lg font-semibold ${
-                    selectedTransaction.transaction_type === "credit" ? "text-green-600" : "text-red-600"
-                  }`}
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium">Category</label>
-                <div className="mt-1">
-                  <CategoryPicker
-                    categories={categories}
-                    value={selectedTransaction.category_id}
-                    suggestionFor={{
-                      transactionId: selectedTransaction.id,
-                      description: selectedTransaction.description,
-                      amount: selectedTransaction.amount,
-                    }}
-                    onSelect={(categoryId, created) => handleSingleCategorize(selectedTransaction, categoryId, created)}
-                    onCategoryCreated={handleCategoryCreated}
-                  />
-                </div>
-                {selectedTransaction.category_detailed && (
-                  <p className="text-xs text-muted-foreground mt-1">{selectedTransaction.category_detailed}</p>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant={selectedTransaction.recurring ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleToggleRecurring(selectedTransaction)}
-                  className="flex-1"
-                >
-                  <Repeat className="mr-2 h-4 w-4" />
-                  {selectedTransaction.recurring ? "Recurring" : "Mark Recurring"}
-                </Button>
-                <Button
-                  variant={selectedTransaction.hidden ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setHidden([selectedTransaction.id], !selectedTransaction.hidden)}
-                  className="flex-1"
-                >
-                  {selectedTransaction.hidden ? <Eye className="mr-2 h-4 w-4" /> : <EyeOff className="mr-2 h-4 w-4" />}
-                  {selectedTransaction.hidden ? "Show" : "Hide"}
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm">
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Transaction?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to delete this transaction? This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => handleDeleteTransaction(selectedTransaction.id)}
-                        className="bg-destructive text-white hover:bg-destructive/90"
-                      >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <TransactionDetails
+        transaction={selectedTransaction}
+        categories={categories}
+        onClose={() => setSelectedTransactionId(null)}
+        onCategorize={handleSingleCategorize}
+        onCategoryCreated={handleCategoryCreated}
+        onToggleRecurring={handleToggleRecurring}
+        onToggleHidden={(tx) => setHidden([tx.id], !tx.hidden)}
+        onDelete={(tx) => handleDeleteTransaction(tx.id)}
+      />
     </div>
   )
 }
@@ -767,63 +648,60 @@ function TransactionRow({
   onCategorize: (categoryId: string | null, created?: Category) => void
   onCategoryCreated: (category: Category) => void
 }) {
+  const pending = tx.plaid_details?.pending
+  const meta = [
+    showDate ? parseLocalDate(tx.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null,
+    accountLabel(tx),
+    locationLabel(tx.plaid_details),
+  ].filter(Boolean).join(" · ")
+
   return (
     <div
       className={cn(
-        "flex items-center gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer transition-colors",
+        "flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors hover:bg-muted/50 active:bg-muted",
         selected && "border-primary bg-primary/5",
         tx.hidden && "opacity-60"
       )}
       onClick={onClick}
     >
       {selectMode && (
-        <Checkbox checked={selected} className="flex-shrink-0 pointer-events-none" aria-label="Select transaction" />
+        <Checkbox checked={selected} className="mt-2.5 flex-shrink-0 pointer-events-none" aria-label="Select transaction" />
       )}
 
-      {tx.logo_url && (
-        <img
-          src={tx.logo_url}
-          alt={displayName(tx)}
-          loading="lazy"
-          className="hidden md:block w-8 h-8 rounded-full object-cover flex-shrink-0"
-          onError={(e) => {
-            e.currentTarget.style.display = 'none'
-          }}
-        />
-      )}
+      <TransactionAvatar transaction={tx} categories={categories} />
 
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span
-              className="font-medium text-sm md:text-base truncate"
-              title={tx.merchant_name && tx.description !== tx.merchant_name ? tx.description : undefined}
-            >
-              {displayName(tx)}
-            </span>
-            {showDate && (
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                {parseLocalDate(tx.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-              </span>
-            )}
-            {tx.recurring && (
-              <Badge variant="outline" className="text-xs px-1 py-0 h-5 flex-shrink-0">
-                <Repeat className="h-3 w-3" />
-              </Badge>
-            )}
-            {tx.hidden && <EyeOff className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
-          </div>
+        <div className="flex items-baseline justify-between gap-2">
+          <span
+            className="font-medium text-[15px] truncate"
+            title={tx.description !== displayName(tx) ? tx.description : undefined}
+          >
+            {displayName(tx)}
+          </span>
           <PrivateAmount
             amount={tx.amount}
             type={tx.transaction_type}
-            className={`text-sm md:text-base font-semibold flex-shrink-0 ${
-              tx.transaction_type === "credit" ? "text-green-600" : "text-red-600"
-            }`}
+            className={cn(
+              "text-[15px] font-semibold flex-shrink-0 tabular-nums",
+              tx.transaction_type === "credit" ? "text-green-600" : "text-foreground",
+              pending && "text-muted-foreground"
+            )}
           />
         </div>
 
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground min-w-0">
+          {pending && (
+            <span className="flex-shrink-0 rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-700 dark:text-amber-400">
+              Pending
+            </span>
+          )}
+          {tx.recurring && <Repeat className="h-3 w-3 flex-shrink-0" aria-label="Recurring" />}
+          {tx.hidden && <EyeOff className="h-3 w-3 flex-shrink-0" aria-label="Hidden" />}
+          <span className="truncate">{meta}</span>
+        </div>
+
         {!selectMode && (
-          <div className="mt-2 flex items-center gap-2 min-w-0">
+          <div className="mt-1.5">
             <CategoryPicker
               categories={categories}
               value={tx.category_id}
@@ -831,9 +709,6 @@ function TransactionRow({
               onSelect={onCategorize}
               onCategoryCreated={onCategoryCreated}
             />
-            {tx.category_detailed && (
-              <span className="text-xs text-muted-foreground truncate">{tx.category_detailed}</span>
-            )}
           </div>
         )}
       </div>

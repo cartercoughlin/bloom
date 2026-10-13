@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
   website TEXT,
   category_detailed TEXT,
   personal_finance_category TEXT,
+  plaid_details JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 

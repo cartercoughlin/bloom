@@ -16,6 +16,13 @@ supabase db execute --file migrations/fix-account-balances-constraint.sql
 
 ## Available Migrations
 
+### add-plaid-details.sql
+**Purpose:** Store extra Plaid transaction details (pending status, location, payment channel, detailed category, counterparties) shown on transaction rows
+
+**Notes:**
+- Safe to run anytime; sync skips these details until the column exists
+- Transactions from the last 30 days are backfilled on the next sync
+
 ### fix-account-balances-constraint.sql
 **Purpose:** Fix constraint to allow multiple Plaid accounts with the same name
 

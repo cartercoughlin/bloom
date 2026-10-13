@@ -84,7 +84,7 @@ export default function RootLayout({
           <PrivacyProvider>
             {children}
           </PrivacyProvider>
-          <Toaster position="top-center" />
+          <Toaster position="top-center" offset="calc(env(safe-area-inset-top, 0px) + 12px)" />
         </ThemeProvider>
         <Analytics />
         <RegisterServiceWorker />

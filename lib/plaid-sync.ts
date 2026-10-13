@@ -5,7 +5,8 @@ import {
   AccountsGetRequest,
   TransactionsGetResponse,
   AccountsGetResponse,
-  InstitutionsGetByIdRequest
+  InstitutionsGetByIdRequest,
+  Transaction
 } from 'plaid'
 import { assignCategoryByRules } from './category-rules'
 
@@ -294,6 +295,41 @@ function getMerchantPrefix(description: string): string {
   return words.slice(0, Math.min(3, words.length)).join(' ')
 }
 
+// Extra Plaid fields shown on transaction rows, stored in transactions.plaid_details
+function buildPlaidDetails(transaction: Transaction) {
+  const location = transaction.location
+  const pfc = transaction.personal_finance_category
+  return {
+    pending: transaction.pending,
+    payment_channel: transaction.payment_channel || null,
+    authorized_date: transaction.authorized_date || null,
+    datetime: transaction.authorized_datetime || transaction.datetime || null,
+    location: location && (location.city || location.address || location.region)
+      ? {
+          address: location.address || null,
+          city: location.city || null,
+          region: location.region || null,
+          postal_code: location.postal_code || null,
+          store_number: location.store_number || null,
+        }
+      : null,
+    category_primary: pfc?.primary || null,
+    category_detailed: pfc?.detailed || null,
+    category_confidence: pfc?.confidence_level || null,
+    category_icon_url: transaction.personal_finance_category_icon_url || null,
+    counterparties: (transaction.counterparties || []).map(c => ({
+      name: c.name,
+      type: c.type,
+      logo_url: c.logo_url || null,
+      website: c.website || null,
+    })),
+    check_number: transaction.check_number || null,
+    account_owner: transaction.account_owner || null,
+    iso_currency_code: transaction.iso_currency_code || null,
+    original_name: transaction.name,
+  }
+}
+
 async function syncTransactionsForAccounts(accessToken: string, accounts: any[], userId: string, syncedAccountsCount: number, institutionName: string, supabaseClient?: any): Promise<SyncResult> {
   const supabase = supabaseClient || await createClient()
 
@@ -307,9 +343,17 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   const lookbackDate = new Date()
   lookbackDate.setDate(lookbackDate.getDate() - 90)
 
+  // plaid_details needs migrations/add-plaid-details.sql; keep syncing without it until it's applied
+  const { error: detailsColumnError } = await supabase.from('transactions').select('plaid_details').limit(1)
+  const storeDetails = !detailsColumnError
+  if (!storeDetails) {
+    console.warn('transactions.plaid_details column missing; run migrations/add-plaid-details.sql to store transaction details')
+  }
+  const lookupColumns = `id, plaid_transaction_id, date, description, amount, bank${storeDetails ? ', plaid_details' : ''}`
+
   const { data: existingTransactions } = await supabase
     .from('transactions')
-    .select('id, plaid_transaction_id, date, description, amount, bank, deleted')
+    .select(`${lookupColumns}, deleted`)
     .eq('user_id', userId)
     .gte('date', lookbackDate.toISOString().split('T')[0])
 
@@ -402,7 +446,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       if (!existingTransaction) {
         const { data: dbMatch } = await supabase
           .from('transactions')
-          .select('id, plaid_transaction_id, date, description, amount, bank')
+          .select(lookupColumns)
           .eq('user_id', userId)
           .eq('plaid_transaction_id', transaction.pending_transaction_id)
           .limit(1)
@@ -424,7 +468,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       if (!existingTransaction) {
         const { data: dbMatch } = await supabase
           .from('transactions')
-          .select('id, plaid_transaction_id, date, description, amount, bank')
+          .select(lookupColumns)
           .eq('user_id', userId)
           .eq('plaid_transaction_id', transaction.transaction_id)
           .limit(1)
@@ -472,6 +516,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
             description: transaction.original_description || transaction.name, // Update with final description
             amount: Math.abs(transaction.amount), // Update with final amount
             date: transaction.date, // Update with final date
+            ...(storeDetails ? { plaid_details: buildPlaidDetails(transaction) } : {}),
           })
           .eq('id', existingTransaction.id)
         updatedCount++
@@ -481,7 +526,18 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
         console.log('Backfilling Plaid ID for existing transaction:', existingTransaction.id)
         await supabase
           .from('transactions')
-          .update({ plaid_transaction_id: transaction.transaction_id })
+          .update({
+            plaid_transaction_id: transaction.transaction_id,
+            ...(storeDetails ? { plaid_details: buildPlaidDetails(transaction) } : {}),
+          })
+          .eq('id', existingTransaction.id)
+        updatedCount++
+      }
+      // One-time backfill of details, and refresh while a transaction is still pending
+      else if (storeDetails && (!existingTransaction.plaid_details || existingTransaction.plaid_details.pending)) {
+        await supabase
+          .from('transactions')
+          .update({ plaid_details: buildPlaidDetails(transaction) })
           .eq('id', existingTransaction.id)
         updatedCount++
       } else {
@@ -526,6 +582,7 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
       website: transaction.website || null,
       category_detailed: transaction.category?.join(' > ') || null,
       personal_finance_category: transaction.personal_finance_category?.primary || null,
+      ...(storeDetails ? { plaid_details: buildPlaidDetails(transaction) } : {}),
     }
 
     console.log('Inserting new transaction:', transactionData)
@@ -544,7 +601,8 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
         date: transaction.date,
         description: transactionData.description,
         amount: transactionData.amount,
-        bank: bankName
+        bank: bankName,
+        plaid_details: transactionData.plaid_details,
       }
 
       if (transaction.transaction_id) {

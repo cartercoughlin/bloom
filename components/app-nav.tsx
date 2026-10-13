@@ -64,11 +64,14 @@ export function AppNav() {
   ]
 
   return (
-    <nav className="border-b bg-background" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 8px)' }}>
-      <div className="container mx-auto flex h-16 items-center justify-between px-6">
+    <nav
+      className="sticky top-0 z-40 border-b border-border/60 bg-background/80 backdrop-blur-xl backdrop-saturate-150"
+      style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
+    >
+      <div className="container mx-auto flex h-12 md:h-16 items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-8">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <span className="text-xl font-bold">🌿 Bloom Budget</span>
+            <span className="text-lg md:text-xl font-bold">🌿 Bloom Budget</span>
           </Link>
 
           {/* Desktop Navigation */}

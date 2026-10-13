@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client"
 import { CategorySummary } from "@/components/category-summary"
 import { BudgetOverview } from "@/components/budget-overview"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PullToRefresh } from "@/components/pull-to-refresh"
 import { useMonth } from "@/contexts/month-context"
 import { CACHE_KEYS } from "@/contexts/app-data-context"
 import { useCachedData } from "@/hooks/use-cached-data"
@@ -168,7 +169,7 @@ export default function DashboardPage() {
     return newData
   }, [router, selectedMonth, selectedYear])
 
-  const { data: cachedData, loading, refreshing } = useCachedData(cacheKey, fetchDashboardData)
+  const { data: cachedData, loading, refreshing, refresh } = useCachedData(cacheKey, fetchDashboardData)
   const data = cachedData || EMPTY_DATA
 
   // Memoize the category totals computation so it only reruns when transactions change
@@ -197,6 +198,7 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
+      <PullToRefresh onRefresh={refresh} />
       <div className="mb-4 md:mb-8">
         <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600 flex items-center gap-2">
           Dashboard

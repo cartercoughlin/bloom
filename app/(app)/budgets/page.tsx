@@ -8,6 +8,7 @@ import { BudgetList } from "@/components/budget-list"
 import { BudgetOverview } from "@/components/budget-overview"
 import { SavingsGoalsList } from "@/components/savings-goals-list"
 import { Skeleton } from "@/components/ui/skeleton"
+import { PullToRefresh } from "@/components/pull-to-refresh"
 import { Button } from "@/components/ui/button"
 import { FolderKanban, Loader2 } from "lucide-react"
 import { useMonth } from "@/contexts/month-context"
@@ -268,6 +269,7 @@ export default function BudgetsPage() {
 
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
+      <PullToRefresh onRefresh={refresh} />
       <div className="flex items-center justify-between mb-4 md:mb-8">
         <div>
           <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600 flex items-center gap-2">
