@@ -4,51 +4,59 @@ import { useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { createClient } from "@/lib/supabase/client"
-import { CategorySummary } from "@/components/category-summary"
-import { BudgetOverview } from "@/components/budget-overview"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PullToRefresh } from "@/components/pull-to-refresh"
+import { SafeToSpend } from "@/components/dashboard/safe-to-spend"
+import { CategoriesAtRisk } from "@/components/dashboard/categories-at-risk"
+import { NeedsCategorization } from "@/components/dashboard/needs-categorization"
 import { useMonth } from "@/contexts/month-context"
 import { CACHE_KEYS } from "@/contexts/app-data-context"
 import { useCachedData } from "@/hooks/use-cached-data"
 import { Loader2 } from "lucide-react"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 import { computeCategoryTotals } from "@/lib/compute-category-totals"
+import { summarizeBudgets } from "@/lib/budget/summary"
+import { buildMonthlyHistory, monthRange, HistoryBudget, HistoryTransaction } from "@/lib/budget/history"
+import { fetchAllRows } from "@/lib/supabase/fetch-all"
 
-// Lazy-load the chart component — Recharts is ~200KB and not needed for initial render
+// Charts are lazy-loaded — Recharts is ~200KB and not needed for the first paint
+const chartSkeleton = () => (
+  <div className="border rounded-xl p-6">
+    <Skeleton className="h-6 w-32 mb-2" />
+    <Skeleton className="h-4 w-48 mb-4" />
+    <Skeleton className="h-48 w-full" />
+  </div>
+)
 const MonthlySpendingComparison = dynamic(
   () => import("@/components/monthly-spending-comparison").then(mod => ({ default: mod.MonthlySpendingComparison })),
-  {
-    loading: () => (
-      <div className="border rounded-lg p-6">
-        <Skeleton className="h-6 w-32 mb-2" />
-        <Skeleton className="h-4 w-48 mb-4" />
-        <Skeleton className="h-48 w-full" />
-      </div>
-    ),
-    ssr: false,
-  }
+  { loading: chartSkeleton, ssr: false }
+)
+const SpendingHistory = dynamic(
+  () => import("@/components/dashboard/spending-history").then(mod => ({ default: mod.SpendingHistory })),
+  { loading: chartSkeleton, ssr: false }
+)
+const NetWorthChart = dynamic(
+  () => import("@/components/net-worth-chart").then(mod => ({ default: mod.NetWorthChart })),
+  { loading: chartSkeleton, ssr: false }
 )
 
+const HISTORY_MONTHS = 6
+
 interface DashboardData {
-  currentMonthTransactions: any[]
-  previousMonthTransactions: any[]
+  // Selected month plus the 5 before it, for the pace and history charts
+  historyTransactions: HistoryTransaction[]
+  historyBudgets: HistoryBudget[]
   budgets: any[]
-  categories: any[]
   rolloverByCategory: Record<string, number>
   historicalRecurring: HistoricalRecurringData
+  uncategorizedCount: number
 }
 
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
-const DASHBOARD_CACHE_VERSION = "v3"
-const EMPTY_DATA: DashboardData = {
-  currentMonthTransactions: [],
-  previousMonthTransactions: [],
-  budgets: [],
-  categories: [],
-  rolloverByCategory: {},
-  historicalRecurring: EMPTY_HISTORICAL,
-}
+const DASHBOARD_CACHE_VERSION = "v4"
+
+const monthKey = (month: number, year: number) => `${year}-${String(month).padStart(2, "0")}`
+const firstOfMonth = (month: number, year: number) => `${monthKey(month, year)}-01`
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -65,48 +73,31 @@ export default function DashboardPage() {
       return null
     }
 
-    // Get selected month date range
-    const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-    const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
-    const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
-    const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
-    const previousMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
-    const previousYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
-    const previousFirstDay = `${previousYear}-${String(previousMonth).padStart(2, '0')}-01`
+    const months = monthRange(selectedMonth, selectedYear, HISTORY_MONTHS)
+    const historyStart = firstOfMonth(months[0].month, months[0].year)
+    const next = new Date(selectedYear, selectedMonth, 1)
+    const historyEnd = firstOfMonth(next.getMonth() + 1, next.getFullYear())
 
-    // Fetch everything in parallel — including rollover via API route
-    const [transactionsResult, previousTransactionsResult, budgetsResult, categoriesResult, rolloverResponse] = await Promise.all([
-      supabase
-        .from("transactions")
-        .select(`
-          *,
-          categories (
-            name,
-            color,
-            icon
-          )
-        `)
-        .eq("user_id", user.id)
-        .gte("date", firstDay)
-        .lt("date", nextMonthFirstDay)
-        .or("deleted.is.null,deleted.eq.false")
-        .order("date", { ascending: false }),
+    const [historyTransactions, historyBudgetsResult, budgetsResult, uncategorizedResult, rolloverResponse] = await Promise.all([
+      fetchAllRows<HistoryTransaction>((from, to) =>
+        supabase
+          .from("transactions")
+          .select("category_id, amount, transaction_type, recurring, hidden, date")
+          .eq("user_id", user.id)
+          .gte("date", historyStart)
+          .lt("date", historyEnd)
+          .not("deleted", "is", true)
+          .order("date")
+          .order("id")
+          .range(from, to)
+      ),
 
       supabase
-        .from("transactions")
-        .select(`
-          *,
-          categories (
-            name,
-            color,
-            icon
-          )
-        `)
+        .from("budgets")
+        .select("category_id, amount, month, year, categories (is_rollover)")
         .eq("user_id", user.id)
-        .gte("date", previousFirstDay)
-        .lt("date", firstDay)
-        .or("deleted.is.null,deleted.eq.false")
-        .order("date", { ascending: false }),
+        .gte("year", months[0].year)
+        .lte("year", selectedYear),
 
       supabase
         .from("budgets")
@@ -129,10 +120,12 @@ export default function DashboardPage() {
         .eq("year", selectedYear),
 
       supabase
-        .from("categories")
-        .select("*")
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
         .eq("user_id", user.id)
-        .order("name"),
+        .is("category_id", null)
+        .not("hidden", "is", true)
+        .not("deleted", "is", true),
 
       fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
     ])
@@ -157,28 +150,55 @@ export default function DashboardPage() {
       )
     }
 
-    const newData: DashboardData = {
-      currentMonthTransactions: transactionsResult.data || [],
-      previousMonthTransactions: previousTransactionsResult.data || [],
+    const historyMonthKeys = new Set(months.map(m => monthKey(m.month, m.year)))
+    const historyBudgets = (historyBudgetsResult.data || [])
+      .filter((b: any) => !b.categories?.is_rollover && historyMonthKeys.has(monthKey(b.month, b.year)))
+      .map(({ categories, ...b }: any) => b as HistoryBudget)
+
+    return {
+      historyTransactions,
+      historyBudgets,
       budgets: regularBudgets,
-      categories: categoriesResult.data || [],
       rolloverByCategory: rollover,
       historicalRecurring: historicalRecurringData,
+      uncategorizedCount: uncategorizedResult.count || 0,
     }
-
-    return newData
   }, [router, selectedMonth, selectedYear])
 
-  const { data: cachedData, loading, refreshing, refresh } = useCachedData(cacheKey, fetchDashboardData)
-  const data = cachedData || EMPTY_DATA
+  const { data, loading, refreshing, refresh } = useCachedData(cacheKey, fetchDashboardData)
 
-  // Memoize the category totals computation so it only reruns when transactions change
-  const netByCategory = useMemo(
-    () => computeCategoryTotals(data.currentMonthTransactions),
-    [data.currentMonthTransactions]
-  )
+  const derived = useMemo(() => {
+    if (!data) return null
+    const currentKey = monthKey(selectedMonth, selectedYear)
+    const prev = new Date(selectedYear, selectedMonth - 2, 1)
+    const previousKey = monthKey(prev.getMonth() + 1, prev.getFullYear())
+    const currentMonthTransactions = data.historyTransactions.filter(tx => tx.date.startsWith(currentKey))
+    const previousMonthTransactions = data.historyTransactions.filter(tx => tx.date.startsWith(previousKey))
 
-  if (loading && !cachedData) {
+    const summary = summarizeBudgets(
+      data.budgets,
+      computeCategoryTotals(currentMonthTransactions),
+      data.rolloverByCategory,
+      data.historicalRecurring,
+      selectedMonth,
+      selectedYear
+    )
+
+    // Spending that isn't counted toward any budget yet
+    const uncategorizedThisMonth = currentMonthTransactions
+      .filter(tx => !tx.category_id && !tx.hidden && tx.transaction_type !== "credit")
+      .reduce((sum, tx) => sum + Number(tx.amount), 0)
+
+    return {
+      summary,
+      currentMonthTransactions,
+      previousMonthTransactions,
+      uncategorizedThisMonth,
+      history: buildMonthlyHistory(data.historyTransactions, data.historyBudgets, selectedMonth, selectedYear, HISTORY_MONTHS),
+    }
+  }, [data, selectedMonth, selectedYear])
+
+  if (loading && !data) {
     return (
       <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
         <div className="mb-4 md:mb-8">
@@ -186,20 +206,24 @@ export default function DashboardPage() {
           <Skeleton className="h-4 w-64" />
         </div>
         <div className="space-y-4 md:space-y-6">
-          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-44 w-full" />
           <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-            <Skeleton className="h-96 w-full" />
-            <Skeleton className="h-96 w-full" />
+            <Skeleton className="h-64 w-full" />
+            <Skeleton className="h-64 w-full" />
           </div>
         </div>
       </div>
     )
   }
 
+  if (!data || !derived) return null
+  const { summary } = derived
+  const monthLabel = new Date(selectedYear, selectedMonth - 1).toLocaleString("default", { month: "long", year: "numeric" })
+
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
       <PullToRefresh onRefresh={refresh} />
-      <div className="mb-4 md:mb-8">
+      <div className="mb-4 md:mb-6">
         <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600 flex items-center gap-2">
           Dashboard
           {refreshing && (
@@ -210,30 +234,36 @@ export default function DashboardPage() {
           )}
         </h1>
         <p className="text-muted-foreground text-xs md:text-sm">
-          {isCurrentMonth() ? 'Your spending insights for this month' : `Review spending for ${new Date(selectedYear, selectedMonth - 1).toLocaleString("default", { month: "long", year: "numeric" })}`}
+          {isCurrentMonth() ? "How this month is going" : `Looking back at ${monthLabel}`}
         </p>
       </div>
 
       <div className="space-y-4 md:space-y-6">
-        <BudgetOverview
-          budgets={data.budgets}
-          netByCategory={netByCategory}
-          rolloverByCategory={data.rolloverByCategory}
-          historicalRecurring={data.historicalRecurring}
-          month={selectedMonth}
-          year={selectedYear}
-        />
+        <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
+          <SafeToSpend summary={summary} />
+          <div className="space-y-4 md:space-y-6">
+            <CategoriesAtRisk summary={summary} />
+            <NeedsCategorization
+              count={data.uncategorizedCount}
+              amountThisMonth={derived.uncategorizedThisMonth}
+            />
+          </div>
+        </div>
 
         <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-          <CategorySummary transactions={data.currentMonthTransactions} />
           <MonthlySpendingComparison
-            currentMonthTransactions={data.currentMonthTransactions}
-            previousMonthTransactions={data.previousMonthTransactions}
+            currentMonthTransactions={derived.currentMonthTransactions}
+            previousMonthTransactions={derived.previousMonthTransactions}
             budgets={data.budgets}
             month={selectedMonth}
             year={selectedYear}
+            budgetTotal={summary.totalBudget}
+            projectedTotal={summary.progress.isCurrentMonth ? summary.projectedTotal : undefined}
           />
+          <SpendingHistory history={derived.history} />
         </div>
+
+        <NetWorthChart variant="card" />
       </div>
     </div>
   )

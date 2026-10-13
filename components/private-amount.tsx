@@ -9,15 +9,17 @@ interface PrivateAmountProps {
   prefix?: string
   showSign?: boolean
   type?: 'credit' | 'debit'
+  decimals?: number
 }
 
-export function PrivateAmount({ amount, className, prefix = '$', showSign = false, type }: PrivateAmountProps) {
+export function PrivateAmount({ amount, className, prefix = '$', showSign = false, type, decimals = 2 }: PrivateAmountProps) {
   const { privacyMode } = usePrivacy()
 
-  const formattedAmount = amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+  const format = (value: number) => value.toLocaleString('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals
   })
+  const formattedAmount = format(amount)
 
   let displayValue: string
 
@@ -27,7 +29,7 @@ export function PrivateAmount({ amount, className, prefix = '$', showSign = fals
     displayValue = `${sign}${prefix}${formattedAmount}`
   } else if (showSign) {
     const sign = amount >= 0 ? '+' : '-'
-    displayValue = `${sign}${prefix}${Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    displayValue = `${sign}${prefix}${format(Math.abs(amount))}`
   } else {
     displayValue = `${prefix}${formattedAmount}`
   }

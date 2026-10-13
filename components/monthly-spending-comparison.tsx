@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useMemo } from "react"
-import { Line, LineChart, CartesianGrid, XAxis, YAxis } from "recharts"
+import { Line, LineChart, CartesianGrid, ReferenceLine, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { PrivateAmount } from "@/components/private-amount"
@@ -26,6 +26,10 @@ interface MonthlySpendingComparisonProps {
   budgets: Budget[]
   month: number
   year: number
+  // Total budget (including rollover), drawn as a horizontal line
+  budgetTotal?: number
+  // Projected month-end spending; draws a dashed line from today to month end
+  projectedTotal?: number
 }
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -137,6 +141,8 @@ function MonthlySpendingComparisonInner({
   budgets,
   month,
   year,
+  budgetTotal,
+  projectedTotal,
 }: MonthlySpendingComparisonProps) {
   const { privacyMode } = usePrivacy()
   const previous = getPreviousMonth(month, year)
@@ -144,10 +150,23 @@ function MonthlySpendingComparisonInner({
   const previousMonthLabel = new Date(previous.year, previous.month - 1).toLocaleString("default", { month: "long" })
   const budgetCategoryIds = useMemo(() => new Set(budgets.map((budget) => budget.category_id)), [budgets])
 
-  const chartData = useMemo(
-    () => buildCumulativeSeries(currentMonthTransactions, previousMonthTransactions, budgetCategoryIds, month, year),
-    [currentMonthTransactions, previousMonthTransactions, budgetCategoryIds, month, year],
-  )
+  const chartData = useMemo(() => {
+    const series: { day: number; current: number | null; previous: number | null; projected?: number | null }[] =
+      buildCumulativeSeries(currentMonthTransactions, previousMonthTransactions, budgetCategoryIds, month, year)
+    if (projectedTotal === undefined) return series
+
+    // Straight line from today's total to the projected month-end total
+    const last = [...series].reverse().find((point) => point.current !== null)
+    if (!last || last.day >= series.length) return series
+    const start = last.current || 0
+    const span = series.length - last.day
+    return series.map((point) => ({
+      ...point,
+      projected: point.day >= last.day
+        ? Math.round((start + ((projectedTotal - start) * (point.day - last.day)) / span) * 100) / 100
+        : null,
+    }))
+  }, [currentMonthTransactions, previousMonthTransactions, budgetCategoryIds, month, year, projectedTotal])
 
   const latestCurrentPoint = [...chartData].reverse().find((point) => point.current !== null)
   const latestCurrentTotal = latestCurrentPoint?.current || 0
@@ -178,7 +197,7 @@ function MonthlySpendingComparisonInner({
       <CardHeader className="pb-3 md:pb-6">
         <CardTitle className="text-base md:text-lg">Spending Pace</CardTitle>
         <CardDescription className="text-xs md:text-sm">
-          Daily cumulative budget spending vs. {previousMonthLabel}
+          Running total vs. {previousMonthLabel}{projectedTotal !== undefined ? ", with where this month is headed" : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="px-3 pb-4 sm:px-6 md:pb-6">
@@ -203,8 +222,12 @@ function MonthlySpendingComparisonInner({
               label: previousMonthLabel,
               color: "#ea580c",
             },
+            projected: {
+              label: "Projected",
+              color: "#16a34a",
+            },
           }}
-          className="h-48 sm:h-56 lg:h-64"
+          className="h-48 sm:h-56 lg:h-64 w-full aspect-auto"
         >
           <LineChart data={chartData} margin={{ left: 0, right: 10, top: 8, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
@@ -232,7 +255,7 @@ function MonthlySpendingComparisonInner({
                   formatter={(value, name) => (
                     <div className="flex min-w-[9rem] items-center justify-between gap-4">
                       <span className="text-muted-foreground">
-                        {name === "current" ? currentMonthLabel : previousMonthLabel}
+                        {name === "current" ? currentMonthLabel : name === "projected" ? "Projected" : previousMonthLabel}
                       </span>
                       <span className="font-mono font-medium text-foreground">
                         {privacyMode ? "••••••" : currencyFormatter.format(Number(value))}
@@ -250,6 +273,28 @@ function MonthlySpendingComparisonInner({
               dot={false}
               connectNulls={false}
             />
+            {budgetTotal !== undefined && budgetTotal > 0 && (
+              <ReferenceLine
+                y={budgetTotal}
+                stroke="currentColor"
+                strokeDasharray="4 4"
+                className="text-muted-foreground"
+                ifOverflow="extendDomain"
+                label={{ value: "Budget", position: "insideTopLeft", fontSize: 10, fill: "currentColor" }}
+              />
+            )}
+            {projectedTotal !== undefined && (
+              <Line
+                type="linear"
+                dataKey="projected"
+                stroke="var(--color-projected)"
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                strokeOpacity={0.6}
+                dot={false}
+                connectNulls={false}
+              />
+            )}
             <Line
               type="monotone"
               dataKey="current"
