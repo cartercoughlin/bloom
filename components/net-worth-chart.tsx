@@ -124,7 +124,8 @@ async function fetchNetWorth(): Promise<NetWorthData> {
 
 function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" }) {
   const { privacyMode } = usePrivacy()
-  const [months, setMonths] = useState<number>(variant === "card" ? 6 : 12)
+  // The dashboard card has no range picker, so it shows all available history
+  const [months, setMonths] = useState<number>(variant === "card" ? 24 : 12)
   const fetcher = useCallback(fetchNetWorth, [])
   const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v3`, fetcher)
 
@@ -151,7 +152,13 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
   const first = points[0]
   const change = latest && first && points.length > 1 ? latest.netWorth - first.netWorth : null
   const changePct = change !== null && first.netWorth !== 0 ? (change / Math.abs(first.netWorth)) * 100 : null
-  const rangeLabel = RANGES.find(r => r.months === months)?.label ?? `${months}M`
+  // When history starts after the range does, say so instead of claiming the full range
+  const rangeStart = new Date()
+  rangeStart.setMonth(rangeStart.getMonth() - months)
+  rangeStart.setDate(rangeStart.getDate() + 7)
+  const rangeLabel = dailyPoints[0] && parseDate(dailyPoints[0].date) > rangeStart
+    ? `since ${parseDate(dailyPoints[0].date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
+    : RANGES.find(r => r.months === months)?.label ?? `${months}M`
 
   const header = (
     <CardHeader className="pb-2">
