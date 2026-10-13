@@ -3,7 +3,12 @@ import { recordBalanceSnapshot } from './balance-snapshots'
 import { createClient } from '@/lib/supabase/server'
 import { AccountsGetRequest, AccountsGetResponse } from 'plaid'
 
-export async function syncAccountBalances(accessToken: string, userId: string): Promise<{
+export async function syncAccountBalances(
+  accessToken: string,
+  userId: string,
+  // Service-role client for cron jobs, which have no user session
+  supabaseClient?: any
+): Promise<{
   success: boolean
   syncedAccounts: number
   errors: string[]
@@ -14,7 +19,7 @@ export async function syncAccountBalances(accessToken: string, userId: string): 
   try {
     console.log('🏦 Starting account balance sync...')
     
-    const supabase = await createClient()
+    const supabase = supabaseClient || await createClient()
     
     // Get accounts from Plaid
     const accountsRequest: AccountsGetRequest = { access_token: accessToken }

@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { syncAccountBalances } from '@/lib/plaid-sync-improved';
 
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
+
 /**
- * Vercel Cron Job: Weekly balance sync
- * Runs at 3 AM UTC every Sunday
- *
- * This is a server-side backup to the client-side auto-sync
+ * Standalone balance sync (not scheduled in vercel.json: the nightly
+ * /api/cron/sync-transactions job already syncs balances and records
+ * snapshots). Kept for manual or future scheduled use.
  */
 export async function GET(request: Request) {
   try {
@@ -18,7 +20,16 @@ export async function GET(request: Request) {
 
     console.log('[Cron] Starting weekly balance sync...');
 
-    const supabase = await createClient();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return NextResponse.json({ error: 'Missing Supabase config' }, { status: 500 });
+    }
+
+    // Service role: cron requests carry no user session for RLS
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     // Get all users with Plaid items configured for balance sync
     const { data: plaidItems, error: plaidError } = await supabase
@@ -60,7 +71,7 @@ export async function GET(request: Request) {
         console.log(`[Cron] Syncing balances for user ${userId}...`);
 
         for (const item of items) {
-          const result = await syncAccountBalances(item.access_token, userId);
+          const result = await syncAccountBalances(item.access_token, userId, supabase);
 
           if (result.success) {
             totalSyncedAccounts += result.syncedAccounts;
