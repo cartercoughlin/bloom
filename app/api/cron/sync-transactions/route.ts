@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { syncPlaidTransactions } from '@/lib/plaid-sync';
+
+export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * Vercel Cron Job: Daily transaction sync
@@ -18,7 +21,18 @@ export async function GET(request: Request) {
 
     console.log('[Cron] Starting daily transaction sync...');
 
-    const supabase = await createClient();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('[Cron] Missing SUPABASE env vars');
+      return NextResponse.json({ error: 'Missing Supabase config' }, { status: 500 });
+    }
+
+    // Service role: cron requests carry no user session, so the cookie-based
+    // client saw no plaid_items through RLS and silently synced nothing.
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     // Get all users with Plaid items
     const { data: plaidItems, error: plaidError } = await supabase
@@ -46,7 +60,7 @@ export async function GET(request: Request) {
         acc[item.user_id] = [];
       }
       acc[item.user_id].push(item);
-      return {};
+      return acc;
     }, {} as Record<string, typeof plaidItems>);
 
     let totalSyncedUsers = 0;
@@ -60,6 +74,8 @@ export async function GET(request: Request) {
 
         for (const item of items) {
           const result = await syncPlaidTransactions(item.access_token, {
+            userId,
+            supabaseClient: supabase,
             syncTransactions: true,
             syncBalances: false,
           });
