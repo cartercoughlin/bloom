@@ -16,6 +16,8 @@ import { TransactionAvatar } from "./transaction-avatar"
 import Link from "next/link"
 import { PrivateAmount } from "./private-amount"
 import { cn } from "@/lib/utils"
+import { TagChips, TagPicker } from "./tag-picker"
+import { MIGRATION_HINT, type Tag } from "@/lib/tags"
 import { haptics } from "@/lib/capacitor"
 import {
   Category,
@@ -35,6 +37,12 @@ interface TransactionsTableProps {
   onCategoriesChange: (updater: (categories: Category[]) => Category[]) => void
   // Called after any edit that changes budget/dashboard numbers
   onBudgetDataChanged: () => void
+  tags: Tag[]
+  // false until migrations/add-tags.sql has run
+  tagsAvailable: boolean
+  onTagsChange: (updater: (tags: Tag[]) => Tag[]) => void
+  // Called after tagging, so tag totals refresh
+  onTagDataChanged: () => void
 }
 
 // Transactions from the same merchant, used for "apply to similar"
@@ -60,9 +68,14 @@ export function TransactionsTable({
   onTransactionsChange,
   onCategoriesChange,
   onBudgetDataChanged,
+  tags,
+  tagsAvailable,
+  onTagsChange,
+  onTagDataChanged,
 }: TransactionsTableProps) {
   const [searchTerm, setSearchTerm] = useState("")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
+  const [tagFilter, setTagFilter] = useState<string>("all")
   const [typeFilter, setTypeFilter] = useState<string>("all")
   const [dateFrom, setDateFrom] = useState<Date>()
   const [dateTo, setDateTo] = useState<Date>()
@@ -99,6 +112,18 @@ export function TransactionsTable({
     [categories]
   )
 
+  const tagsById = useMemo(() => new Map(tags.map(t => [t.id, t])), [tags])
+  const tagsFor = (tx: Transaction) => (tx.tag_ids || []).map(id => tagsById.get(id)).filter((t): t is Tag => !!t)
+
+  // /transactions?tag=<id> (from the Tags page) opens filtered to that tag
+  useEffect(() => {
+    const tag = new URLSearchParams(window.location.search).get("tag")
+    if (tag) {
+      setTagFilter(tag)
+      setShowFilters(true)
+    }
+  }, [])
+
   const filteredTransactions = useMemo(() => {
     const search = searchTerm.trim().toLowerCase()
     const min = amountMin ? parseFloat(amountMin) : null
@@ -109,7 +134,8 @@ export function TransactionsTable({
 
       if (search) {
         const categoryName = tx.category_id ? categoriesById.get(tx.category_id)?.name : ""
-        const haystack = [tx.description, tx.merchant_name, tx.bank, tx.account_name, categoryName, tx.plaid_details?.location?.city]
+        const tagNames = (tx.tag_ids || []).map(id => tagsById.get(id)?.name)
+        const haystack = [tx.description, tx.merchant_name, tx.bank, tx.account_name, categoryName, tx.plaid_details?.location?.city, ...tagNames]
           .filter(Boolean)
           .join(" ")
           .toLowerCase()
@@ -119,6 +145,11 @@ export function TransactionsTable({
       if (categoryFilter !== "all") {
         if (categoryFilter === "uncategorized" && tx.category_id) return false
         if (categoryFilter !== "uncategorized" && tx.category_id !== categoryFilter) return false
+      }
+
+      if (tagFilter !== "all") {
+        const has = (tx.tag_ids || []).length > 0
+        if (tagFilter === "untagged" ? has : !(tx.tag_ids || []).includes(tagFilter)) return false
       }
 
       if (typeFilter !== "all" && tx.transaction_type !== typeFilter) return false
@@ -132,7 +163,7 @@ export function TransactionsTable({
 
       return true
     })
-  }, [transactions, categoriesById, searchTerm, categoryFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax, showHidden])
+  }, [transactions, categoriesById, tagsById, searchTerm, categoryFilter, tagFilter, typeFilter, dateFrom, dateTo, amountMin, amountMax, showHidden])
 
   const uncategorizedTransactions = useMemo(
     () => filteredTransactions.filter(tx => !tx.category_id && !tx.hidden),
@@ -220,6 +251,41 @@ export function TransactionsTable({
     })
   }
 
+  // Optimistically add/remove tags, rolling back if the server rejects it
+  const applyTags = async (ids: string[], change: { add: string[]; remove: string[] }) => {
+    if (ids.length === 0 || change.add.length + change.remove.length === 0) return false
+    if (!tagsAvailable) {
+      toast.error(MIGRATION_HINT)
+      return false
+    }
+    const idSet = new Set(ids)
+    const previous = new Map(transactions.filter(tx => idSet.has(tx.id)).map(tx => [tx.id, tx.tag_ids || []]))
+    const removeSet = new Set(change.remove)
+    applyLocal(idSet, tx => ({
+      ...tx,
+      tag_ids: [...new Set([...(tx.tag_ids || []).filter(id => !removeSet.has(id)), ...change.add])],
+    }))
+    try {
+      const res = await fetch("/api/transactions/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transactionIds: ids, ...change }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Couldn't update tags")
+      haptics.light()
+      onTagDataChanged()
+      return true
+    } catch (error) {
+      onTransactionsChange(prev => prev.map(tx => (previous.has(tx.id) ? { ...tx, tag_ids: previous.get(tx.id) } : tx)))
+      toast.error(error instanceof Error ? error.message : "Couldn't update tags")
+      return false
+    }
+  }
+
+  const handleTagCreated = (tag: Tag) => {
+    onTagsChange(prev => [...prev, tag].sort((a, b) => a.name.localeCompare(b.name)))
+  }
+
   const setHidden = async (ids: string[], hidden: boolean) => {
     if (ids.length === 0) return
     const idSet = new Set(ids)
@@ -295,6 +361,7 @@ export function TransactionsTable({
   const clearFilters = () => {
     setSearchTerm("")
     setCategoryFilter("all")
+    setTagFilter("all")
     setTypeFilter("all")
     setDateFrom(undefined)
     setDateTo(undefined)
@@ -303,7 +370,7 @@ export function TransactionsTable({
     setShowHidden(false)
   }
 
-  const hasActiveFilters = searchTerm || categoryFilter !== "all" || typeFilter !== "all" ||
+  const hasActiveFilters = searchTerm || categoryFilter !== "all" || tagFilter !== "all" || typeFilter !== "all" ||
                           dateFrom || dateTo || amountMin || amountMax || showHidden
 
   if (transactions.length === 0) {
@@ -335,6 +402,7 @@ export function TransactionsTable({
       onClick={() => handleRowClick(tx)}
       onCategorize={(categoryId, created) => handleSingleCategorize(tx, categoryId, created)}
       onCategoryCreated={handleCategoryCreated}
+      tags={tagsFor(tx)}
     />
   )
 
@@ -397,7 +465,7 @@ export function TransactionsTable({
 
         {showFilters && (
           <div className="space-y-3 mt-3 p-4 bg-card rounded-lg border-2">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 md:gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2 md:gap-4">
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="text-xs md:text-sm h-8 md:h-10">
                   <SelectValue placeholder="All categories" />
@@ -415,6 +483,26 @@ export function TransactionsTable({
                   ))}
                 </SelectContent>
               </Select>
+
+              {tags.length > 0 && (
+                <Select value={tagFilter} onValueChange={setTagFilter}>
+                  <SelectTrigger className="text-xs md:text-sm h-8 md:h-10">
+                    <SelectValue placeholder="All tags" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All tags</SelectItem>
+                    <SelectItem value="untagged">Untagged</SelectItem>
+                    {tags.map((tag) => (
+                      <SelectItem key={tag.id} value={tag.id}>
+                        <div className="flex items-center gap-2">
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }} />
+                          {tag.name}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Select value={typeFilter} onValueChange={setTypeFilter}>
                 <SelectTrigger className="text-xs md:text-sm h-8 md:h-10">
@@ -596,18 +684,32 @@ export function TransactionsTable({
             onCategoryCreated={handleCategoryCreated}
             className={cn("h-8", selectedIds.size === 0 && "pointer-events-none opacity-50")}
           />
+          <TagPicker
+            tags={tags}
+            mode="add"
+            onChange={async (change) => {
+              const ids = [...selectedIds]
+              if (await applyTags(ids, change)) {
+                const tag = tagsById.get(change.add[0])
+                toast.success(`Tagged ${ids.length} transaction${ids.length === 1 ? "" : "s"}${tag ? ` #${tag.name}` : ""}`)
+              }
+            }}
+            onTagCreated={handleTagCreated}
+            className={cn("h-8", selectedIds.size === 0 && "pointer-events-none opacity-50")}
+          />
           <Button
             variant="outline"
             size="sm"
-            className="h-8 text-xs"
+            className="h-8 text-xs px-2 sm:px-3"
             disabled={selectedIds.size === 0}
+            aria-label="Hide selected"
             onClick={async () => {
               await setHidden([...selectedIds], true)
               exitSelectMode()
             }}
           >
-            <EyeOff className="h-3 w-3 mr-1" />
-            Hide
+            <EyeOff className="h-3 w-3 sm:mr-1" />
+            <span className="hidden sm:inline">Hide</span>
           </Button>
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={exitSelectMode} aria-label="Exit selection">
             <X className="h-4 w-4" />
@@ -624,6 +726,9 @@ export function TransactionsTable({
         onToggleRecurring={handleToggleRecurring}
         onToggleHidden={(tx) => setHidden([tx.id], !tx.hidden)}
         onDelete={(tx) => handleDeleteTransaction(tx.id)}
+        tags={tags}
+        onTagsChange={(tx, change) => applyTags([tx.id], change)}
+        onTagCreated={handleTagCreated}
       />
     </div>
   )
@@ -638,6 +743,7 @@ function TransactionRow({
   onClick,
   onCategorize,
   onCategoryCreated,
+  tags,
 }: {
   tx: Transaction
   categories: Category[]
@@ -647,6 +753,7 @@ function TransactionRow({
   onClick: () => void
   onCategorize: (categoryId: string | null, created?: Category) => void
   onCategoryCreated: (category: Category) => void
+  tags: Tag[]
 }) {
   const pending = tx.plaid_details?.pending
   const meta = [
@@ -701,7 +808,7 @@ function TransactionRow({
         </div>
 
         {!selectMode && (
-          <div className="mt-1.5">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <CategoryPicker
               categories={categories}
               value={tx.category_id}
@@ -709,8 +816,10 @@ function TransactionRow({
               onSelect={onCategorize}
               onCategoryCreated={onCategoryCreated}
             />
+            <TagChips tags={tags} max={2} />
           </div>
         )}
+        {selectMode && tags.length > 0 && <TagChips tags={tags} max={3} className="mt-1" />}
       </div>
     </div>
   )

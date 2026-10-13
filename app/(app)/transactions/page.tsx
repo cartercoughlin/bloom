@@ -2,7 +2,9 @@
 
 import { useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2 } from "lucide-react"
+import { Loader2, Tags } from "lucide-react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { TransactionsTable } from "@/components/transactions-table"
 import type { Transaction, Category } from "@/lib/transaction-display"
@@ -11,10 +13,49 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PullToRefresh } from "@/components/pull-to-refresh"
 import { useAppData, CACHE_KEYS } from "@/contexts/app-data-context"
 import { useCachedData } from "@/hooks/use-cached-data"
+import { fetchAllRows } from "@/lib/supabase/fetch-all"
+import { isMissingTagTables, type Tag } from "@/lib/tags"
+
+// Tags and which transactions carry them. Separate from the transactions
+// query so the page still loads before migrations/add-tags.sql has run.
+async function loadTags(supabase: any, userId: string) {
+  const empty = { tags: [] as Tag[], byTransaction: new Map<string, string[]>(), available: false }
+  const { data: tags, error } = await supabase
+    .from("tags")
+    .select("id, name, color, target_amount")
+    .eq("user_id", userId)
+    .order("name")
+  if (error) {
+    if (!isMissingTagTables(error)) console.error("Error loading tags:", error)
+    return empty
+  }
+  try {
+    const links = await fetchAllRows<{ transaction_id: string; tag_id: string }>((from, to) =>
+      supabase
+        .from("transaction_tags")
+        .select("transaction_id, tag_id")
+        .eq("user_id", userId)
+        .order("transaction_id")
+        .order("tag_id")
+        .range(from, to)
+    )
+    const byTransaction = new Map<string, string[]>()
+    for (const l of links) {
+      ;(byTransaction.get(l.transaction_id) || byTransaction.set(l.transaction_id, []).get(l.transaction_id)!).push(l.tag_id)
+    }
+    return { tags: (tags || []) as Tag[], byTransaction, available: true }
+  } catch (linkError) {
+    console.error("Error loading transaction tags:", linkError)
+    return { ...empty, tags: (tags || []) as Tag[], available: true }
+  }
+}
 
 interface TransactionsPageData {
   transactions: Transaction[]
   categories: Category[]
+  tags: Tag[]
+  // false until migrations/add-tags.sql has run
+  tagsAvailable: boolean
 }
 
 export default function TransactionsPage() {
@@ -30,7 +71,7 @@ export default function TransactionsPage() {
       return null
     }
 
-    const [transactionsResult, categoriesResult, accountsResult] = await Promise.all([
+    const [transactionsResult, categoriesResult, accountsResult, tagData] = await Promise.all([
       // `*` rather than a column list so plaid_details is included once its
       // migration has run, without breaking the page before then
       supabase
@@ -59,6 +100,8 @@ export default function TransactionsPage() {
         .select("*")
         .eq("user_id", user.id)
         .not("plaid_account_id", "is", null),
+
+      loadTags(supabase, user.id),
     ])
 
     const accountNames = new Map<string, string>(
@@ -69,8 +112,11 @@ export default function TransactionsPage() {
       transactions: (transactionsResult.data || []).map((tx: any) => ({
         ...tx,
         account_name: tx.plaid_account_id ? accountNames.get(tx.plaid_account_id) || null : null,
+        tag_ids: tagData.byTransaction.get(tx.id) || [],
       })) as Transaction[],
-      categories: categoriesResult.data || []
+      categories: categoriesResult.data || [],
+      tags: tagData.tags,
+      tagsAvailable: tagData.available,
     }
   }, [router])
 
@@ -86,6 +132,18 @@ export default function TransactionsPage() {
     (updater: (categories: Category[]) => Category[]) =>
       mutate(prev => ({ ...prev, categories: updater(prev.categories) })),
     [mutate]
+  )
+
+  const handleTagsChange = useCallback(
+    (updater: (tags: Tag[]) => Tag[]) =>
+      mutate(prev => ({ ...prev, tags: updater(prev.tags || []) })),
+    [mutate]
+  )
+
+  // Tag totals on the Tags page refetch the next time it's shown
+  const handleTagDataChanged = useCallback(
+    () => appData.markStale([CACHE_KEYS.tags]),
+    [appData.markStale]
   )
 
   // Budgets and dashboard refetch the next time they're shown
@@ -118,7 +176,15 @@ export default function TransactionsPage() {
           Transactions
           {refreshing && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
         </h1>
-        <SyncButton />
+        <div className="flex items-center gap-2">
+          <Link href="/tags">
+            <Button variant="outline" className="text-xs md:text-sm h-8 md:h-10 px-3">
+              <Tags className="mr-1 h-3.5 w-3.5" />
+              Tags
+            </Button>
+          </Link>
+          <SyncButton />
+        </div>
       </div>
       <TransactionsTable
         transactions={data?.transactions || []}
@@ -126,6 +192,10 @@ export default function TransactionsPage() {
         onTransactionsChange={handleTransactionsChange}
         onCategoriesChange={handleCategoriesChange}
         onBudgetDataChanged={handleBudgetDataChanged}
+        tags={data?.tags || []}
+        tagsAvailable={data?.tagsAvailable ?? false}
+        onTagsChange={handleTagsChange}
+        onTagDataChanged={handleTagDataChanged}
       />
     </div>
   )

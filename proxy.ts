@@ -34,7 +34,8 @@ export async function proxy(request: NextRequest) {
     (request.nextUrl.pathname.startsWith("/dashboard") ||
       request.nextUrl.pathname.startsWith("/transactions") ||
       request.nextUrl.pathname.startsWith("/budgets") ||
-      request.nextUrl.pathname.startsWith("/categories")) &&
+      request.nextUrl.pathname.startsWith("/categories") ||
+      request.nextUrl.pathname.startsWith("/tags")) &&
     !user
   ) {
     const url = request.nextUrl.clone()

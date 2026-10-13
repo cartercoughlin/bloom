@@ -41,6 +41,7 @@ export interface Transaction {
   plaid_account_id?: string | null
   account_name?: string | null
   plaid_details?: PlaidDetails | null
+  tag_ids?: string[]
   categories?: {
     name: string
     color: string
