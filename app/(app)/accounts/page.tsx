@@ -107,12 +107,12 @@ export default function AccountsPage() {
     const loadBalances = async () => {
       // Check in-memory cache first
       const cached = appData.get('accounts')
-      const cachedHistory = appData.get('account-history')
+      const cachedHistory = appData.get('account-history-v2')
       if (cached) {
         setBalances(cached)
         if (cachedHistory) setHistory(cachedHistory)
         setLoading(false)
-        if (!appData.isStale('accounts') && cachedHistory && !appData.isStale('account-history')) return
+        if (!appData.isStale('accounts') && cachedHistory && !appData.isStale('account-history-v2')) return
       }
 
       if (fetchingRef.current) return
@@ -135,9 +135,9 @@ export default function AccountsPage() {
         appData.set('accounts', sortedData)
 
         if (historyResponse.ok) {
-          const historyData = await historyResponse.json()
-          setHistory(historyData || [])
-          appData.set('account-history', historyData || [])
+          const historyData = (await historyResponse.json())?.points || []
+          setHistory(historyData)
+          appData.set('account-history-v2', historyData)
         }
       } catch (error) {
         console.error('Error loading balances:', error)

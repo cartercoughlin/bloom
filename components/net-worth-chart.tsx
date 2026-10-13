@@ -18,11 +18,15 @@ interface Point {
   assets: number
   liabilities: number
   netWorth: number
+  estimated: boolean
 }
 
 interface NetWorthData {
   points: Point[]
   hasAccounts: boolean
+  coverageStart?: string
+  investmentAccountNames: string[]
+  investmentTransferCount: number
 }
 
 const RANGES = [
@@ -40,36 +44,34 @@ const parseDate = (date: string) => {
 }
 
 async function fetchNetWorth(): Promise<NetWorthData> {
-  const [historyRes, accountsRes] = await Promise.all([
-    fetch("/api/net-worth-history?months=12", { cache: "no-store" }),
-    fetch("/api/account-balances", { cache: "no-store" }),
-  ])
-  const history: Point[] = historyRes.ok ? await historyRes.json() : []
-  const accounts: { account_type: string; balance: number }[] = accountsRes.ok ? await accountsRes.json() : []
-
-  // End the line at today's live balances
-  if (accounts.length > 0) {
-    let assets = 0
-    let liabilities = 0
-    for (const a of accounts) {
-      if (a.account_type === "liability") liabilities += Math.abs(Number(a.balance))
-      else assets += Number(a.balance)
-    }
-    const now = new Date()
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`
-    const current = { date: today, assets, liabilities, netWorth: Math.round((assets - liabilities) * 100) / 100 }
-    const points = history.filter(p => p.date < today)
-    points.push(current)
-    return { points, hasAccounts: true }
+  const accountsRes = await fetch("/api/account-balances", { cache: "no-store" })
+  const accounts = accountsRes.ok ? await accountsRes.json() : []
+  if (!Array.isArray(accounts) || accounts.length === 0) {
+    return { points: [], hasAccounts: false, investmentAccountNames: [], investmentTransferCount: 0 }
   }
-  return { points: history, hasAccounts: history.length > 0 }
+
+  // History is rebuilt backwards from exactly these balances, so it ends at today's numbers
+  const historyRes = await fetch("/api/net-worth-history?months=12", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accounts }),
+    cache: "no-store",
+  })
+  const history = historyRes.ok ? await historyRes.json() : null
+  return {
+    points: history?.points || [],
+    hasAccounts: true,
+    coverageStart: history?.coverageStart,
+    investmentAccountNames: history?.investmentAccountNames || [],
+    investmentTransferCount: history?.investmentTransferCount || 0,
+  }
 }
 
 function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" }) {
   const { privacyMode } = usePrivacy()
   const [months, setMonths] = useState<number>(variant === "card" ? 6 : 12)
   const fetcher = useCallback(fetchNetWorth, [])
-  const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v1`, fetcher)
+  const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v2`, fetcher)
 
   const points = useMemo(() => {
     if (!data) return []
@@ -163,7 +165,7 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
       <CardContent className="px-3 pb-4 sm:px-6">
         {points.length < 2 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            History builds up each time balances sync. Check back after a few syncs.
+            Not enough transaction history yet to estimate past balances.
           </p>
         ) : (
           <ChartContainer
@@ -206,7 +208,9 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
                   <ChartTooltipContent
                     labelFormatter={(_, payload) => {
                       const p = payload?.[0]?.payload as Point | undefined
-                      return p ? parseDate(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""
+                      return p
+                        ? `${parseDate(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${p.estimated ? " (estimated)" : ""}`
+                        : ""
                     }}
                     formatter={(_, __, item) => {
                       const p = item.payload as Point
@@ -237,6 +241,14 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
               />
             </AreaChart>
           </ChartContainer>
+        )}
+        {points.some(p => p.estimated) && data && (
+          <p className="mt-2 px-1 text-[11px] leading-snug text-muted-foreground">
+            Past values are estimated by working back from today's balances through your transactions.
+            {data.investmentAccountNames.length > 0 && (
+              <> {data.investmentAccountNames.join(", ")} only {data.investmentAccountNames.length === 1 ? "reflects" : "reflect"} deposits and withdrawals{data.investmentTransferCount > 0 ? ` (${data.investmentTransferCount} found)` : ""}, not market gains or losses.</>
+            )}
+          </p>
         )}
       </CardContent>
     </Card>

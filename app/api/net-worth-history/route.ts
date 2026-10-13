@@ -1,91 +1,127 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
+import {
+  reconstructNetWorth,
+  type BalanceTransaction,
+  type CurrentAccount,
+  type SnapshotRow,
+} from '@/lib/net-worth/reconstruct'
 
-// Accounts drop out of the total if they haven't been snapshotted for this
-// long (e.g. a disconnected account), instead of being carried forward forever
-const CARRY_FORWARD_DAYS = 45
-const DAY_MS = 24 * 60 * 60 * 1000
+const localDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-interface Snapshot {
-  snapshot_date: string
-  account_type: string
-  balance: number
-  plaid_account_id: string | null
-  account_name: string
+// POST /api/net-worth-history?months=12[&group=month]
+// Body: { accounts: [{ plaid_account_id, account_name, account_type, balance }] }
+//   (the live balances the page shows, so history ends exactly at them)
+// GET falls back to the stored account_balances rows.
+//
+// Returns { points: [{ date, assets, liabilities, netWorth, estimated }], coverageStart,
+// investmentTransferCount, investmentAccountNames }. History is estimated by working
+// backwards from today's balances through transactions; see lib/net-worth/reconstruct.ts.
+export async function POST(request: NextRequest) {
+  const body = await request.json().catch(() => null)
+  const accounts = Array.isArray(body?.accounts) ? (body.accounts as CurrentAccount[]) : null
+  return buildHistory(request, accounts)
 }
 
-// GET /api/net-worth-history?months=12[&group=month]
-// Returns one point per snapshot date: [{ date, assets, liabilities, netWorth }],
-// or the last point of each month with group=month
 export async function GET(request: NextRequest) {
+  return buildHistory(request, null)
+}
+
+async function buildHistory(request: NextRequest, providedAccounts: CurrentAccount[] | null) {
   try {
     const supabase = await createClient()
-
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const months = Math.min(36, Math.max(1, Number(request.nextUrl.searchParams.get('months')) || 12))
-    const start = new Date()
+    const months = Math.min(24, Math.max(1, Number(request.nextUrl.searchParams.get('months')) || 12))
+    const now = new Date()
+    const today = localDate(now)
+    const start = new Date(now)
     start.setMonth(start.getMonth() - months)
-    // Look back a little further so balances can carry into the first point
-    const lookback = new Date(start.getTime() - CARRY_FORWARD_DAYS * DAY_MS)
-    const startDate = start.toISOString().split('T')[0]
+    const earliest = localDate(start)
 
-    const snapshots = await fetchAllRows<Snapshot>((from, to) =>
-      supabase
-        .from('balance_snapshots')
-        .select('snapshot_date, account_type, balance, plaid_account_id, account_name')
+    let accounts = providedAccounts
+    if (!accounts) {
+      const { data } = await supabase
+        .from('account_balances')
+        .select('plaid_account_id, account_name, account_type, balance')
         .eq('user_id', user.id)
-        .gte('snapshot_date', lookback.toISOString().split('T')[0])
-        .order('snapshot_date', { ascending: true })
-        .order('id', { ascending: true })
-        .range(from, to)
-    )
-
-    // Snapshots only exist for accounts synced that day, so a date's total
-    // uses each account's most recent balance as of that date.
-    const latest = new Map<string, { date: string; type: string; balance: number }>()
-    const dates = [...new Set(snapshots.map(s => s.snapshot_date))]
-    const byDate = new Map<string, Snapshot[]>()
-    for (const s of snapshots) {
-      ;(byDate.get(s.snapshot_date) || byDate.set(s.snapshot_date, []).get(s.snapshot_date)!).push(s)
+      accounts = (data || []) as CurrentAccount[]
     }
+    accounts = accounts
+      .filter(a => a && typeof a.account_name === 'string' && Number.isFinite(Number(a.balance)))
+      .map(a => ({
+        plaid_account_id: a.plaid_account_id || null,
+        account_name: a.account_name,
+        account_type: a.account_type,
+        balance: Number(a.balance),
+      }))
 
-    const points = []
-    for (const date of dates) {
-      for (const s of byDate.get(date)!) {
-        latest.set(s.plaid_account_id || s.account_name, { date, type: s.account_type, balance: Number(s.balance) })
-      }
-      if (date < startDate) continue
+    const [transactions, snapshots] = await Promise.all([
+      fetchTransactions(supabase, user.id, earliest),
+      fetchAllRows<SnapshotRow>((from, to) =>
+        supabase
+          .from('balance_snapshots')
+          .select('snapshot_date, plaid_account_id, account_name, balance')
+          .eq('user_id', user.id)
+          .gte('snapshot_date', earliest)
+          .order('snapshot_date')
+          .order('id')
+          .range(from, to)
+      ),
+    ])
 
-      const dateMs = new Date(date).getTime()
-      let assets = 0
-      let liabilities = 0
-      for (const acct of latest.values()) {
-        if (dateMs - new Date(acct.date).getTime() > CARRY_FORWARD_DAYS * DAY_MS) continue
-        if (acct.type === 'liability') liabilities += Math.abs(acct.balance)
-        else assets += acct.balance
-      }
-      points.push({
-        date,
-        assets: Math.round(assets * 100) / 100,
-        liabilities: Math.round(liabilities * 100) / 100,
-        netWorth: Math.round((assets - liabilities) * 100) / 100,
-      })
-    }
+    const result = reconstructNetWorth({ accounts, transactions, snapshots, today, earliest })
 
     if (request.nextUrl.searchParams.get('group') === 'month') {
-      const lastPerMonth = new Map<string, (typeof points)[number]>()
-      for (const p of points) lastPerMonth.set(p.date.slice(0, 7), p)
-      return NextResponse.json([...lastPerMonth.values()])
+      const lastPerMonth = new Map<string, (typeof result.points)[number]>()
+      for (const p of result.points) lastPerMonth.set(p.date.slice(0, 7), p)
+      return NextResponse.json({ ...result, points: [...lastPerMonth.values()] })
     }
 
-    return NextResponse.json(points)
+    return NextResponse.json(result)
   } catch (error) {
     console.error('Net worth history error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
+}
+
+// Every posted transaction on a linked account, including hidden ones (they
+// still moved money). Deleted rows are skipped: they're mostly duplicates.
+async function fetchTransactions(supabase: any, userId: string, earliest: string): Promise<BalanceTransaction[]> {
+  const query = (columns: string) => (from: number, to: number) =>
+    supabase
+      .from('transactions')
+      .select(columns)
+      .eq('user_id', userId)
+      .gte('date', earliest)
+      .not('plaid_account_id', 'is', null)
+      .not('deleted', 'is', true)
+      .order('date')
+      .order('id')
+      .range(from, to)
+
+  const base = 'plaid_account_id, amount, transaction_type, date, description, merchant_name'
+  let rows: any[]
+  try {
+    rows = await fetchAllRows<any>(query(`${base}, plaid_details`))
+  } catch {
+    // plaid_details column not added yet (migrations/add-plaid-details.sql)
+    rows = await fetchAllRows<any>(query(base))
+  }
+
+  return rows.map(r => ({
+    plaid_account_id: r.plaid_account_id,
+    amount: Number(r.amount),
+    transaction_type: r.transaction_type,
+    date: String(r.date).slice(0, 10),
+    description: r.description,
+    merchant_name: r.merchant_name,
+    pending: r.plaid_details?.pending === true,
+    counterparty_names: (r.plaid_details?.counterparties || []).map((c: any) => c.name).filter(Boolean),
+  }))
 }
