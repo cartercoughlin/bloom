@@ -28,7 +28,7 @@ interface MonthlySpendingComparisonProps {
   year: number
   // Total budget (including rollover), drawn as a horizontal line
   budgetTotal?: number
-  // Projected month-end spending; draws a dashed line from today to month end
+  // Month-end spending if the rest of the month goes to plan; dashed line from today
   projectedTotal?: number
 }
 
@@ -197,7 +197,7 @@ function MonthlySpendingComparisonInner({
       <CardHeader className="pb-3 md:pb-6">
         <CardTitle className="text-base md:text-lg">Spending Pace</CardTitle>
         <CardDescription className="text-xs md:text-sm">
-          Running total vs. {previousMonthLabel}{projectedTotal !== undefined ? ", with where this month is headed" : ""}
+          Running total vs. {previousMonthLabel}{projectedTotal !== undefined ? ", and the rest of the month at your planned pace" : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="px-3 pb-4 sm:px-6 md:pb-6">
@@ -223,7 +223,7 @@ function MonthlySpendingComparisonInner({
               color: "#ea580c",
             },
             projected: {
-              label: "Projected",
+              label: "At planned pace",
               color: "#16a34a",
             },
           }}
@@ -255,7 +255,7 @@ function MonthlySpendingComparisonInner({
                   formatter={(value, name) => (
                     <div className="flex min-w-[9rem] items-center justify-between gap-4">
                       <span className="text-muted-foreground">
-                        {name === "current" ? currentMonthLabel : name === "projected" ? "Projected" : previousMonthLabel}
+                        {name === "current" ? currentMonthLabel : name === "projected" ? "At planned pace" : previousMonthLabel}
                       </span>
                       <span className="font-mono font-medium text-foreground">
                         {privacyMode ? "••••••" : currencyFormatter.format(Number(value))}

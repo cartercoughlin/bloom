@@ -19,7 +19,7 @@ export function CategoriesAtRisk({ summary }: { summary: BudgetSummary }) {
         <CardContent className="flex items-center gap-3 p-4">
           <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
           <p className="text-sm">
-            {finished ? "Every category finished within budget." : "Every category is on pace to stay within budget."}
+            {finished ? "Every category finished within budget." : "Every category is on or ahead of pace."}
           </p>
         </CardContent>
       </Card>
@@ -33,10 +33,10 @@ export function CategoriesAtRisk({ summary }: { summary: BudgetSummary }) {
       </CardHeader>
       <CardContent className="space-y-3 pb-4">
         {atRisk.slice(0, MAX_SHOWN).map(c => {
-          const scale = Math.max(c.budget, c.projected, c.spent)
+          const scale = Math.max(c.budget, c.spent)
           const spentPct = (c.spent / scale) * 100
-          const projectedPct = (c.projected / scale) * 100
           const budgetPct = (c.budget / scale) * 100
+          const expectedPct = (Math.min(c.expected, scale) / scale) * 100
           const alreadyOver = c.overBy > 0
 
           return (
@@ -47,19 +47,24 @@ export function CategoriesAtRisk({ summary }: { summary: BudgetSummary }) {
                 </span>
                 <span className="text-xs text-muted-foreground flex-shrink-0">
                   {alreadyOver ? (
-                    <><PrivateAmount amount={c.overBy} decimals={0} className="font-semibold text-red-600" /> over</>
+                    <><PrivateAmount amount={c.overBy} decimals={0} className="font-semibold text-red-600" /> over budget</>
                   ) : (
-                    <>on pace for <PrivateAmount amount={c.projected} decimals={0} className="font-semibold text-amber-600" /> of <PrivateAmount amount={c.budget} decimals={0} /></>
+                    <><PrivateAmount amount={c.pacingDifference} decimals={0} className="font-semibold text-amber-600" /> behind pace</>
                   )}
                 </span>
               </div>
-              <div className="relative mt-1.5 h-2 rounded-full bg-muted overflow-hidden">
-                {!finished && (
-                  <div className="absolute inset-y-0 left-0 rounded-full opacity-30" style={{ width: `${projectedPct}%`, backgroundColor: c.color }} />
+              <div className="relative mt-1.5">
+                <div className="relative h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${spentPct}%`, backgroundColor: c.color }} />
+                </div>
+                {/* Budget limit, when spending has gone past it */}
+                {alreadyOver && (
+                  <div className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-foreground/60" style={{ left: `calc(${budgetPct}% - 1px)` }} />
                 )}
-                <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${spentPct}%`, backgroundColor: c.color }} />
-                {/* Budget limit */}
-                <div className="absolute inset-y-0 w-0.5 bg-foreground/60" style={{ left: `calc(${budgetPct}% - 1px)` }} />
+                {/* Expected by today, same as the pace marker on Budgets */}
+                {!finished && !alreadyOver && (
+                  <div className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-blue-600 dark:bg-blue-400" style={{ left: `calc(${expectedPct}% - 1px)` }} title="Expected by today" />
+                )}
               </div>
             </Link>
           )

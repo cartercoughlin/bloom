@@ -34,6 +34,7 @@ import { useRouter } from "next/navigation"
 import { PrivateAmount } from "./private-amount"
 import { CategoryForm } from "./category-form"
 import { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
+import { expectedSpending as calculateExpectedSpending, historicalRecurringFor } from "@/lib/budget/pacing"
 
 interface Budget {
   id: string
@@ -604,44 +605,14 @@ export function BudgetList({
             const isOverBudget = netSpending > totalBudget
             const isIncomeCategory = income > expenses
 
-            // Calculate expected spending using historical recurring data when available
-            // Historical data tells us what recurring expenses to expect for the full month
-            // Rollover is available immediately, not scaled through the month
-            const calculateExpectedSpending = () => {
-              if (percentageThroughMonth === null) return 0
-
-              // If we have historical data for this category, use hybrid approach
-              const historicalRecurringForCategory = historicalRecurring?.byCategory?.[budget.category_id] || 0
-              const hasHistoricalData = historicalRecurring && historicalRecurring.monthsUsed > 0 && historicalRecurringForCategory > 0
-
-              if (hasHistoricalData) {
-                // Use baseBudget (not totalBudget) so rollover isn't scaled
-                const historicalVariableFromBase = Math.max(0, baseBudget - historicalRecurringForCategory)
-
-                // Net recurring expenses (after income offsets)
-                const netRecurringExpenses = Math.max(0, recurringExpenses - income)
-
-                // Expected recurring: whichever is higher - what's already hit or baseline expectation
-                const expectedRecurringBaseline = historicalRecurringForCategory * (percentageThroughMonth / 100)
-                const expectedRecurring = Math.max(netRecurringExpenses, expectedRecurringBaseline)
-
-                // Expected variable: scales linearly through the month (from base budget only)
-                const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
-
-                // Rollover is available immediately from day 1, so add the full amount
-                return expectedRecurring + expectedVariable + rollover
-              }
-
-              // Fallback: no historical data for this category
-              // Use actual recurring spent so far as the baseline, scale base budget variable only
-              // Rollover is available immediately from day 1, so add the full amount
-              const netRecurringExpenses = Math.max(0, recurringExpenses - income)
-              const remainingBaseBudget = Math.max(0, baseBudget - netRecurringExpenses)
-
-              return netRecurringExpenses + (remainingBaseBudget * (percentageThroughMonth / 100)) + rollover
-            }
-
-            const expectedSpending = calculateExpectedSpending()
+            // Rollover is available from day 1, so it counts as expected in full
+            const expectedSpending = percentageThroughMonth === null ? 0 : calculateExpectedSpending({
+              baseBudget,
+              rollover,
+              income,
+              recurringExpenses,
+              historicalRecurring: historicalRecurringFor(historicalRecurring, budget.category_id),
+            }, percentageThroughMonth / 100, true)
             const pacingDifference = percentageThroughMonth !== null ? netSpending - expectedSpending : 0
 
             return (
