@@ -15,8 +15,10 @@ function SpendingHistoryInner({ history }: { history: MonthHistory[] }) {
   const { privacyMode } = usePrivacy()
   const complete = history.filter(m => !m.isPartial && (m.spent > 0 || m.budget))
   const average = complete.length > 0 ? complete.reduce((s, m) => s + m.spent, 0) / complete.length : null
+  // Budget minus spending, summed over finished months that had a budget:
+  // positive = under budget overall, negative = over
   const budgeted = complete.filter(m => m.budget !== null)
-  const underCount = budgeted.filter(m => m.spent <= (m.budget || 0)).length
+  const totalDelta = budgeted.reduce((s, m) => s + (m.budget! - m.spent), 0)
 
   if (history.every(m => m.spent === 0 && m.budget === null)) {
     return (
@@ -46,10 +48,17 @@ function SpendingHistoryInner({ history }: { history: MonthHistory[] }) {
               : <span className="text-muted-foreground">—</span>}
           </div>
           <div className="rounded-lg bg-muted/50 p-3">
-            <div className="text-xs text-muted-foreground">Within budget</div>
-            <span className="font-semibold">
-              {budgeted.length > 0 ? `${underCount} of ${budgeted.length} months` : "—"}
-            </span>
+            <div className="text-xs text-muted-foreground">
+              Total delta{budgeted.length > 0 ? ` · ${budgeted.length} mo` : ""}
+            </div>
+            {budgeted.length > 0 ? (
+              <span className={totalDelta >= 0 ? "text-green-600" : "text-red-600"}>
+                <PrivateAmount amount={totalDelta} decimals={0} showSign className="font-semibold" />
+                <span className="text-xs font-normal"> {totalDelta >= 0 ? "under" : "over"}</span>
+              </span>
+            ) : (
+              <span className="text-muted-foreground">—</span>
+            )}
           </div>
         </div>
 
