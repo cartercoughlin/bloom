@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { RegisterServiceWorker } from "./register-sw"
 import { PWAUpdatePrompt } from "@/components/pwa-update-prompt"
+import { Toaster } from "@/components/ui/sonner"
 import { ThemeProvider } from "@/components/theme-provider"
 import { PrivacyProvider } from "@/contexts/privacy-context"
 import "./globals.css"
@@ -83,6 +84,7 @@ export default function RootLayout({
           <PrivacyProvider>
             {children}
           </PrivacyProvider>
+          <Toaster position="top-center" offset="calc(env(safe-area-inset-top, 0px) + 12px)" />
         </ThemeProvider>
         <Analytics />
         <RegisterServiceWorker />

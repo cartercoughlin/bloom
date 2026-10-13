@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { cache } from "@/lib/capacitor"
+import { useAppData } from "@/contexts/app-data-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Trash2, Edit } from "lucide-react"
@@ -32,6 +32,7 @@ export function CategoryList({ categories: initialCategories }: { categories: Ca
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const router = useRouter()
+  const appData = useAppData()
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -51,9 +52,8 @@ export function CategoryList({ categories: initialCategories }: { categories: Ca
 
       if (error) throw error
 
-      // Invalidate all budget and dashboard caches since categories affect all months
-      await cache.removePattern('budgets-')
-      await cache.removePattern('dashboard-')
+      // Categories appear on every screen and month, so refetch them all
+      appData.markStale()
 
       setCategories(categories.filter((c) => c.id !== deleteId))
       setDeleteId(null)

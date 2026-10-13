@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { PrivateAmount } from './private-amount'
 import { useRouter } from 'next/navigation'
 import { cache, isBrowserOnly } from '@/lib/capacitor'
+import { useAppData } from '@/contexts/app-data-context'
 
 interface ConnectedAccount {
   id: string
@@ -34,6 +35,7 @@ export function ConnectedAccounts() {
   const [refreshingBalances, setRefreshingBalances] = useState(false)
   const [showManualControls, setShowManualControls] = useState(false)
   const router = useRouter()
+  const appData = useAppData()
 
   useEffect(() => {
     // Only show manual refresh buttons in regular web browser
@@ -268,9 +270,8 @@ export function ConnectedAccounts() {
     // Wait for the exchange-token sync to complete
     await new Promise(resolve => setTimeout(resolve, 2000))
 
-    // Clear any cached data
-    await cache.remove('dashboard-data')
-    await cache.removePattern('dashboard-')
+    // Refetch every screen with the new account's transactions
+    appData.markStale()
 
     // Refresh the page and load accounts
     router.refresh()

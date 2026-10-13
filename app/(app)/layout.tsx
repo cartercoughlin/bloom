@@ -15,7 +15,8 @@ export default function AppLayout({
       <AppDataProvider>
         <AutoSyncService />
         <AppNav />
-        {children}
+        {/* Room for the tab bar's home-indicator inset; pages pad for the bar itself */}
+        <main className="pb-[env(safe-area-inset-bottom)] md:pb-0">{children}</main>
         <MobileNav />
       </AppDataProvider>
     </MonthProvider>

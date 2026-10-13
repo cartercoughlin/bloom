@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { cache } from "@/lib/capacitor"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -274,10 +273,6 @@ export function BudgetList({
         ))
       }
 
-      // Invalidate cache to force fresh data load
-      await cache.removePattern(`budgets-${year}-${month}`)
-      await cache.removePattern(`dashboard-${year}-${month}`)
-
       setIsOpen(false)
       if (onEditComplete) onEditComplete()
       if (onRefresh) onRefresh()
@@ -303,10 +298,6 @@ export function BudgetList({
 
       if (error) throw error
 
-      // Invalidate cache to force fresh data load
-      await cache.removePattern(`budgets-${year}-${month}`)
-      await cache.removePattern(`dashboard-${year}-${month}`)
-
       setBudgets(budgets.filter((b) => b.id !== budgetId))
       if (onRefresh) onRefresh()
     } catch (error) {
@@ -331,6 +322,8 @@ export function BudgetList({
         if (selectedTransaction?.id === transactionId) {
           setSelectedTransaction({ ...selectedTransaction, recurring: !currentRecurring })
         }
+        // Recurring vs. variable spending feeds budget pacing
+        if (onRefresh) onRefresh()
       } else {
         console.error("Failed to toggle recurring status")
         alert("Failed to update recurring status")
@@ -348,10 +341,6 @@ export function BudgetList({
       })
 
       if (response.ok) {
-        // Invalidate cache to force fresh data load
-        await cache.removePattern(`budgets-${year}-${month}`)
-        await cache.removePattern(`dashboard-${year}-${month}`)
-
         setCategoryTransactions(prev => prev.filter(tx => tx.id !== transactionId))
         setSelectedTransaction(null)
         if (onRefresh) onRefresh()

@@ -4,15 +4,17 @@
 @custom-variant dark (&:is(.dark *));
 
 /* Proper viewport scaling */
+/* `clip` rather than `auto`: auto makes body a scroll container, which
+   breaks position: sticky on the header */
 html {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: clip;
 }
 
 body {
   width: 100%;
   min-width: 320px;
-  overflow-x: auto;
+  overflow-x: clip;
 }
 
 * {
@@ -22,6 +24,24 @@ body {
 /* iOS safe area support */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Native-feeling touch behavior: no gray tap flash, no long-press
+   callout or text selection on controls */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+a,
+button,
+nav,
+[role="button"],
+[role="option"],
+[role="tab"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 :root {
@@ -96,7 +116,7 @@ body {
 }
 
 @theme inline {
-  --font-sans: 'Geist', 'Geist Fallback';
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Geist', 'Geist Fallback', system-ui, sans-serif;
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
   --color-foreground: var(--foreground);

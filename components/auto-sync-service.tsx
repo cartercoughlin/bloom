@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { performAutoSync } from '@/lib/auto-sync';
-import { isPWAOrMobile, cache } from '@/lib/capacitor';
+import { isPWAOrMobile } from '@/lib/capacitor';
 import { useAppData } from '@/contexts/app-data-context';
 
 /**
@@ -16,7 +15,6 @@ import { useAppData } from '@/contexts/app-data-context';
  * Automatically refreshes the UI after successful sync
  */
 export function AutoSyncService() {
-  const router = useRouter();
   const appData = useAppData();
 
   useEffect(() => {
@@ -57,17 +55,8 @@ export function AutoSyncService() {
 
         toast.success(messages.join(', '));
 
-        // Clear all cached data so next navigation fetches fresh data
-        console.log('[AutoSync] Clearing cache...');
-        await cache.removePattern('dashboard-');
-        await cache.removePattern('budgets-');
-        await cache.remove('transactions-page');
-        appData.invalidate(); // Clear in-memory cache too
-
-        // Trigger a soft refresh via Next.js router instead of full page reload.
-        // This re-runs server components and preserves client state/scroll position.
-        console.log('[AutoSync] Refreshing via router...');
-        router.refresh();
+        // Refetch every screen; cached data stays visible until fresh data arrives
+        appData.markStale();
       } else {
         console.log('[AutoSync] No new data to sync');
       }
@@ -86,7 +75,7 @@ export function AutoSyncService() {
       clearInterval(intervalId);
       console.log('[AutoSync] Service stopped');
     };
-  }, [router]);
+  }, [appData.markStale]);
 
   // This component renders nothing
   return null;

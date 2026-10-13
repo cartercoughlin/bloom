@@ -2,11 +2,11 @@
  * Daily Digest Cron Job
  *
  * Called daily by Vercel Cron to send budget digests to opted-in users.
- * Schedule: 0 8 * * * (8 AM UTC daily) — see vercel.json
+ * Schedule: 0 16 * * * (4 PM UTC / noon Eastern) — see vercel.json
  */
 
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { generateDigestData } from '@/lib/email/generate-digest-data'
 import { generateBudgetDigestHTML } from '@/lib/email/budget-digest-template'
 import { syncPlaidTransactions } from '@/lib/plaid-sync'
@@ -14,7 +14,49 @@ import { syncPlaidTransactions } from '@/lib/plaid-sync'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+// Stop syncing this long into the run so there's time left to build and send emails
+const SYNC_DEADLINE_MS = 25_000
+
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | 'timeout'> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeout = new Promise<'timeout'>(resolve => { timer = setTimeout(() => resolve('timeout'), ms) })
+  try {
+    return await Promise.race([promise, timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+async function syncUserTransactions(supabase: SupabaseClient, userId: string) {
+  try {
+    const { data: plaidItems } = await supabase
+      .from('plaid_items')
+      .select('access_token')
+      .eq('user_id', userId)
+      .eq('sync_transactions', true)
+
+    for (const item of plaidItems || []) {
+      if (!item.access_token) continue
+      const syncResult = await syncPlaidTransactions(item.access_token, {
+        userId,
+        supabaseClient: supabase,
+        syncTransactions: true,
+        syncBalances: false,
+      })
+      if (!syncResult.success) {
+        console.warn(`[DailyDigest] Sync warning for ${userId}: ${syncResult.error}`)
+      } else {
+        console.log(`[DailyDigest] Synced ${syncResult.newTransactions} new, ${syncResult.updatedTransactions} updated for ${userId}`)
+      }
+    }
+  } catch (syncErr) {
+    const msg = syncErr instanceof Error ? syncErr.message : 'Unknown sync error'
+    console.warn(`[DailyDigest] Sync failed for ${userId}, continuing with existing data: ${msg}`)
+  }
+}
+
 export async function GET(request: Request) {
+  const startedAt = Date.now()
   // Log immediately so we can always see invocations in Vercel logs
   console.log('[DailyDigest] Cron invoked')
 
@@ -78,35 +120,13 @@ export async function GET(request: Request) {
         }
 
         // Refresh transactions before generating the digest so data is up-to-date.
-        // Only sync transactions (not balances) to keep the run fast and within
-        // the Hobby plan's 60s maxDuration budget.
-        try {
-          const { data: plaidItems } = await supabase
-            .from('plaid_items')
-            .select('access_token')
-            .eq('user_id', userId)
-            .eq('sync_transactions', true)
-
-          if (plaidItems && plaidItems.length > 0) {
-            console.log(`[DailyDigest] Syncing ${plaidItems.length} Plaid item(s) for ${userId}`)
-            for (const item of plaidItems) {
-              if (!item.access_token) continue
-              const syncResult = await syncPlaidTransactions(item.access_token, {
-                userId,
-                supabaseClient: supabase,
-                syncTransactions: true,
-                syncBalances: false,
-              })
-              if (!syncResult.success) {
-                console.warn(`[DailyDigest] Sync warning for ${userId}: ${syncResult.error}`)
-              } else {
-                console.log(`[DailyDigest] Synced ${syncResult.newTransactions} new, ${syncResult.updatedTransactions} updated for ${userId}`)
-              }
-            }
-          }
-        } catch (syncErr) {
-          const msg = syncErr instanceof Error ? syncErr.message : 'Unknown sync error'
-          console.warn(`[DailyDigest] Sync failed for ${userId}, continuing with existing data: ${msg}`)
+        // The sync is best-effort and time-boxed: a slow bank sync used to eat
+        // the whole function timeout, killing the run before any email went out.
+        // The 2 AM sync cron keeps data reasonably fresh if this is skipped.
+        const syncBudgetMs = Math.max(0, SYNC_DEADLINE_MS - (Date.now() - startedAt))
+        const syncOutcome = await withTimeout(syncUserTransactions(supabase, userId), syncBudgetMs)
+        if (syncOutcome === 'timeout') {
+          console.warn(`[DailyDigest] Sync for ${userId} exceeded ${syncBudgetMs}ms, sending with existing data`)
         }
 
         // Generate digest

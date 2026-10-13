@@ -1,85 +1,100 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { RefreshCw } from "lucide-react"
+import { haptics } from "@/lib/capacitor"
 
-export function PullToRefresh() {
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const [pullDistance, setPullDistance] = useState(0)
-  const [startY, setStartY] = useState(0)
+const THRESHOLD = 70
+const MAX_PULL = 110
+
+/**
+ * iOS-style pull-to-refresh for touch devices. Pull down from the top of the
+ * page past the threshold and release to run `onRefresh`.
+ */
+export function PullToRefresh({ onRefresh }: { onRefresh: () => Promise<unknown> }) {
+  const [pull, setPull] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const onRefreshRef = useRef(onRefresh)
+  onRefreshRef.current = onRefresh
 
   useEffect(() => {
-    let touchStartY = 0
-    let touchCurrentY = 0
-    let isAtTop = false
+    let startY: number | null = null
+    let current = 0
+    let armed = false
+    let busy = false
 
-    const handleTouchStart = (e: TouchEvent) => {
-      if (window.scrollY === 0) {
-        isAtTop = true
-        touchStartY = e.touches[0].clientY
-        setStartY(touchStartY)
+    const onTouchStart = (e: TouchEvent) => {
+      if (busy || window.scrollY > 0 || e.touches.length !== 1) return
+      startY = e.touches[0].clientY
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (startY === null) return
+      const delta = e.touches[0].clientY - startY
+      if (delta <= 0 || window.scrollY > 0) {
+        if (current !== 0) setPull((current = 0))
+        return
+      }
+      e.preventDefault()
+      // Rubber-band resistance, like UIScrollView
+      current = Math.min(MAX_PULL, delta * 0.5)
+      setPull(current)
+      if (!armed && current >= THRESHOLD) {
+        armed = true
+        haptics.light()
+      } else if (armed && current < THRESHOLD) {
+        armed = false
       }
     }
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isAtTop || isRefreshing) return
-
-      touchCurrentY = e.touches[0].clientY
-      const pullDistance = Math.max(0, touchCurrentY - touchStartY)
-
-      if (pullDistance > 0) {
-        e.preventDefault()
-        setPullDistance(Math.min(pullDistance, 100))
+    const onTouchEnd = async () => {
+      if (startY === null) return
+      startY = null
+      const shouldRefresh = armed
+      armed = false
+      current = 0
+      if (!shouldRefresh) {
+        setPull(0)
+        return
+      }
+      busy = true
+      setRefreshing(true)
+      setPull(THRESHOLD * 0.75)
+      try {
+        await onRefreshRef.current()
+      } finally {
+        busy = false
+        setRefreshing(false)
+        setPull(0)
       }
     }
 
-    const handleTouchEnd = () => {
-      if (!isAtTop || isRefreshing) return
-
-      if (pullDistance > 60) {
-        setIsRefreshing(true)
-        // Refresh the page
-        setTimeout(() => {
-          window.location.reload()
-        }, 500)
-      }
-
-      setPullDistance(0)
-      isAtTop = false
-    }
-
-    document.addEventListener('touchstart', handleTouchStart, { passive: false })
-    document.addEventListener('touchmove', handleTouchMove, { passive: false })
-    document.addEventListener('touchend', handleTouchEnd)
-
+    document.addEventListener("touchstart", onTouchStart, { passive: true })
+    document.addEventListener("touchmove", onTouchMove, { passive: false })
+    document.addEventListener("touchend", onTouchEnd)
+    document.addEventListener("touchcancel", onTouchEnd)
     return () => {
-      document.removeEventListener('touchstart', handleTouchStart)
-      document.removeEventListener('touchmove', handleTouchMove)
-      document.removeEventListener('touchend', handleTouchEnd)
+      document.removeEventListener("touchstart", onTouchStart)
+      document.removeEventListener("touchmove", onTouchMove)
+      document.removeEventListener("touchend", onTouchEnd)
+      document.removeEventListener("touchcancel", onTouchEnd)
     }
-  }, [pullDistance, isRefreshing])
+  }, [])
 
-  if (pullDistance === 0 && !isRefreshing) return null
+  if (pull === 0 && !refreshing) return null
 
+  const progress = Math.min(1, pull / THRESHOLD)
   return (
-    <div 
-      className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-sm transition-all duration-200"
-      style={{ 
-        height: `${Math.max(pullDistance, isRefreshing ? 60 : 0)}px`,
-        transform: `translateY(-${Math.max(60 - pullDistance, 0)}px)`
-      }}
+    <div
+      className="flex justify-center overflow-hidden transition-[height] duration-150 ease-out"
+      style={{ height: pull }}
+      aria-live="polite"
     >
-      <div className="flex items-center gap-2 text-muted-foreground">
-        <RefreshCw 
-          className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`}
-          style={{ 
-            transform: `rotate(${pullDistance * 3.6}deg)` 
-          }}
-        />
-        <span className="text-sm">
-          {isRefreshing ? 'Refreshing...' : pullDistance > 60 ? 'Release to refresh' : 'Pull to refresh'}
-        </span>
-      </div>
+      <RefreshCw
+        className={`mt-3 h-5 w-5 text-muted-foreground ${refreshing ? "animate-spin" : ""}`}
+        style={{ opacity: progress, transform: refreshing ? undefined : `rotate(${progress * 270}deg)` }}
+        aria-label={refreshing ? "Refreshing" : undefined}
+      />
     </div>
   )
 }
