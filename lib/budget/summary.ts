@@ -4,7 +4,7 @@
 
 import type { CategoryTotals } from "@/lib/compute-category-totals"
 import type { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
-import { expectedSpending, historicalRecurringFor, PacingInput } from "@/lib/budget/pacing"
+import { expectedSpending, historicalRecurringFor, historyShareFor, PacingHistory, PacingInput } from "@/lib/budget/pacing"
 
 export interface SummaryBudget {
   id: string
@@ -69,6 +69,9 @@ export interface BudgetSummary {
   // Month-end spending if the rest of the month goes to plan:
   // spent so far plus the plan's expected spending for the remaining days
   projectedTotal: number
+  // The plan itself: expected spending by each day of the month
+  // (index = day, [0] = 0), excluding rollover. Current month only.
+  expectedByDay: number[] | null
   progress: MonthProgress
   categories: CategoryStatus[]
 }
@@ -80,10 +83,14 @@ export function summarizeBudgets(
   historicalRecurring: HistoricalRecurringData | undefined,
   month: number,
   year: number,
+  // Set in history pacing mode
+  pacingHistory?: PacingHistory | null,
   now = new Date()
 ): BudgetSummary {
   const progress = getMonthProgress(month, year, now)
   const pacing = progress.isCurrentMonth
+  const { day, daysInMonth } = progress
+  const expectedByDay = pacing ? new Array(daysInMonth + 1).fill(0) : null
 
   let expectedTotal = 0
   let remainingPlanned = 0
@@ -108,12 +115,20 @@ export function summarizeBudgets(
       recurringExpenses: recurring,
       historicalRecurring: historical,
     }
+    const shareOn = (d: number) => historyShareFor(pacingHistory, b.category_id, d, daysInMonth)
+
     // Per-category pace includes rollover (as on the category bars);
     // the overall pace leaves it out (as on the Progress bar)
-    const expected = pacing ? expectedSpending(input, progress.fraction, true) : budget
+    const expected = pacing ? expectedSpending(input, progress.fraction, true, shareOn(day)) : budget
     if (pacing) {
-      expectedTotal += expectedSpending(input, progress.fraction, false)
-      remainingPlanned += expectedSpending(input, 1, false) - expectedSpending(input, progress.fraction, false)
+      const expectedNow = expectedSpending(input, progress.fraction, false, shareOn(day))
+      expectedTotal += expectedNow
+      remainingPlanned += expectedSpending(input, 1, false, shareOn(daysInMonth)) - expectedNow
+      // Plan curve: what's expected by each day, before anything has posted
+      const planInput = { ...input, income: 0, recurringExpenses: 0 }
+      for (let d = 1; d <= daysInMonth; d++) {
+        expectedByDay![d] += expectedSpending(planInput, d / daysInMonth, false, shareOn(d))
+      }
     }
 
     return {
@@ -146,6 +161,7 @@ export function summarizeBudgets(
     expectedTotal: pacing ? expectedTotal : null,
     pacingDifference: pacing ? totalSpent - expectedTotal : null,
     projectedTotal: totalSpent + remainingPlanned,
+    expectedByDay,
     progress,
     categories,
   }

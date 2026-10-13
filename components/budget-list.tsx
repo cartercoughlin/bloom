@@ -34,7 +34,7 @@ import { useRouter } from "next/navigation"
 import { PrivateAmount } from "./private-amount"
 import { CategoryForm } from "./category-form"
 import { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
-import { expectedSpending as calculateExpectedSpending, historicalRecurringFor } from "@/lib/budget/pacing"
+import { expectedSpending as calculateExpectedSpending, historicalRecurringFor, historyShareFor, PacingHistory } from "@/lib/budget/pacing"
 
 interface Budget {
   id: string
@@ -71,6 +71,8 @@ interface BudgetListProps {
   spending: Record<string, number>
   rolloverByCategory?: Record<string, number>
   historicalRecurring?: HistoricalRecurringData
+  // Set in history pacing mode
+  pacingHistory?: PacingHistory | null
   month: number
   year: number
   editBudgetId?: string | null
@@ -86,6 +88,7 @@ export function BudgetList({
   spending,
   rolloverByCategory = {},
   historicalRecurring,
+  pacingHistory,
   month,
   year,
   editBudgetId = null,
@@ -612,7 +615,8 @@ export function BudgetList({
               income,
               recurringExpenses,
               historicalRecurring: historicalRecurringFor(historicalRecurring, budget.category_id),
-            }, percentageThroughMonth / 100, true)
+            }, percentageThroughMonth / 100, true,
+              historyShareFor(pacingHistory, budget.category_id, new Date().getDate(), new Date(year, month, 0).getDate()))
             const pacingDifference = percentageThroughMonth !== null ? netSpending - expectedSpending : 0
 
             return (

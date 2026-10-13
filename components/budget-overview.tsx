@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
-import { expectedSpending as calculateExpectedSpending, historicalRecurringFor } from "@/lib/budget/pacing"
+import { expectedSpending as calculateExpectedSpending, historicalRecurringFor, historyShareFor, PacingHistory } from "@/lib/budget/pacing"
 
 interface Budget {
   id: string
@@ -39,11 +39,13 @@ interface BudgetOverviewProps {
   }>
   rolloverByCategory?: Record<string, number>
   historicalRecurring?: HistoricalRecurringData
+  // Set in history pacing mode
+  pacingHistory?: PacingHistory | null
   month: number
   year: number
 }
 
-export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, month, year }: BudgetOverviewProps) {
+export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, pacingHistory, month, year }: BudgetOverviewProps) {
   const { privacyMode } = usePrivacy()
   const [showDetailModal, setShowDetailModal] = useState(false)
 
@@ -113,7 +115,8 @@ export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCateg
           income: categoryData?.income || 0,
           recurringExpenses: categoryData?.recurringExpenses || 0,
           historicalRecurring: historicalRecurringFor(historicalRecurring, budget.category_id),
-        }, percentageThroughMonth / 100, false)
+        }, percentageThroughMonth / 100, false,
+          historyShareFor(pacingHistory, budget.category_id, new Date().getDate(), new Date(year, month, 0).getDate()))
       }, 0)
     : 0
 
