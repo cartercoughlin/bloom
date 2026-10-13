@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { RefreshCw } from 'lucide-react'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { cache, isBrowserOnly } from '@/lib/capacitor'
+import { isBrowserOnly } from '@/lib/capacitor'
+import { useAppData } from '@/contexts/app-data-context'
 
 export function SyncButton() {
   const [isLoading, setIsLoading] = useState(false)
   const [showButton, setShowButton] = useState(false)
-  const router = useRouter()
+  const appData = useAppData()
 
   useEffect(() => {
     // Only show sync button in regular web browser
@@ -27,16 +27,11 @@ export function SyncButton() {
 
       if (response.ok) {
         const data = await response.json()
-        console.log('Sync result:', data)
-
         if (data.success) {
           toast.success(`Synced ${data.newTransactions} new transactions`)
           
-          // Clear cached data
-          await cache.remove('transactions-page')
-          await cache.remove('dashboard-data')
-          
-          router.refresh()
+          // Refetch every screen with the newly synced transactions
+          appData.markStale()
         } else {
           toast.error(data.error || 'Sync failed')
         }

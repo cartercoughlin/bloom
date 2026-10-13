@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from "react"
+import { useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import dynamic from "next/dynamic"
 import { createClient } from "@/lib/supabase/client"
 import { CategorySummary } from "@/components/category-summary"
 import { BudgetOverview } from "@/components/budget-overview"
-import { cache } from "@/lib/capacitor"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useMonth } from "@/contexts/month-context"
-import { useAppData } from "@/contexts/app-data-context"
+import { CACHE_KEYS } from "@/contexts/app-data-context"
+import { useCachedData } from "@/hooks/use-cached-data"
+import { Loader2 } from "lucide-react"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 import { computeCategoryTotals } from "@/lib/compute-category-totals"
 
@@ -50,11 +51,125 @@ const EMPTY_DATA: DashboardData = {
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [data, setData] = useState<DashboardData>(EMPTY_DATA)
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
-  const appData = useAppData()
-  const fetchingRef = useRef(false)
+
+  const cacheKey = `${CACHE_KEYS.dashboard}${selectedYear}-${selectedMonth}-${DASHBOARD_CACHE_VERSION}`
+
+  const fetchDashboardData = useCallback(async (): Promise<DashboardData | null> => {
+    const supabase = createClient()
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    if (userError || !user) {
+      router.push("/auth/login")
+      return null
+    }
+
+    // Get selected month date range
+    const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
+    const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
+    const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
+    const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+    const previousMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
+    const previousYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
+    const previousFirstDay = `${previousYear}-${String(previousMonth).padStart(2, '0')}-01`
+
+    // Fetch everything in parallel — including rollover via API route
+    const [transactionsResult, previousTransactionsResult, budgetsResult, categoriesResult, rolloverResponse] = await Promise.all([
+      supabase
+        .from("transactions")
+        .select(`
+          *,
+          categories (
+            name,
+            color,
+            icon
+          )
+        `)
+        .eq("user_id", user.id)
+        .gte("date", firstDay)
+        .lt("date", nextMonthFirstDay)
+        .or("deleted.is.null,deleted.eq.false")
+        .order("date", { ascending: false }),
+
+      supabase
+        .from("transactions")
+        .select(`
+          *,
+          categories (
+            name,
+            color,
+            icon
+          )
+        `)
+        .eq("user_id", user.id)
+        .gte("date", previousFirstDay)
+        .lt("date", firstDay)
+        .or("deleted.is.null,deleted.eq.false")
+        .order("date", { ascending: false }),
+
+      supabase
+        .from("budgets")
+        .select(`
+          id,
+          amount,
+          category_id,
+          month,
+          year,
+          enable_rollover,
+          categories (
+            name,
+            color,
+            icon,
+            is_rollover
+          )
+        `)
+        .eq("user_id", user.id)
+        .eq("month", selectedMonth)
+        .eq("year", selectedYear),
+
+      supabase
+        .from("categories")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("name"),
+
+      fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
+    ])
+
+    const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}
+
+    const regularBudgets = (budgetsResult.data || []).filter(
+      (budget: any) => !budget.categories?.is_rollover
+    )
+
+    let historicalRecurringData: HistoricalRecurringData = EMPTY_HISTORICAL
+    const now = new Date()
+    if (selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear()) {
+      const budgetCategoryIds = regularBudgets.map((b: any) => b.category_id)
+      historicalRecurringData = await calculateHistoricalRecurring(
+        supabase,
+        user.id,
+        selectedMonth,
+        selectedYear,
+        budgetCategoryIds,
+        3
+      )
+    }
+
+    const newData: DashboardData = {
+      currentMonthTransactions: transactionsResult.data || [],
+      previousMonthTransactions: previousTransactionsResult.data || [],
+      budgets: regularBudgets,
+      categories: categoriesResult.data || [],
+      rolloverByCategory: rollover,
+      historicalRecurring: historicalRecurringData,
+    }
+
+    return newData
+  }, [router, selectedMonth, selectedYear])
+
+  const { data: cachedData, loading, refreshing } = useCachedData(cacheKey, fetchDashboardData)
+  const data = cachedData || EMPTY_DATA
 
   // Memoize the category totals computation so it only reruns when transactions change
   const netByCategory = useMemo(
@@ -62,168 +177,7 @@ export default function DashboardPage() {
     [data.currentMonthTransactions]
   )
 
-  const cacheKey = `dashboard-${selectedYear}-${selectedMonth}-${DASHBOARD_CACHE_VERSION}`
-
-  useEffect(() => {
-    async function loadData() {
-      // Check in-memory context first (instant, no flicker)
-      const cached = appData.get(cacheKey)
-      if (cached) {
-        setData(cached)
-        setLoading(false)
-        // If data is fresh enough, skip refetch entirely
-        if (!appData.isStale(cacheKey)) return
-      }
-
-      // Prevent duplicate fetches
-      if (fetchingRef.current) return
-      fetchingRef.current = true
-
-      try {
-        const supabase = createClient()
-
-        // Check authentication
-        const { data: { user }, error: userError } = await supabase.auth.getUser()
-        if (userError || !user) {
-          router.push("/auth/login")
-          return
-        }
-
-        // If no in-memory cache, try disk cache for instant display
-        if (!cached) {
-          const diskCached = await cache.getJSON<any>(cacheKey)
-          if (diskCached) {
-            setData({
-              currentMonthTransactions: diskCached.currentMonthTransactions || [],
-              previousMonthTransactions: diskCached.previousMonthTransactions || [],
-              budgets: diskCached.budgets || [],
-              categories: diskCached.categories || [],
-              rolloverByCategory: diskCached.rolloverByCategory || {},
-              historicalRecurring: diskCached.historicalRecurring || EMPTY_HISTORICAL,
-            })
-            setLoading(false)
-          }
-        }
-
-        // Get selected month date range
-        const firstDay = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`
-        const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
-        const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
-        const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
-        const previousMonth = selectedMonth === 1 ? 12 : selectedMonth - 1
-        const previousYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear
-        const previousFirstDay = `${previousYear}-${String(previousMonth).padStart(2, '0')}-01`
-
-        // Fetch everything in parallel — including rollover via API route
-        const [transactionsResult, previousTransactionsResult, budgetsResult, categoriesResult, rolloverResponse] = await Promise.all([
-          supabase
-            .from("transactions")
-            .select(`
-              *,
-              categories (
-                name,
-                color,
-                icon
-              )
-            `)
-            .eq("user_id", user.id)
-            .gte("date", firstDay)
-            .lt("date", nextMonthFirstDay)
-            .or("deleted.is.null,deleted.eq.false")
-            .order("date", { ascending: false }),
-
-          supabase
-            .from("transactions")
-            .select(`
-              *,
-              categories (
-                name,
-                color,
-                icon
-              )
-            `)
-            .eq("user_id", user.id)
-            .gte("date", previousFirstDay)
-            .lt("date", firstDay)
-            .or("deleted.is.null,deleted.eq.false")
-            .order("date", { ascending: false }),
-
-          supabase
-            .from("budgets")
-            .select(`
-              id,
-              amount,
-              category_id,
-              month,
-              year,
-              enable_rollover,
-              categories (
-                name,
-                color,
-                icon,
-                is_rollover
-              )
-            `)
-            .eq("user_id", user.id)
-            .eq("month", selectedMonth)
-            .eq("year", selectedYear),
-
-          supabase
-            .from("categories")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("name"),
-
-          fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
-        ])
-
-        const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}
-
-        const regularBudgets = (budgetsResult.data || []).filter(
-          (budget: any) => !budget.categories?.is_rollover
-        )
-
-        let historicalRecurringData: HistoricalRecurringData = EMPTY_HISTORICAL
-        const now = new Date()
-        if (selectedMonth === now.getMonth() + 1 && selectedYear === now.getFullYear()) {
-          const budgetCategoryIds = regularBudgets.map((b: any) => b.category_id)
-          historicalRecurringData = await calculateHistoricalRecurring(
-            supabase,
-            user.id,
-            selectedMonth,
-            selectedYear,
-            budgetCategoryIds,
-            3
-          )
-        }
-
-        const newData: DashboardData = {
-          currentMonthTransactions: transactionsResult.data || [],
-          previousMonthTransactions: previousTransactionsResult.data || [],
-          budgets: regularBudgets,
-          categories: categoriesResult.data || [],
-          rolloverByCategory: rollover,
-          historicalRecurring: historicalRecurringData,
-        }
-
-        setData(newData)
-        setLoading(false)
-
-        // Cache in both memory (instant nav) and disk (app restart)
-        appData.set(cacheKey, newData)
-        await cache.setJSON(cacheKey, newData)
-      } catch (error) {
-        console.error("[Dashboard] Error loading data:", error)
-        setLoading(false)
-      } finally {
-        fetchingRef.current = false
-      }
-    }
-
-    loadData()
-  }, [selectedMonth, selectedYear])
-
-  if (loading && data.currentMonthTransactions.length === 0) {
+  if (loading && !cachedData) {
     return (
       <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
         <div className="mb-4 md:mb-8">
@@ -244,7 +198,15 @@ export default function DashboardPage() {
   return (
     <div className="container mx-auto p-3 md:p-6 max-w-7xl pb-20 md:pb-6">
       <div className="mb-4 md:mb-8">
-        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600">Dashboard</h1>
+        <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2 text-green-600 flex items-center gap-2">
+          Dashboard
+          {refreshing && (
+            <span className="flex items-center gap-1 text-xs font-normal text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Updating
+            </span>
+          )}
+        </h1>
         <p className="text-muted-foreground text-xs md:text-sm">
           {isCurrentMonth() ? 'Your spending insights for this month' : `Review spending for ${new Date(selectedYear, selectedMonth - 1).toLocaleString("default", { month: "long", year: "numeric" })}`}
         </p>

@@ -5,7 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import { cache } from "@/lib/capacitor"
+import { useAppData } from "@/contexts/app-data-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -44,6 +44,7 @@ export function CategoryForm({ category, onSuccess, onCancel }: { category?: Cat
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+  const appData = useAppData()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,9 +84,8 @@ export function CategoryForm({ category, onSuccess, onCancel }: { category?: Cat
         if (insertError) throw insertError
       }
 
-      // Invalidate all budget and dashboard caches since categories affect all months
-      await cache.removePattern('budgets-')
-      await cache.removePattern('dashboard-')
+      // Categories appear on every screen and month, so refetch them all
+      appData.markStale()
 
       if (onSuccess) {
         onSuccess()
