@@ -45,6 +45,17 @@ export interface NetWorthPoint {
   estimated: boolean
 }
 
+// Per-account view of the estimate, to sanity-check where it comes from
+export interface AccountEstimate {
+  name: string
+  type: string
+  kind: "transactions" | "investment" // investment: moved only by matched transfers
+  current: number
+  start: number // estimated balance at coverageStart
+  transactionCount: number
+  firstTransaction: string | null
+}
+
 export interface ReconstructionResult {
   points: NetWorthPoint[]
   // First day we have transaction coverage for every active account
@@ -52,6 +63,7 @@ export interface ReconstructionResult {
   // Bank transactions treated as transfers into/out of investment accounts
   investmentTransferCount: number
   investmentAccountNames: string[]
+  accounts: AccountEstimate[]
 }
 
 // Bank transactions mentioning these are transfers to/from investment
@@ -154,6 +166,8 @@ export function reconstructNetWorth({
   let poolBalance = pool.reduce((s, a) => s + Number(a.balance), 0)
 
   const points: NetWorthPoint[] = []
+  let startBalances = new Map(balance)
+  let startPool = poolBalance
   for (let day = today; day >= coverageStart; day = previousDay(day)) {
     let anchored = day === today
     if (day !== today) {
@@ -176,6 +190,10 @@ export function reconstructNetWorth({
       else assets += value
     }
     points.push({ date: day, assets: round(assets), liabilities: round(liabilities), netWorth: round(assets - liabilities), estimated: !anchored })
+    if (day === coverageStart) {
+      startBalances = new Map(balance)
+      startPool = poolBalance
+    }
 
     // Undo this day's activity to get the previous day's closing balances
     for (const [key, byDay] of deltas) {
@@ -185,10 +203,35 @@ export function reconstructNetWorth({
     poolBalance -= poolDeltas.get(day) || 0
   }
 
+  const poolCurrent = pool.reduce((s, a) => s + Number(a.balance), 0)
+  const accountEstimates: AccountEstimate[] = accounts
+    .filter(a => !poolKeys.has(keyOf(a)))
+    .map(a => ({
+      name: a.account_name,
+      type: a.account_type,
+      kind: "transactions" as const,
+      current: round(a.account_type === "liability" ? Math.abs(Number(a.balance)) : Number(a.balance)),
+      start: round(startBalances.get(keyOf(a)) ?? 0),
+      transactionCount: txCount.get(keyOf(a)) || 0,
+      firstTransaction: firstTxDate.get(keyOf(a)) || null,
+    }))
+  if (pool.length > 0) {
+    accountEstimates.push({
+      name: pool.map(a => a.account_name).join(", "),
+      type: "investment",
+      kind: "investment",
+      current: round(poolCurrent),
+      start: round(startPool),
+      transactionCount: investmentTransferCount,
+      firstTransaction: null,
+    })
+  }
+
   return {
     points: points.reverse(),
     coverageStart,
     investmentTransferCount,
     investmentAccountNames: pool.map(a => a.account_name),
+    accounts: accountEstimates,
   }
 }

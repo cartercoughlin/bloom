@@ -11,7 +11,7 @@ import {
 const localDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
-// POST /api/net-worth-history?months=12[&group=month]
+// POST /api/net-worth-history?months=24[&group=month]
 // Body: { accounts: [{ plaid_account_id, account_name, account_type, balance }] }
 //   (the live balances the page shows, so history ends exactly at them)
 // GET falls back to the stored account_balances rows.
@@ -37,7 +37,7 @@ async function buildHistory(request: NextRequest, providedAccounts: CurrentAccou
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const months = Math.min(24, Math.max(1, Number(request.nextUrl.searchParams.get('months')) || 12))
+    const months = Math.min(24, Math.max(1, Number(request.nextUrl.searchParams.get('months')) || 24))
     const now = new Date()
     const today = localDate(now)
     const start = new Date(now)
@@ -61,7 +61,7 @@ async function buildHistory(request: NextRequest, providedAccounts: CurrentAccou
         balance: Number(a.balance),
       }))
 
-    const [transactions, snapshots] = await Promise.all([
+    const [transactions, snapshots, unlinked] = await Promise.all([
       fetchTransactions(supabase, user.id, earliest),
       fetchAllRows<SnapshotRow>((from, to) =>
         supabase
@@ -73,9 +73,20 @@ async function buildHistory(request: NextRequest, providedAccounts: CurrentAccou
           .order('id')
           .range(from, to)
       ),
+      // Transactions not linked to an account can't be placed in any balance
+      supabase
+        .from('transactions')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .gte('date', earliest)
+        .is('plaid_account_id', null)
+        .not('deleted', 'is', true),
     ])
 
-    const result = reconstructNetWorth({ accounts, transactions, snapshots, today, earliest })
+    const result = {
+      ...reconstructNetWorth({ accounts, transactions, snapshots, today, earliest }),
+      unlinkedTransactionCount: unlinked.count || 0,
+    }
 
     if (request.nextUrl.searchParams.get('group') === 'month') {
       const lastPerMonth = new Map<string, (typeof result.points)[number]>()
