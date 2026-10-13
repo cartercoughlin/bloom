@@ -3,11 +3,12 @@
 import { memo, useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChevronRight, History, Loader2 } from "lucide-react"
+import { ChevronRight, History, Info, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PrivateAmount } from "@/components/private-amount"
 import { usePrivacy } from "@/contexts/privacy-context"
@@ -172,10 +173,38 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
     ? `since ${parseDate(dailyPoints[0].date).toLocaleDateString("en-US", { month: "short", year: "numeric" })}`
     : RANGES.find(r => r.months === months)?.label ?? `${months}M`
 
+  // How past values are estimated, behind the ⓘ next to the title
+  const estimated = data?.hasAccounts && points.some(p => p.estimated)
   const header = (
     <CardHeader className="pb-2">
       <div className="flex items-center justify-between gap-2">
-        <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
+        <div className="flex items-center gap-1">
+          <CardTitle className="text-base md:text-lg">Net Worth</CardTitle>
+          {estimated && data && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="-m-1.5 p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+                  aria-label="How net worth history is estimated"
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" collisionPadding={16} className="w-72 space-y-2 text-xs leading-snug text-muted-foreground">
+                <p>
+                  Past values are estimated by working back from today&apos;s balances through your transactions.
+                  {data.investmentAccountNames.length > 0 && (
+                    <> {data.investmentAccountNames.join(", ")} only {data.investmentAccountNames.length === 1 ? "reflects" : "reflect"} deposits and withdrawals{data.investmentTransferCount > 0 ? ` (${data.investmentTransferCount} found)` : ""}, not market gains or losses.</>
+                  )}
+                </p>
+                {data.coverageStart && (
+                  <p>History starts {formatMonth(data.coverageStart)}, the earliest date every account has transactions.</p>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
         {variant === "card" && (
           <Link href="/net-worth" className="flex items-center text-xs font-medium text-green-600 flex-shrink-0">
             Details <ChevronRight className="h-3 w-3" />
@@ -328,14 +357,6 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
             </AreaChart>
           </ChartContainer>
         )}
-        {points.some(p => p.estimated) && data && (
-          <p className="mt-2 px-1 text-[11px] leading-snug text-muted-foreground">
-            Past values are estimated by working back from today's balances through your transactions.
-            {data.investmentAccountNames.length > 0 && (
-              <> {data.investmentAccountNames.join(", ")} only {data.investmentAccountNames.length === 1 ? "reflects" : "reflect"} deposits and withdrawals{data.investmentTransferCount > 0 ? ` (${data.investmentTransferCount} found)` : ""}, not market gains or losses.</>
-            )}
-          </p>
-        )}
         {variant === "full" && data?.hasAccounts && <HistoryDetails data={data} />}
       </CardContent>
     </Card>
@@ -400,10 +421,7 @@ function HistoryDetails({ data }: { data: NetWorthData }) {
 
   return (
     <div className="mt-3 space-y-2 px-1">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-muted-foreground">
-          {data.coverageStart ? <>History starts {formatMonth(data.coverageStart)}, the earliest date every account has transactions.</> : null}
-        </p>
+      <div>
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={loadOlderHistory} disabled={progress !== null}>
           {progress ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <History className="mr-1 h-3 w-3" />}
           {progress ?? "Load older history"}
