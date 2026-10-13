@@ -3,13 +3,15 @@
 import { memo, useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, History, Loader2 } from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PrivateAmount } from "@/components/private-amount"
 import { usePrivacy } from "@/contexts/privacy-context"
-import { CACHE_KEYS } from "@/contexts/app-data-context"
+import { CACHE_KEYS, useAppData } from "@/contexts/app-data-context"
 import { useCachedData } from "@/hooks/use-cached-data"
 import { cn } from "@/lib/utils"
 
@@ -27,12 +29,25 @@ interface NetWorthData {
   coverageStart?: string
   investmentAccountNames: string[]
   investmentTransferCount: number
+  accounts: AccountEstimate[]
+  unlinkedTransactionCount: number
+}
+
+interface AccountEstimate {
+  name: string
+  type: string
+  kind: "transactions" | "investment"
+  current: number
+  start: number
+  transactionCount: number
+  firstTransaction: string | null
 }
 
 const RANGES = [
   { label: "3M", months: 3 },
   { label: "6M", months: 6 },
   { label: "1Y", months: 12 },
+  { label: "2Y", months: 24 },
 ] as const
 
 const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
@@ -85,11 +100,11 @@ async function fetchNetWorth(): Promise<NetWorthData> {
   const accountsRes = await fetch("/api/account-balances", { cache: "no-store" })
   const accounts = accountsRes.ok ? await accountsRes.json() : []
   if (!Array.isArray(accounts) || accounts.length === 0) {
-    return { points: [], hasAccounts: false, investmentAccountNames: [], investmentTransferCount: 0 }
+    return { points: [], hasAccounts: false, investmentAccountNames: [], investmentTransferCount: 0, accounts: [], unlinkedTransactionCount: 0 }
   }
 
   // History is rebuilt backwards from exactly these balances, so it ends at today's numbers
-  const historyRes = await fetch("/api/net-worth-history?months=12", {
+  const historyRes = await fetch("/api/net-worth-history?months=24", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ accounts }),
@@ -102,6 +117,8 @@ async function fetchNetWorth(): Promise<NetWorthData> {
     coverageStart: history?.coverageStart,
     investmentAccountNames: history?.investmentAccountNames || [],
     investmentTransferCount: history?.investmentTransferCount || 0,
+    accounts: history?.accounts || [],
+    unlinkedTransactionCount: history?.unlinkedTransactionCount || 0,
   }
 }
 
@@ -109,7 +126,7 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
   const { privacyMode } = usePrivacy()
   const [months, setMonths] = useState<number>(variant === "card" ? 6 : 12)
   const fetcher = useCallback(fetchNetWorth, [])
-  const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v2`, fetcher)
+  const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v3`, fetcher)
 
   const dailyPoints = useMemo(() => {
     if (!data) return []
@@ -296,9 +313,110 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
             )}
           </p>
         )}
+        {variant === "full" && data?.hasAccounts && <HistoryDetails data={data} />}
       </CardContent>
     </Card>
   )
 }
 
 export const NetWorthChart = memo(NetWorthChartInner)
+
+const formatMonth = (date: string) =>
+  parseDate(date).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+
+// Import older transactions from Plaid and explain where the estimate comes from
+function HistoryDetails({ data }: { data: NetWorthData }) {
+  const appData = useAppData()
+  const [progress, setProgress] = useState<string | null>(null)
+
+  const loadOlderHistory = async () => {
+    setProgress("Starting...")
+    let cursor: unknown = null
+    let imported = 0
+    let linked = 0
+    let windows = 0
+    let failed = 0
+    let lastError = ""
+    try {
+      for (;;) {
+        const res = await fetch("/api/plaid/backfill-history", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cursor }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || "Import failed")
+        imported += json.newTransactions || 0
+        linked += json.updatedTransactions || 0
+        if (json.window) windows++
+        if (json.error) {
+          failed++
+          lastError = json.error
+        }
+        if (json.window) setProgress(`${json.institution || "Bank"} · back to ${formatMonth(json.window.startDate)}`)
+        if (json.done) break
+        cursor = json.cursor
+      }
+      if (windows > 0 && failed === windows) {
+        throw new Error(`Couldn't reach your bank${lastError ? `: ${lastError}` : ""}`)
+      }
+      if (failed > 0) toast.warning(`Some periods couldn't be loaded (${failed} of ${windows})`)
+      toast.success(
+        imported > 0
+          ? `Imported ${imported} older transaction${imported === 1 ? "" : "s"}`
+          : linked > 0 ? `Updated ${linked} existing transactions` : "No older transactions available from your banks"
+      )
+      // Transactions changed everywhere: budgets, dashboard, this chart
+      appData.markStale()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Import failed")
+    } finally {
+      setProgress(null)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-2 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-muted-foreground">
+          {data.coverageStart ? <>History starts {formatMonth(data.coverageStart)}, the earliest date every account has transactions.</> : null}
+        </p>
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={loadOlderHistory} disabled={progress !== null}>
+          {progress ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <History className="mr-1 h-3 w-3" />}
+          {progress ?? "Load older history"}
+        </Button>
+      </div>
+
+      <details className="text-xs">
+        <summary className="cursor-pointer text-muted-foreground">How this is estimated</summary>
+        <ul className="mt-2 divide-y rounded-lg border">
+          {data.accounts.map(a => (
+            <li key={a.name} className="flex items-start justify-between gap-3 px-3 py-2">
+              <div className="min-w-0">
+                <p className="font-medium truncate">{a.name}</p>
+                <p className="text-muted-foreground">
+                  {a.kind === "investment"
+                    ? `Investment · moved only by ${a.transactionCount} matched transfer${a.transactionCount === 1 ? "" : "s"}`
+                    : a.transactionCount > 0
+                      ? `${a.type === "liability" ? "Credit" : "Bank"} · ${a.transactionCount} transaction${a.transactionCount === 1 ? "" : "s"} since ${formatMonth(a.firstTransaction!)}`
+                      : `${a.type === "liability" ? "Credit" : "Bank"} · no transactions, held flat`}
+                </p>
+              </div>
+              <p className="text-right whitespace-nowrap tabular-nums">
+                <PrivateAmount amount={a.start} decimals={0} className="text-muted-foreground" />
+                {" → "}
+                <PrivateAmount amount={a.current} decimals={0} />
+              </p>
+            </li>
+          ))}
+        </ul>
+        {data.unlinkedTransactionCount > 0 && (
+          <p className="mt-2 text-muted-foreground">
+            {data.unlinkedTransactionCount} transactions aren't linked to an account and are left out.
+            Loading older history links the ones your banks still have.
+          </p>
+        )}
+      </details>
+    </div>
+  )
+}

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { LayoutDashboard, Receipt, Wallet, TrendingUp, CreditCard, LogOut, ChevronLeft, ChevronRight, Settings } from "lucide-react"
+import { LayoutDashboard, Receipt, Wallet, TrendingUp, CreditCard, LogOut, ChevronLeft, ChevronRight, Settings, Tags } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
@@ -45,6 +45,11 @@ export function AppNav() {
       title: "Budget",
       href: "/budgets",
       icon: Wallet,
+    },
+    {
+      title: "Tags",
+      href: "/tags",
+      icon: Tags,
     },
     {
       title: "Net Worth",

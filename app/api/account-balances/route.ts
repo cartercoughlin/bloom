@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+// Show the user's name for an account when they've set one; keep the bank's
+// name as original_name (sync keeps updating account_name from Plaid)
+function withDisplayName<T extends { account_name: string; custom_name?: string | null }>(acc: T) {
+  return { ...acc, original_name: acc.account_name, account_name: acc.custom_name || acc.account_name }
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -69,13 +75,13 @@ export async function GET() {
               activeAccountIds.has(acc.plaid_account_id)
           })
 
-          return NextResponse.json(filteredAccounts)
+          return NextResponse.json(filteredAccounts.map(withDisplayName))
         }
       }
     }
 
     // If no plaid accounts, just return all accounts (manual ones)
-    return NextResponse.json(accounts?.filter(acc => !acc.plaid_account_id) || [])
+    return NextResponse.json((accounts?.filter(acc => !acc.plaid_account_id) || []).map(withDisplayName))
   } catch (error) {
     console.error('API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

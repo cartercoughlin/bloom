@@ -8,6 +8,8 @@ import { Eye, EyeOff, ExternalLink, Repeat, Trash2 } from "lucide-react"
 import { CategoryPicker } from "./category-picker"
 import { PrivateAmount } from "./private-amount"
 import { TransactionAvatar } from "./transaction-avatar"
+import { TagChips, TagPicker } from "./tag-picker"
+import type { Tag } from "@/lib/tags"
 import { useIsMobile } from "@/hooks/use-mobile"
 import {
   Category,
@@ -29,6 +31,9 @@ interface TransactionDetailsProps {
   onToggleRecurring: (tx: Transaction) => void
   onToggleHidden: (tx: Transaction) => void
   onDelete: (tx: Transaction) => void
+  tags: Tag[]
+  onTagsChange: (tx: Transaction, change: { add: string[]; remove: string[] }) => void
+  onTagCreated: (tag: Tag) => void
 }
 
 // Bottom sheet on phones, centered dialog on larger screens
@@ -76,6 +81,9 @@ function DetailsBody({
   onToggleRecurring,
   onToggleHidden,
   onDelete,
+  tags,
+  onTagsChange,
+  onTagCreated,
 }: TransactionDetailsProps & { transaction: Transaction }) {
   const details = tx.plaid_details
   const date = parseLocalDate(tx.date)
@@ -112,6 +120,20 @@ function DetailsBody({
           onSelect={(categoryId, created) => onCategorize(tx, categoryId, created)}
           onCategoryCreated={onCategoryCreated}
         />
+        {/* Tags: trips, projects, goals; separate from the budget category */}
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
+          <TagChips
+            tags={(tx.tag_ids || []).map(id => tags.find(t => t.id === id)).filter((t): t is Tag => !!t)}
+            onRemove={(tag) => onTagsChange(tx, { add: [], remove: [tag.id] })}
+          />
+          <TagPicker
+            tags={tags}
+            selected={tx.tag_ids || []}
+            onChange={(change) => onTagsChange(tx, change)}
+            onTagCreated={onTagCreated}
+            label={(tx.tag_ids || []).length > 0 ? "Edit tags" : "Add tag"}
+          />
+        </div>
       </div>
 
       {/* Grouped info list */}

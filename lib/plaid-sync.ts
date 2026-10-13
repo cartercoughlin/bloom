@@ -1,5 +1,6 @@
 import { plaidClient } from './plaid'
 import { recordBalanceSnapshot } from './balance-snapshots'
+import { fetchAllRows } from './supabase/fetch-all'
 import { createClient } from '@/lib/supabase/server'
 import {
   TransactionsGetRequest,
@@ -28,6 +29,9 @@ export async function syncPlaidTransactions(
     syncBalances?: boolean
     userId?: string
     supabaseClient?: any
+    // Date range to fetch (YYYY-MM-DD); defaults to the last 30 days
+    startDate?: string
+    endDate?: string
   }
 ): Promise<SyncResult> {
   try {
@@ -41,7 +45,7 @@ export async function syncPlaidTransactions(
       }
     }
 
-    const { syncTransactions = true, syncBalances = true, userId, supabaseClient } = options || {}
+    const { syncTransactions = true, syncBalances = true, userId, supabaseClient, startDate, endDate } = options || {}
 
     console.log('Starting Plaid sync with access token:', accessToken.substring(0, 10) + '...')
     console.log('Sync options:', { syncTransactions, syncBalances })
@@ -234,7 +238,7 @@ export async function syncPlaidTransactions(
     // Sync transactions only if enabled
     if (syncTransactions) {
       console.log('Syncing transactions...')
-      const result = await syncTransactionsForAccounts(accessToken, accounts, user.id, syncedAccountsCount, institutionName, supabaseClient)
+      const result = await syncTransactionsForAccounts(accessToken, accounts, user.id, syncedAccountsCount, institutionName, supabaseClient, { startDate, endDate })
       return {
         ...result,
         accountIds: accounts.map(acc => acc.account_id)
@@ -325,18 +329,36 @@ function buildPlaidDetails(transaction: Transaction) {
   }
 }
 
-async function syncTransactionsForAccounts(accessToken: string, accounts: any[], userId: string, syncedAccountsCount: number, institutionName: string, supabaseClient?: any): Promise<SyncResult> {
+async function syncTransactionsForAccounts(
+  accessToken: string,
+  accounts: any[],
+  userId: string,
+  syncedAccountsCount: number,
+  institutionName: string,
+  supabaseClient?: any,
+  range: { startDate?: string; endDate?: string } = {}
+): Promise<SyncResult> {
   const supabase = supabaseClient || await createClient()
 
   // Get existing categories
   const { data: categories } = await supabase.from('categories').select('id, name').eq('user_id', userId)
   const categoryMap = new Map(categories?.map((c: any) => [c.name.toLowerCase(), c.id]) || [])
 
-  // Get existing transactions from last 90 days to avoid duplicates
-  // Extended to 90 days to catch older categorized transactions
+  // Range to fetch: last 30 days unless a range is given (e.g. history backfill)
+  const isoDate = (d: Date) => d.toISOString().split('T')[0]
+  const defaultStart = new Date()
+  defaultStart.setDate(defaultStart.getDate() - 30)
+  const startDateStr = range.startDate || isoDate(defaultStart)
+  const endDateStr = range.endDate || isoDate(new Date())
+
+  // Existing transactions to dedupe against: the last 90 days, or from a week
+  // before the requested range if that's earlier.
   // Also fetch deleted transactions to prevent re-importing them
   const lookbackDate = new Date()
   lookbackDate.setDate(lookbackDate.getDate() - 90)
+  const rangeLookback = new Date(`${startDateStr}T00:00:00Z`)
+  rangeLookback.setUTCDate(rangeLookback.getUTCDate() - 7)
+  if (rangeLookback < lookbackDate) lookbackDate.setTime(rangeLookback.getTime())
 
   // plaid_details needs migrations/add-plaid-details.sql; keep syncing without it until it's applied
   const { error: detailsColumnError } = await supabase.from('transactions').select('plaid_details').limit(1)
@@ -344,13 +366,20 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   if (!storeDetails) {
     console.warn('transactions.plaid_details column missing; run migrations/add-plaid-details.sql to store transaction details')
   }
-  const lookupColumns = `id, plaid_transaction_id, date, description, amount, bank${storeDetails ? ', plaid_details' : ''}`
+  const lookupColumns = `id, plaid_transaction_id, plaid_account_id, date, description, amount, bank${storeDetails ? ', plaid_details' : ''}`
 
-  const { data: existingTransactions } = await supabase
-    .from('transactions')
-    .select(`${lookupColumns}, deleted`)
-    .eq('user_id', userId)
-    .gte('date', lookbackDate.toISOString().split('T')[0])
+  // Paged: a single response is capped at 1000 rows, and a missed row here
+  // would be re-imported as a duplicate
+  const existingTransactions = await fetchAllRows<any>((from, to) =>
+    supabase
+      .from('transactions')
+      .select(`${lookupColumns}, deleted`)
+      .eq('user_id', userId)
+      .gte('date', lookbackDate.toISOString().split('T')[0])
+      .order('date')
+      .order('id')
+      .range(from, to)
+  )
 
   // Create multiple lookup maps for robust deduplication
   const existingByPlaidId = new Map<string, any>()
@@ -382,22 +411,23 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
   let updatedCount = 0
   let processedCount = 0
 
-  // Get transactions for last 30 days
-  const startDate = new Date()
-  startDate.setDate(startDate.getDate() - 30)
-  const endDate = new Date()
+  console.log('Fetching transactions from', startDateStr, 'to', endDateStr)
 
-  console.log('Fetching transactions from', startDate.toISOString().split('T')[0], 'to', endDate.toISOString().split('T')[0])
-
-  const transactionsRequest: TransactionsGetRequest = {
-    access_token: accessToken,
-    start_date: startDate.toISOString().split('T')[0],
-    end_date: endDate.toISOString().split('T')[0],
+  // /transactions/get returns 100 transactions by default; page through all of them
+  // (busy months used to lose everything past the first 100)
+  const PAGE_SIZE = 500
+  const transactions: Transaction[] = []
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const transactionsRequest: TransactionsGetRequest = {
+      access_token: accessToken,
+      start_date: startDateStr,
+      end_date: endDateStr,
+      options: { count: PAGE_SIZE, offset },
+    }
+    const transactionsResponse: TransactionsGetResponse = await plaidClient.transactionsGet(transactionsRequest)
+    transactions.push(...transactionsResponse.data.transactions)
+    if (transactionsResponse.data.transactions.length === 0 || transactions.length >= transactionsResponse.data.total_transactions) break
   }
-
-  console.log('Making Plaid transactions request...')
-  const transactionsResponse: TransactionsGetResponse = await plaidClient.transactionsGet(transactionsRequest)
-  const transactions = transactionsResponse.data.transactions
   console.log('Retrieved transactions:', transactions.length)
   console.log('Processing transactions...')
 
@@ -523,16 +553,24 @@ async function syncTransactionsForAccounts(accessToken: string, accounts: any[],
           .from('transactions')
           .update({
             plaid_transaction_id: transaction.transaction_id,
+            plaid_account_id: transaction.account_id,
             ...(storeDetails ? { plaid_details: buildPlaidDetails(transaction) } : {}),
           })
           .eq('id', existingTransaction.id)
         updatedCount++
       }
-      // One-time backfill of details, and refresh while a transaction is still pending
-      else if (storeDetails && (!existingTransaction.plaid_details || existingTransaction.plaid_details.pending)) {
+      // Older rows may lack the account link (needed for net worth history), and
+      // details are backfilled once and refreshed while a transaction is pending
+      else if (
+        !existingTransaction.plaid_account_id ||
+        (storeDetails && (!existingTransaction.plaid_details || existingTransaction.plaid_details.pending))
+      ) {
         await supabase
           .from('transactions')
-          .update({ plaid_details: buildPlaidDetails(transaction) })
+          .update({
+            plaid_account_id: transaction.account_id,
+            ...(storeDetails ? { plaid_details: buildPlaidDetails(transaction) } : {}),
+          })
           .eq('id', existingTransaction.id)
         updatedCount++
       } else {

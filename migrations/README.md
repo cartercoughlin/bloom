@@ -16,6 +16,20 @@ supabase db execute --file migrations/fix-account-balances-constraint.sql
 
 ## Available Migrations
 
+### add-tags.sql
+**Purpose:** Tags for tracking trips, projects or savings goals separately from budget categories
+
+**Notes:**
+- Creates `tags` and `transaction_tags` with row-level security
+- The app works without it; tag features show a prompt to run it
+
+### add-account-custom-name.sql
+**Purpose:** Let users rename individual accounts (shown instead of the name from Plaid)
+
+**Notes:**
+- Renaming shows a prompt to run this if the column is missing
+- Sync never overwrites custom names
+
 ### add-plaid-details.sql
 **Purpose:** Store extra Plaid transaction details (pending status, location, payment channel, detailed category, counterparties) shown on transaction rows
 
