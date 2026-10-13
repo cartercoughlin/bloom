@@ -18,6 +18,9 @@ import { computeCategoryTotals } from "@/lib/compute-category-totals"
 import { summarizeBudgets } from "@/lib/budget/summary"
 import { buildMonthlyHistory, monthRange, HistoryBudget, HistoryTransaction } from "@/lib/budget/history"
 import { fetchAllRows } from "@/lib/supabase/fetch-all"
+import type { PacingHistory } from "@/lib/budget/pacing"
+import { usePacingMode } from "@/hooks/use-pacing-mode"
+import { PacingModeToggle } from "@/components/pacing-mode-toggle"
 
 // Charts are lazy-loaded — Recharts is ~200KB and not needed for the first paint
 const chartSkeleton = () => (
@@ -50,10 +53,11 @@ interface DashboardData {
   rolloverByCategory: Record<string, number>
   historicalRecurring: HistoricalRecurringData
   uncategorizedCount: number
+  pacingHistory: PacingHistory | null
 }
 
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
-const DASHBOARD_CACHE_VERSION = "v4"
+const DASHBOARD_CACHE_VERSION = "v5"
 
 const monthKey = (month: number, year: number) => `${year}-${String(month).padStart(2, "0")}`
 const firstOfMonth = (month: number, year: number) => `${monthKey(month, year)}-01`
@@ -61,6 +65,7 @@ const firstOfMonth = (month: number, year: number) => `${monthKey(month, year)}-
 export default function DashboardPage() {
   const router = useRouter()
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
+  const [pacingMode] = usePacingMode()
 
   const cacheKey = `${CACHE_KEYS.dashboard}${selectedYear}-${selectedMonth}-${DASHBOARD_CACHE_VERSION}`
 
@@ -78,7 +83,10 @@ export default function DashboardPage() {
     const next = new Date(selectedYear, selectedMonth, 1)
     const historyEnd = firstOfMonth(next.getMonth() + 1, next.getFullYear())
 
-    const [historyTransactions, historyBudgetsResult, budgetsResult, uncategorizedResult, rolloverResponse] = await Promise.all([
+    const today = new Date()
+    const isViewingCurrentMonth = selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()
+
+    const [historyTransactions, historyBudgetsResult, budgetsResult, uncategorizedResult, rolloverResponse, pacingHistoryResponse] = await Promise.all([
       fetchAllRows<HistoryTransaction>((from, to) =>
         supabase
           .from("transactions")
@@ -128,9 +136,15 @@ export default function DashboardPage() {
         .not("deleted", "is", true),
 
       fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
+
+      // When spending usually happens, for history pacing (current month only)
+      isViewingCurrentMonth
+        ? fetch(`/api/pacing-history?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" })
+        : Promise.resolve(null),
     ])
 
     const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}
+    const pacingHistory: PacingHistory | null = pacingHistoryResponse?.ok ? await pacingHistoryResponse.json() : null
 
     const regularBudgets = (budgetsResult.data || []).filter(
       (budget: any) => !budget.categories?.is_rollover
@@ -162,6 +176,7 @@ export default function DashboardPage() {
       rolloverByCategory: rollover,
       historicalRecurring: historicalRecurringData,
       uncategorizedCount: uncategorizedResult.count || 0,
+      pacingHistory,
     }
   }, [router, selectedMonth, selectedYear])
 
@@ -181,7 +196,8 @@ export default function DashboardPage() {
       data.rolloverByCategory,
       data.historicalRecurring,
       selectedMonth,
-      selectedYear
+      selectedYear,
+      pacingMode === "history" ? data.pacingHistory : null
     )
 
     // Spending that isn't counted toward any budget yet
@@ -196,7 +212,7 @@ export default function DashboardPage() {
       uncategorizedThisMonth,
       history: buildMonthlyHistory(data.historyTransactions, data.historyBudgets, selectedMonth, selectedYear, HISTORY_MONTHS),
     }
-  }, [data, selectedMonth, selectedYear])
+  }, [data, selectedMonth, selectedYear, pacingMode])
 
   if (loading && !data) {
     return (
@@ -236,6 +252,7 @@ export default function DashboardPage() {
         <p className="text-muted-foreground text-xs md:text-sm">
           {isCurrentMonth() ? "How this month is going" : `Looking back at ${monthLabel}`}
         </p>
+        {isCurrentMonth() && <PacingModeToggle className="mt-2" />}
       </div>
 
       <div className="space-y-4 md:space-y-6">
@@ -259,6 +276,7 @@ export default function DashboardPage() {
             year={selectedYear}
             budgetTotal={summary.totalBudget}
             projectedTotal={summary.progress.isCurrentMonth ? summary.projectedTotal : undefined}
+            expectedByDay={summary.expectedByDay ?? undefined}
           />
           <SpendingHistory history={derived.history} />
         </div>

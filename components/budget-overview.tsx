@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
+import { expectedSpending as calculateExpectedSpending, historicalRecurringFor, historyShareFor, PacingHistory } from "@/lib/budget/pacing"
 
 interface Budget {
   id: string
@@ -38,11 +39,13 @@ interface BudgetOverviewProps {
   }>
   rolloverByCategory?: Record<string, number>
   historicalRecurring?: HistoricalRecurringData
+  // Set in history pacing mode
+  pacingHistory?: PacingHistory | null
   month: number
   year: number
 }
 
-export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, month, year }: BudgetOverviewProps) {
+export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCategory, rolloverByCategory = {}, historicalRecurring, pacingHistory, month, year }: BudgetOverviewProps) {
   const { privacyMode } = usePrivacy()
   const [showDetailModal, setShowDetailModal] = useState(false)
 
@@ -102,28 +105,18 @@ export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCateg
 
   const percentageThroughMonth = getPercentageThroughMonth()
 
+  // Rollover counts in full from day 1, same as the per-category bars
   const expectedSpending = percentageThroughMonth !== null
     ? budgets.reduce((total, budget) => {
         const categoryData = netByCategory?.[budget.category_id || '']
-        const recurringExpenses = categoryData?.recurringExpenses || 0
-        const categoryIncome = categoryData?.income || 0
-        const netRecurringExpenses = Math.max(0, recurringExpenses - categoryIncome)
-
-        const catBaseBudget = Number(budget.amount)
-
-        const historicalRecurringForCategory = historicalRecurring?.byCategory?.[budget.category_id] || 0
-        const hasHistoricalData = historicalRecurring && historicalRecurring.monthsUsed > 0 && historicalRecurringForCategory > 0
-
-        if (hasHistoricalData) {
-          const historicalVariableFromBase = Math.max(0, catBaseBudget - historicalRecurringForCategory)
-          const expectedRecurringBaseline = historicalRecurringForCategory * (percentageThroughMonth / 100)
-          const expectedRecurring = Math.max(netRecurringExpenses, expectedRecurringBaseline)
-          const expectedVariable = historicalVariableFromBase * (percentageThroughMonth / 100)
-          return total + expectedRecurring + expectedVariable
-        }
-
-        const remainingBaseBudget = Math.max(0, catBaseBudget - netRecurringExpenses)
-        return total + netRecurringExpenses + (remainingBaseBudget * (percentageThroughMonth / 100))
+        return total + calculateExpectedSpending({
+          baseBudget: Number(budget.amount),
+          rollover: budget.enable_rollover !== false ? rolloverByCategory[budget.category_id] || 0 : 0,
+          income: categoryData?.income || 0,
+          recurringExpenses: categoryData?.recurringExpenses || 0,
+          historicalRecurring: historicalRecurringFor(historicalRecurring, budget.category_id),
+        }, percentageThroughMonth / 100, true,
+          historyShareFor(pacingHistory, budget.category_id, new Date().getDate(), new Date(year, month, 0).getDate()))
       }, 0)
     : 0
 

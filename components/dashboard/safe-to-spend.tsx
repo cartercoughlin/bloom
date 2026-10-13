@@ -8,7 +8,7 @@ import type { BudgetSummary } from "@/lib/budget/summary"
 
 // The one-glance answer to "am I on track this month?"
 export function SafeToSpend({ summary }: { summary: BudgetSummary }) {
-  const { totalBudget, totalSpent, remaining, safeToSpend, dailyAllowance, upcomingRecurring, projectedTotal, progress } = summary
+  const { totalBudget, totalSpent, remaining, safeToSpend, dailyAllowance, upcomingRecurring, expectedTotal, pacingDifference, progress } = summary
 
   if (totalBudget <= 0) {
     return (
@@ -25,7 +25,6 @@ export function SafeToSpend({ summary }: { summary: BudgetSummary }) {
   }
 
   const usedFraction = totalSpent / totalBudget
-  const projectedDiff = totalBudget - projectedTotal
   const finished = !progress.isCurrentMonth
 
   let headline: React.ReactNode
@@ -41,11 +40,12 @@ export function SafeToSpend({ summary }: { summary: BudgetSummary }) {
     caption = upcomingRecurring > 0 && remaining > 0 ? "short once upcoming bills post" : "over budget"
   }
 
-  const status = finished
+  // Same pace as the Budgets page Progress bar: spent vs. expected by today
+  const status = finished || pacingDifference === null
     ? null
-    : projectedDiff >= 0
-      ? { tone: "good", text: <>On pace to finish <PrivateAmount amount={projectedDiff} decimals={0} /> under</> }
-      : { tone: "bad", text: <>On pace to go <PrivateAmount amount={-projectedDiff} decimals={0} /> over</> }
+    : pacingDifference <= 0
+      ? { tone: "good", text: <>On track · <PrivateAmount amount={-pacingDifference} decimals={0} /> ahead of pace</> }
+      : { tone: "bad", text: <><PrivateAmount amount={pacingDifference} decimals={0} /> over pace</> }
 
   const negative = finished ? remaining < 0 : safeToSpend <= 0
 
@@ -53,7 +53,7 @@ export function SafeToSpend({ summary }: { summary: BudgetSummary }) {
     <Card className="rounded-xl">
       <CardContent className="p-5 md:p-6">
         <div className="flex items-center gap-5">
-          <ProgressRing used={usedFraction} elapsed={progress.isCurrentMonth ? progress.fraction : null} />
+          <ProgressRing used={usedFraction} expected={expectedTotal !== null ? expectedTotal / totalBudget : null} />
           <div className="min-w-0">
             <div className={cn("text-4xl font-bold tracking-tight tabular-nums", negative ? "text-red-600" : "text-foreground")}>
               {headline}
@@ -93,17 +93,17 @@ function Stat({ label, amount, tone }: { label: string; amount: number; tone?: "
   )
 }
 
-// Ring fills with the share of budget used; the tick marks how far through the month we are
-function ProgressRing({ used, elapsed }: { used: number; elapsed: number | null }) {
+// Ring fills with the share of budget used; the tick marks expected spending by today
+function ProgressRing({ used, expected }: { used: number; expected: number | null }) {
   const size = 88
   const stroke = 9
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const clamped = Math.min(1, Math.max(0, used))
   const over = used > 1
-  const ahead = elapsed !== null && used > elapsed
-  const color = over ? "#dc2626" : ahead ? "#f59e0b" : "#16a34a"
-  const tickAngle = elapsed !== null ? elapsed * 2 * Math.PI - Math.PI / 2 : null
+  const overPace = expected !== null && used > expected
+  const color = over ? "#dc2626" : overPace ? "#f59e0b" : "#16a34a"
+  const tickAngle = expected !== null ? Math.min(1, expected) * 2 * Math.PI - Math.PI / 2 : null
 
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
@@ -130,7 +130,7 @@ function ProgressRing({ used, elapsed }: { used: number; elapsed: number | null 
             top: size / 2 + r * Math.sin(tickAngle) - 6,
             transform: `rotate(${tickAngle + Math.PI / 2}rad)`,
           }}
-          title="Today"
+          title="Expected by today"
         />
       )}
       <div className="absolute inset-0 flex flex-col items-center justify-center">

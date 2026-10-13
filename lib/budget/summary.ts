@@ -1,9 +1,10 @@
-// Budget totals, pacing and month-end projections shared by the dashboard.
-// Mirrors the per-category math on the Budgets page (components/budget-list.tsx)
-// so both screens agree on what's spent and what's expected.
+// Budget totals and pacing for the dashboard. Pacing uses the same
+// expected-spending math as the Budgets page (lib/budget/pacing.ts), so the
+// two screens agree on what's spent and what's expected by now.
 
 import type { CategoryTotals } from "@/lib/compute-category-totals"
 import type { HistoricalRecurringData } from "@/lib/budget/historical-recurring"
+import { expectedSpending, historicalRecurringFor, historyShareFor, PacingHistory, PacingInput } from "@/lib/budget/pacing"
 
 export interface SummaryBudget {
   id: string
@@ -45,10 +46,11 @@ export interface CategoryStatus {
   spent: number
   // Recurring charges historically expected this month that haven't posted yet
   upcomingRecurring: number
-  // Where spending lands at month end at the current pace
-  projected: number
+  // Expected spending by today, matching this category's pace marker on Budgets
+  expected: number
+  // spent - expected: positive means behind pace (spending faster than planned)
+  pacingDifference: number
   overBy: number // spent beyond budget (0 if within)
-  projectedOverBy: number // projected beyond budget (0 if within)
 }
 
 export interface BudgetSummary {
@@ -60,13 +62,19 @@ export interface BudgetSummary {
   safeToSpend: number
   // safeToSpend spread over the days left (current month only)
   dailyAllowance: number | null
+  // Expected spending by today and spent - expected, matching the Budgets
+  // page's Progress bar. null outside the current month.
+  expectedTotal: number | null
+  pacingDifference: number | null
+  // Month-end spending if the rest of the month goes to plan:
+  // spent so far plus the plan's expected spending for the remaining days
   projectedTotal: number
+  // The plan itself: expected spending by each day of the month
+  // (index = day, [0] = 0), including rollover. Current month only.
+  expectedByDay: number[] | null
   progress: MonthProgress
   categories: CategoryStatus[]
 }
-
-// Too early in the month for a linear projection to mean much
-const MIN_FRACTION_FOR_PROJECTION = 0.15
 
 export function summarizeBudgets(
   budgets: SummaryBudget[],
@@ -75,9 +83,17 @@ export function summarizeBudgets(
   historicalRecurring: HistoricalRecurringData | undefined,
   month: number,
   year: number,
+  // Set in history pacing mode
+  pacingHistory?: PacingHistory | null,
   now = new Date()
 ): BudgetSummary {
   const progress = getMonthProgress(month, year, now)
+  const pacing = progress.isCurrentMonth
+  const { day, daysInMonth } = progress
+  const expectedByDay = pacing ? new Array(daysInMonth + 1).fill(0) : null
+
+  let expectedTotal = 0
+  let remainingPlanned = 0
 
   const categories: CategoryStatus[] = budgets.map(b => {
     const totals = netByCategory[b.category_id]
@@ -89,16 +105,28 @@ export function summarizeBudgets(
 
     const spent = Math.max(0, expenses - income)
     const netRecurring = Math.max(0, recurring - income)
-    const variableSpent = Math.max(0, spent - netRecurring)
+    const historical = historicalRecurringFor(historicalRecurring, b.category_id)
+    const upcomingRecurring = pacing ? Math.max(0, historical - netRecurring) : 0
 
-    const historical = historicalRecurring?.byCategory?.[b.category_id] || 0
-    const upcomingRecurring = progress.isCurrentMonth ? Math.max(0, historical - netRecurring) : 0
+    const input: PacingInput = {
+      baseBudget: Number(b.amount),
+      rollover,
+      income,
+      recurringExpenses: recurring,
+      historicalRecurring: historical,
+    }
+    const shareOn = (d: number) => historyShareFor(pacingHistory, b.category_id, d, daysInMonth)
 
-    let projected = spent
-    if (progress.isCurrentMonth && progress.fraction >= MIN_FRACTION_FOR_PROJECTION) {
-      projected = netRecurring + upcomingRecurring + variableSpent / progress.fraction
-    } else if (progress.isCurrentMonth) {
-      projected = spent + upcomingRecurring
+    // Rollover counts in full from day 1, both per category and overall
+    const expected = pacing ? expectedSpending(input, progress.fraction, true, shareOn(day)) : budget
+    if (pacing) {
+      expectedTotal += expected
+      remainingPlanned += expectedSpending(input, 1, true, shareOn(daysInMonth)) - expected
+      // Plan curve: what's expected by each day, before anything has posted
+      const planInput = { ...input, income: 0, recurringExpenses: 0 }
+      for (let d = 1; d <= daysInMonth; d++) {
+        expectedByDay![d] += expectedSpending(planInput, d / daysInMonth, true, shareOn(d))
+      }
     }
 
     return {
@@ -109,9 +137,9 @@ export function summarizeBudgets(
       budget,
       spent,
       upcomingRecurring,
-      projected,
+      expected,
+      pacingDifference: spent - expected,
       overBy: Math.max(0, spent - budget),
-      projectedOverBy: Math.max(0, projected - budget),
     }
   })
 
@@ -127,16 +155,20 @@ export function summarizeBudgets(
     remaining,
     upcomingRecurring,
     safeToSpend,
-    dailyAllowance: progress.isCurrentMonth && progress.daysLeft > 0 ? safeToSpend / progress.daysLeft : null,
-    projectedTotal: categories.reduce((s, c) => s + c.projected, 0),
+    dailyAllowance: pacing && progress.daysLeft > 0 ? safeToSpend / progress.daysLeft : null,
+    expectedTotal: pacing ? expectedTotal : null,
+    pacingDifference: pacing ? totalSpent - expectedTotal : null,
+    projectedTotal: totalSpent + remainingPlanned,
+    expectedByDay,
     progress,
     categories,
   }
 }
 
-// Categories over budget or on pace to be, worst first
+// Categories over budget or behind pace (spending faster than planned), worst first
 export function categoriesAtRisk(summary: BudgetSummary): CategoryStatus[] {
+  const severity = (c: CategoryStatus) => Math.max(c.overBy, c.pacingDifference) / c.budget
   return summary.categories
-    .filter(c => c.budget > 0 && (c.overBy > 0 || c.projectedOverBy > 0))
-    .sort((a, b) => Math.max(b.overBy, b.projectedOverBy) / b.budget - Math.max(a.overBy, a.projectedOverBy) / a.budget)
+    .filter(c => c.budget > 0 && (c.overBy > 0 || (summary.progress.isCurrentMonth && c.pacingDifference > 0.5)))
+    .sort((a, b) => severity(b) - severity(a))
 }

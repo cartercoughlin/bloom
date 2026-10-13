@@ -15,9 +15,12 @@ import { useMonth } from "@/contexts/month-context"
 import { calculateHistoricalRecurring, HistoricalRecurringData } from "@/lib/budget/historical-recurring"
 import { useAppData, CACHE_KEYS } from "@/contexts/app-data-context"
 import { useCachedData } from "@/hooks/use-cached-data"
+import { usePacingMode } from "@/hooks/use-pacing-mode"
+import { PacingModeToggle } from "@/components/pacing-mode-toggle"
+import type { PacingHistory } from "@/lib/budget/pacing"
 import { computeCategoryTotals, CategoryTotals } from "@/lib/compute-category-totals"
 
-const BUDGET_CACHE_VERSION = "v4"
+const BUDGET_CACHE_VERSION = "v5"
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
 
 interface BudgetPageData {
@@ -28,6 +31,7 @@ interface BudgetPageData {
   spendingByCategory: Record<string, number>
   rolloverByCategory: Record<string, number>
   historicalRecurring: HistoricalRecurringData
+  pacingHistory: PacingHistory | null
 }
 
 export default function BudgetsPage() {
@@ -35,6 +39,7 @@ export default function BudgetsPage() {
   const [editBudgetId, setEditBudgetId] = useState<string | null>(null)
   const { selectedMonth, selectedYear, isCurrentMonth } = useMonth()
   const appData = useAppData()
+  const [pacingMode] = usePacingMode()
 
   // Auto-create budgets for new month from previous month
   const autoCreateBudgetsFromPreviousMonth = async (supabase: any, userId: string) => {
@@ -137,8 +142,10 @@ export default function BudgetsPage() {
     const nextMonth = selectedMonth === 12 ? 1 : selectedMonth + 1
     const nextYear = selectedMonth === 12 ? selectedYear + 1 : selectedYear
     const nextMonthFirstDay = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+    const today = new Date()
+    const isViewingCurrentMonth = selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()
 
-    const [budgetsResult, categoriesResult, transactionsResult, rolloverResponse] = await Promise.all([
+    const [budgetsResult, categoriesResult, transactionsResult, rolloverResponse, pacingHistoryResponse] = await Promise.all([
       supabase
         .from("budgets")
         .select(`
@@ -172,6 +179,11 @@ export default function BudgetsPage() {
 
       // Server-side rollover: 2 DB queries instead of 12+ recursive ones
       fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
+
+      // When spending usually happens, for history pacing (current month only)
+      isViewingCurrentMonth
+        ? fetch(`/api/pacing-history?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" })
+        : Promise.resolve(null),
     ])
 
     if (transactionsResult.error) {
@@ -179,6 +191,7 @@ export default function BudgetsPage() {
     }
 
     const rollover = rolloverResponse.ok ? await rolloverResponse.json() : {}
+    const pacingHistory: PacingHistory | null = pacingHistoryResponse?.ok ? await pacingHistoryResponse.json() : null
     const categoryTotals = computeCategoryTotals(transactionsResult.data || [])
 
     const spending: Record<string, number> = {}
@@ -232,7 +245,8 @@ export default function BudgetsPage() {
       netByCategory: categoryTotals,
       spendingByCategory: spending,
       rolloverByCategory: rollover,
-      historicalRecurring: historicalRecurringData
+      historicalRecurring: historicalRecurringData,
+      pacingHistory,
     }
   }, [router, selectedMonth, selectedYear])
 
@@ -251,6 +265,7 @@ export default function BudgetsPage() {
   const spendingByCategory = data?.spendingByCategory || {}
   const rolloverByCategory = data?.rolloverByCategory || {}
   const historicalRecurring = data?.historicalRecurring || EMPTY_HISTORICAL
+  const pacingHistory = pacingMode === "history" ? data?.pacingHistory ?? null : null
 
   if (loading && !data) {
     return (
@@ -284,6 +299,7 @@ export default function BudgetsPage() {
           <p className="text-muted-foreground text-xs md:text-sm">
             {isCurrentMonth() ? 'Set spending limits and track progress by category' : 'Review past budgets and spending'}
           </p>
+          {isCurrentMonth() && <PacingModeToggle className="mt-2" />}
         </div>
         <Link href="/categories">
           <Button variant="outline" className="text-xs md:text-sm h-8 md:h-10 px-2 md:px-4">
@@ -300,6 +316,7 @@ export default function BudgetsPage() {
           netByCategory={netByCategory}
           rolloverByCategory={rolloverByCategory}
           historicalRecurring={historicalRecurring}
+          pacingHistory={pacingHistory}
           month={selectedMonth}
           year={selectedYear}
         />
@@ -311,6 +328,7 @@ export default function BudgetsPage() {
           spending={spendingByCategory}
           rolloverByCategory={rolloverByCategory}
           historicalRecurring={historicalRecurring}
+          pacingHistory={pacingHistory}
           month={selectedMonth}
           year={selectedYear}
           editBudgetId={editBudgetId}

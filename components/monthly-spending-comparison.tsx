@@ -28,8 +28,10 @@ interface MonthlySpendingComparisonProps {
   year: number
   // Total budget (including rollover), drawn as a horizontal line
   budgetTotal?: number
-  // Projected month-end spending; draws a dashed line from today to month end
+  // Month-end spending if the rest of the month goes to plan; dashed line from today
   projectedTotal?: number
+  // Expected spending by each day under the current pacing mode (index = day)
+  expectedByDay?: number[]
 }
 
 const currencyFormatter = new Intl.NumberFormat("en-US", {
@@ -143,6 +145,7 @@ function MonthlySpendingComparisonInner({
   year,
   budgetTotal,
   projectedTotal,
+  expectedByDay,
 }: MonthlySpendingComparisonProps) {
   const { privacyMode } = usePrivacy()
   const previous = getPreviousMonth(month, year)
@@ -151,8 +154,12 @@ function MonthlySpendingComparisonInner({
   const budgetCategoryIds = useMemo(() => new Set(budgets.map((budget) => budget.category_id)), [budgets])
 
   const chartData = useMemo(() => {
-    const series: { day: number; current: number | null; previous: number | null; projected?: number | null }[] =
+    const series: { day: number; current: number | null; previous: number | null; projected?: number | null; expected?: number | null }[] =
       buildCumulativeSeries(currentMonthTransactions, previousMonthTransactions, budgetCategoryIds, month, year)
+        .map((point) => ({
+          ...point,
+          expected: expectedByDay?.[point.day] !== undefined ? Math.round(expectedByDay[point.day] * 100) / 100 : null,
+        }))
     if (projectedTotal === undefined) return series
 
     // Straight line from today's total to the projected month-end total
@@ -166,7 +173,7 @@ function MonthlySpendingComparisonInner({
         ? Math.round((start + ((projectedTotal - start) * (point.day - last.day)) / span) * 100) / 100
         : null,
     }))
-  }, [currentMonthTransactions, previousMonthTransactions, budgetCategoryIds, month, year, projectedTotal])
+  }, [currentMonthTransactions, previousMonthTransactions, budgetCategoryIds, month, year, projectedTotal, expectedByDay])
 
   const latestCurrentPoint = [...chartData].reverse().find((point) => point.current !== null)
   const latestCurrentTotal = latestCurrentPoint?.current || 0
@@ -197,7 +204,7 @@ function MonthlySpendingComparisonInner({
       <CardHeader className="pb-3 md:pb-6">
         <CardTitle className="text-base md:text-lg">Spending Pace</CardTitle>
         <CardDescription className="text-xs md:text-sm">
-          Running total vs. {previousMonthLabel}{projectedTotal !== undefined ? ", with where this month is headed" : ""}
+          Running total vs. {previousMonthLabel}{projectedTotal !== undefined ? ", and the rest of the month at your planned pace" : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="px-3 pb-4 sm:px-6 md:pb-6">
@@ -223,8 +230,12 @@ function MonthlySpendingComparisonInner({
               color: "#ea580c",
             },
             projected: {
-              label: "Projected",
+              label: "At planned pace",
               color: "#16a34a",
+            },
+            expected: {
+              label: "Expected",
+              color: "#2563eb",
             },
           }}
           className="h-48 sm:h-56 lg:h-64 w-full aspect-auto"
@@ -255,7 +266,7 @@ function MonthlySpendingComparisonInner({
                   formatter={(value, name) => (
                     <div className="flex min-w-[9rem] items-center justify-between gap-4">
                       <span className="text-muted-foreground">
-                        {name === "current" ? currentMonthLabel : name === "projected" ? "Projected" : previousMonthLabel}
+                        {name === "current" ? currentMonthLabel : name === "projected" ? "At planned pace" : name === "expected" ? "Expected by today" : previousMonthLabel}
                       </span>
                       <span className="font-mono font-medium text-foreground">
                         {privacyMode ? "••••••" : currencyFormatter.format(Number(value))}
@@ -281,6 +292,18 @@ function MonthlySpendingComparisonInner({
                 className="text-muted-foreground"
                 ifOverflow="extendDomain"
                 label={{ value: "Budget", position: "insideTopLeft", fontSize: 10, fill: "currentColor" }}
+              />
+            )}
+            {expectedByDay && (
+              <Line
+                type="monotone"
+                dataKey="expected"
+                stroke="var(--color-expected)"
+                strokeWidth={1.5}
+                strokeDasharray="2 3"
+                strokeOpacity={0.7}
+                dot={false}
+                connectNulls={false}
               />
             )}
             {projectedTotal !== undefined && (
