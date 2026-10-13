@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { createClient } from '@/lib/supabase/client'
-import { TrendingUp, TrendingDown, EyeOff, Eye } from 'lucide-react'
+import Link from 'next/link'
+import { TrendingUp, TrendingDown, EyeOff, Eye, ChevronRight } from 'lucide-react'
 import { usePrivacy } from '@/contexts/privacy-context'
 import { PrivateAmount } from '@/components/private-amount'
 import { useAppData } from '@/contexts/app-data-context'
@@ -207,9 +208,16 @@ export default function AccountsPage() {
       <div className="space-y-6">
         {/* Net Worth Summary */}
         <div className="grid gap-3 md:grid-cols-3 md:gap-4">
-          <Card>
+          {/* Opens the Net Worth page (chart, history and per-account balances) */}
+          <Link href="/net-worth" className="block rounded-xl active:opacity-70" aria-label="Net worth details">
+          <Card className="h-full transition-colors hover:bg-muted/40">
             <CardHeader className="pb-1 md:pb-2">
-              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">Net Worth</CardTitle>
+              <CardTitle className="flex items-center justify-between text-xs md:text-sm font-medium text-muted-foreground">
+                Net Worth
+                <span className="flex items-center text-xs font-medium text-green-600">
+                  Details <ChevronRight className="h-3 w-3" />
+                </span>
+              </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 pb-2 md:pb-6">
               <div className="flex items-end justify-between gap-3">
@@ -231,6 +239,7 @@ export default function AccountsPage() {
               </div>
             </CardContent>
           </Card>
+          </Link>
 
           <Card>
             <CardHeader className="pb-1 md:pb-2">
