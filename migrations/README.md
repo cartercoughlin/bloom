@@ -16,6 +16,13 @@ supabase db execute --file migrations/fix-account-balances-constraint.sql
 
 ## Available Migrations
 
+### add-account-custom-name.sql
+**Purpose:** Let users rename individual accounts (shown instead of the name from Plaid)
+
+**Notes:**
+- Renaming shows a prompt to run this if the column is missing
+- Sync never overwrites custom names
+
 ### add-plaid-details.sql
 **Purpose:** Store extra Plaid transaction details (pending status, location, payment channel, detailed category, counterparties) shown on transaction rows
 

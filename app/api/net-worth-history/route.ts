@@ -48,9 +48,9 @@ async function buildHistory(request: NextRequest, providedAccounts: CurrentAccou
     if (!accounts) {
       const { data } = await supabase
         .from('account_balances')
-        .select('plaid_account_id, account_name, account_type, balance')
+        .select('*')
         .eq('user_id', user.id)
-      accounts = (data || []) as CurrentAccount[]
+      accounts = (data || []).map((a: any) => ({ ...a, account_name: a.custom_name || a.account_name })) as CurrentAccount[]
     }
     accounts = accounts
       .filter(a => a && typeof a.account_name === 'string' && Number.isFinite(Number(a.balance)))

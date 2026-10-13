@@ -115,6 +115,7 @@ CREATE TABLE IF NOT EXISTS public.account_balances (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   account_name TEXT NOT NULL,
+  custom_name TEXT,
   account_type TEXT NOT NULL CHECK (account_type IN ('checking', 'savings', 'liability')),
   balance NUMERIC(12, 2) NOT NULL,
   plaid_account_id TEXT,

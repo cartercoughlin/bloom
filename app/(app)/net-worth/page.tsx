@@ -12,12 +12,9 @@ const NetWorthChart = dynamic(
   { loading: () => <Skeleton className="h-72 w-full mb-6" />, ssr: false }
 )
 import { useAppData } from "@/contexts/app-data-context"
+import { AccountRow, type AccountRowData } from "@/components/account-row"
 
-interface AccountBalance {
-  account_name: string
-  account_type: string
-  balance: number
-}
+type AccountBalance = AccountRowData
 
 export default function NetWorthPage() {
   const router = useRouter()
@@ -65,6 +62,14 @@ export default function NetWorthPage() {
     loadData()
   }, [])
 
+  const handleRenamed = (updated: AccountBalance) => {
+    const next = accounts.map((a) => (a.id === updated.id ? updated : a))
+    setAccounts(next)
+    appData.set('net-worth', next)
+    // Names also show in the net worth breakdown and on transactions
+    appData.markStale()
+  }
+
   const assets = accounts.filter((a) => a.account_type !== "liability")
   const liabilities = accounts.filter((a) => a.account_type === "liability")
   const totalAssets = assets.reduce((sum, a) => sum + Number(a.balance), 0)
@@ -92,7 +97,7 @@ export default function NetWorthPage() {
       <div className="mb-4 md:mb-8">
         <h1 className="text-xl md:text-3xl font-bold mb-1 md:mb-2">Net Worth</h1>
         <p className="text-muted-foreground text-xs md:text-sm">
-          Track all your accounts and total net worth
+          Track all your accounts and total net worth. Tap an account to rename it.
         </p>
       </div>
 
@@ -109,20 +114,8 @@ export default function NetWorthPage() {
           </CardHeader>
           <CardContent className="space-y-2 md:space-y-3 px-3 md:px-6 pb-3 md:pb-6">
             {assets.map((account) => (
-              <div
-                key={account.account_name}
-                className="flex justify-between items-center p-2 md:p-3 border rounded-lg"
-              >
-                <div>
-                  <span className="font-medium text-sm md:text-base">{account.account_name}</span>
-                  <span className="text-xs text-muted-foreground ml-2 capitalize">
-                    ({account.account_type})
-                  </span>
-                </div>
-                <span className="font-bold text-green-600 text-sm md:text-base">
-                  ${Number(account.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
+              // Keyed by id: several accounts can share a name (e.g. "INVESTMENTS")
+              <AccountRow key={account.id} account={account} onRenamed={handleRenamed} />
             ))}
             <div className="pt-3 md:pt-4 border-t">
               <div className="flex justify-between items-center">
@@ -143,15 +136,7 @@ export default function NetWorthPage() {
           </CardHeader>
           <CardContent className="space-y-2 md:space-y-3 px-3 md:px-6 pb-3 md:pb-6">
             {liabilities.map((account) => (
-              <div
-                key={account.account_name}
-                className="flex justify-between items-center p-2 md:p-3 border rounded-lg"
-              >
-                <span className="font-medium text-sm md:text-base">{account.account_name}</span>
-                <span className="font-bold text-red-600 text-sm md:text-base">
-                  ${Math.abs(Number(account.balance)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
+              <AccountRow key={account.id} account={account} onRenamed={handleRenamed} />
             ))}
             <div className="pt-3 md:pt-4 border-t">
               <div className="flex justify-between items-center">

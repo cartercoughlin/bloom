@@ -55,13 +55,14 @@ export default function TransactionsPage() {
 
       supabase
         .from("account_balances")
-        .select("plaid_account_id, account_name")
+        // `*` so custom_name is picked up once its migration has run
+        .select("*")
         .eq("user_id", user.id)
         .not("plaid_account_id", "is", null),
     ])
 
     const accountNames = new Map<string, string>(
-      (accountsResult.data || []).map((a: any) => [a.plaid_account_id, a.account_name])
+      (accountsResult.data || []).map((a: any) => [a.plaid_account_id, a.custom_name || a.account_name])
     )
 
     return {
