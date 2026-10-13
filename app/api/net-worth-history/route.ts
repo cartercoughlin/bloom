@@ -1,7 +1,24 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 
-export async function GET() {
+// Accounts drop out of the total if they haven't been snapshotted for this
+// long (e.g. a disconnected account), instead of being carried forward forever
+const CARRY_FORWARD_DAYS = 45
+const DAY_MS = 24 * 60 * 60 * 1000
+
+interface Snapshot {
+  snapshot_date: string
+  account_type: string
+  balance: number
+  plaid_account_id: string | null
+  account_name: string
+}
+
+// GET /api/net-worth-history?months=12[&group=month]
+// Returns one point per snapshot date: [{ date, assets, liabilities, netWorth }],
+// or the last point of each month with group=month
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient()
 
@@ -10,73 +27,65 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get snapshots from the last 6 months
-    const sixMonthsAgo = new Date()
-    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-    const startDate = sixMonthsAgo.toISOString().split('T')[0]
+    const months = Math.min(36, Math.max(1, Number(request.nextUrl.searchParams.get('months')) || 12))
+    const start = new Date()
+    start.setMonth(start.getMonth() - months)
+    // Look back a little further so balances can carry into the first point
+    const lookback = new Date(start.getTime() - CARRY_FORWARD_DAYS * DAY_MS)
+    const startDate = start.toISOString().split('T')[0]
 
-    const { data: snapshots, error } = await supabase
-      .from('balance_snapshots')
-      .select('snapshot_date, account_type, balance')
-      .eq('user_id', user.id)
-      .gte('snapshot_date', startDate)
-      .order('snapshot_date', { ascending: true })
+    const snapshots = await fetchAllRows<Snapshot>((from, to) =>
+      supabase
+        .from('balance_snapshots')
+        .select('snapshot_date, account_type, balance, plaid_account_id, account_name')
+        .eq('user_id', user.id)
+        .gte('snapshot_date', lookback.toISOString().split('T')[0])
+        .order('snapshot_date', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to)
+    )
 
-    if (error) {
-      console.error('Database error:', error)
-      return NextResponse.json({ error: 'Failed to fetch snapshots' }, { status: 500 })
+    // Snapshots only exist for accounts synced that day, so a date's total
+    // uses each account's most recent balance as of that date.
+    const latest = new Map<string, { date: string; type: string; balance: number }>()
+    const dates = [...new Set(snapshots.map(s => s.snapshot_date))]
+    const byDate = new Map<string, Snapshot[]>()
+    for (const s of snapshots) {
+      ;(byDate.get(s.snapshot_date) || byDate.set(s.snapshot_date, []).get(s.snapshot_date)!).push(s)
     }
 
-    if (!snapshots || snapshots.length === 0) {
-      return NextResponse.json([])
-    }
-
-    // Group by date → compute account totals per snapshot date
-    const byDate = new Map<string, { assets: number; liabilities: number }>()
-    for (const snap of snapshots) {
-      const bal = Number(snap.balance)
-      const existing = byDate.get(snap.snapshot_date) || { assets: 0, liabilities: 0 }
-
-      if (snap.account_type === 'liability') {
-        existing.liabilities += Math.abs(bal)
-      } else {
-        existing.assets += bal
+    const points = []
+    for (const date of dates) {
+      for (const s of byDate.get(date)!) {
+        latest.set(s.plaid_account_id || s.account_name, { date, type: s.account_type, balance: Number(s.balance) })
       }
+      if (date < startDate) continue
 
-      byDate.set(snap.snapshot_date, existing)
-    }
-
-    // Pick the last snapshot per month (most accurate for that month)
-    const byMonth = new Map<string, { date: string; assets: number; liabilities: number; netWorth: number }>()
-    for (const [date, totals] of byDate) {
-      const monthKey = date.substring(0, 7) // "YYYY-MM"
-      const existing = byMonth.get(monthKey)
-      if (!existing || date > existing.date) {
-        byMonth.set(monthKey, {
-          date,
-          assets: totals.assets,
-          liabilities: totals.liabilities,
-          netWorth: totals.assets - totals.liabilities,
-        })
+      const dateMs = new Date(date).getTime()
+      let assets = 0
+      let liabilities = 0
+      for (const acct of latest.values()) {
+        if (dateMs - new Date(acct.date).getTime() > CARRY_FORWARD_DAYS * DAY_MS) continue
+        if (acct.type === 'liability') liabilities += Math.abs(acct.balance)
+        else assets += acct.balance
       }
-    }
-
-    // Sort chronologically and format for the chart
-    const result = Array.from(byMonth.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([monthKey, { assets, liabilities, netWorth }]) => {
-        const [y, m] = monthKey.split('-').map(Number)
-        return {
-          month: new Date(y, m - 1).toLocaleString('default', { month: 'short', year: 'numeric' }),
-          assets: Math.round(assets * 100) / 100,
-          liabilities: Math.round(liabilities * 100) / 100,
-          netWorth: Math.round(netWorth * 100) / 100,
-        }
+      points.push({
+        date,
+        assets: Math.round(assets * 100) / 100,
+        liabilities: Math.round(liabilities * 100) / 100,
+        netWorth: Math.round((assets - liabilities) * 100) / 100,
       })
+    }
 
-    return NextResponse.json(result)
+    if (request.nextUrl.searchParams.get('group') === 'month') {
+      const lastPerMonth = new Map<string, (typeof points)[number]>()
+      for (const p of points) lastPerMonth.set(p.date.slice(0, 7), p)
+      return NextResponse.json([...lastPerMonth.values()])
+    }
+
+    return NextResponse.json(points)
   } catch (error) {
-    console.error('API error:', error)
+    console.error('Net worth history error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
