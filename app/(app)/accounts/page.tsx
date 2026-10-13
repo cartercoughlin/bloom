@@ -19,7 +19,7 @@ interface AccountBalance {
 }
 
 interface AccountHistoryPoint {
-  month: string
+  date: string
   netWorth: number
   assets: number
   liabilities: number
@@ -121,7 +121,7 @@ export default function AccountsPage() {
       try {
         const [balancesResponse, historyResponse] = await Promise.all([
           fetch('/api/account-balances'),
-          fetch('/api/net-worth-history'),
+          fetch('/api/net-worth-history?months=6&group=month'),
         ])
 
         if (!balancesResponse.ok) {

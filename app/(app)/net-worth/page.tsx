@@ -4,6 +4,13 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import dynamic from "next/dynamic"
+
+// Recharts is large; load the chart after the account lists
+const NetWorthChart = dynamic(
+  () => import("@/components/net-worth-chart").then(mod => ({ default: mod.NetWorthChart })),
+  { loading: () => <Skeleton className="h-72 w-full mb-6" />, ssr: false }
+)
 import { useAppData } from "@/contexts/app-data-context"
 
 interface AccountBalance {
@@ -87,6 +94,10 @@ export default function NetWorthPage() {
         <p className="text-muted-foreground text-xs md:text-sm">
           Track all your accounts and total net worth
         </p>
+      </div>
+
+      <div className="mb-6">
+        <NetWorthChart />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

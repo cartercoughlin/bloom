@@ -1,4 +1,5 @@
 import { plaidClient } from './plaid'
+import { recordBalanceSnapshot } from './balance-snapshots'
 import { createClient } from '@/lib/supabase/server'
 import {
   TransactionsGetRequest,
@@ -214,19 +215,13 @@ export async function syncPlaidTransactions(
           syncedAccountsCount++
 
           // Record a daily balance snapshot for historical net worth tracking
-          const today = new Date().toISOString().split('T')[0]
-          await supabase
-            .from('balance_snapshots')
-            .upsert({
-              user_id: user.id,
-              snapshot_date: today,
-              account_name: accountName,
-              account_type: accountType,
-              balance: balance,
-              plaid_account_id: account.account_id,
-            }, {
-              onConflict: 'idx_balance_snapshots_unique',
-            })
+          await recordBalanceSnapshot(supabase, {
+            userId: user.id,
+            accountName,
+            accountType,
+            balance,
+            plaidAccountId: account.account_id,
+          })
         }
       }
       

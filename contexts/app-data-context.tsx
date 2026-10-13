@@ -18,6 +18,7 @@ export const CACHE_KEYS = {
   dashboard: "dashboard-",
   budgets: "budgets-",
   transactions: "transactions-page",
+  netWorth: "net-worth-",
 } as const
 
 interface AppDataContextType {
