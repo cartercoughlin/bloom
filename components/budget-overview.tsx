@@ -105,17 +105,17 @@ export const BudgetOverview = memo(function BudgetOverview({ budgets, netByCateg
 
   const percentageThroughMonth = getPercentageThroughMonth()
 
-  // Rollover isn't counted as expected spending here (see lib/budget/pacing.ts)
+  // Rollover counts in full from day 1, same as the per-category bars
   const expectedSpending = percentageThroughMonth !== null
     ? budgets.reduce((total, budget) => {
         const categoryData = netByCategory?.[budget.category_id || '']
         return total + calculateExpectedSpending({
           baseBudget: Number(budget.amount),
-          rollover: 0,
+          rollover: budget.enable_rollover !== false ? rolloverByCategory[budget.category_id] || 0 : 0,
           income: categoryData?.income || 0,
           recurringExpenses: categoryData?.recurringExpenses || 0,
           historicalRecurring: historicalRecurringFor(historicalRecurring, budget.category_id),
-        }, percentageThroughMonth / 100, false,
+        }, percentageThroughMonth / 100, true,
           historyShareFor(pacingHistory, budget.category_id, new Date().getDate(), new Date(year, month, 0).getDate()))
       }, 0)
     : 0

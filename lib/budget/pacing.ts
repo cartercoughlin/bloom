@@ -38,7 +38,7 @@ export interface PacingInput {
  * spending that has usually happened by this day of the month.
  *
  * `includeRollover` adds rollover in full, since it's available from day 1.
- * The per-category bars include it; the overview Progress bar does not.
+ * Every pace on Budgets and the dashboard includes it.
  */
 export function expectedSpending(
   c: PacingInput,

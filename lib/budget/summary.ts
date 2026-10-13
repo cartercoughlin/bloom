@@ -70,7 +70,7 @@ export interface BudgetSummary {
   // spent so far plus the plan's expected spending for the remaining days
   projectedTotal: number
   // The plan itself: expected spending by each day of the month
-  // (index = day, [0] = 0), excluding rollover. Current month only.
+  // (index = day, [0] = 0), including rollover. Current month only.
   expectedByDay: number[] | null
   progress: MonthProgress
   categories: CategoryStatus[]
@@ -117,17 +117,15 @@ export function summarizeBudgets(
     }
     const shareOn = (d: number) => historyShareFor(pacingHistory, b.category_id, d, daysInMonth)
 
-    // Per-category pace includes rollover (as on the category bars);
-    // the overall pace leaves it out (as on the Progress bar)
+    // Rollover counts in full from day 1, both per category and overall
     const expected = pacing ? expectedSpending(input, progress.fraction, true, shareOn(day)) : budget
     if (pacing) {
-      const expectedNow = expectedSpending(input, progress.fraction, false, shareOn(day))
-      expectedTotal += expectedNow
-      remainingPlanned += expectedSpending(input, 1, false, shareOn(daysInMonth)) - expectedNow
+      expectedTotal += expected
+      remainingPlanned += expectedSpending(input, 1, true, shareOn(daysInMonth)) - expected
       // Plan curve: what's expected by each day, before anything has posted
       const planInput = { ...input, income: 0, recurringExpenses: 0 }
       for (let d = 1; d <= daysInMonth; d++) {
-        expectedByDay![d] += expectedSpending(planInput, d / daysInMonth, false, shareOn(d))
+        expectedByDay![d] += expectedSpending(planInput, d / daysInMonth, true, shareOn(d))
       }
     }
 
