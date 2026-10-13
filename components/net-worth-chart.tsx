@@ -43,6 +43,44 @@ const parseDate = (date: string) => {
   return new Date(y, m - 1, d)
 }
 
+// Round tick values from $0 to just past the data, e.g. 0/10K/20K/30K/40K
+function zeroBasedTicks(values: number[], intervals = 4): number[] {
+  const lo = Math.min(0, ...values)
+  const hi = Math.max(0, ...values)
+  const raw = (hi - lo) / intervals || 1
+  const magnitude = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 2.5, 5, 10].map(m => m * magnitude).find(s => s >= raw)!
+  const ticks: number[] = []
+  for (let t = Math.floor(lo / step) * step; t < hi + step; t += step) ticks.push(t)
+  return ticks
+}
+
+// Average each week's (Monday-Sunday) daily values into one point dated at
+// the week's first day in range; estimated if any day in it was
+function weeklyAverages(daily: Point[]): Point[] {
+  const weeks: { date: string; days: Point[] }[] = []
+  let currentWeek = ""
+  for (const p of daily) {
+    const d = parseDate(p.date)
+    const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7))
+    const key = monday.toDateString()
+    if (key !== currentWeek) {
+      weeks.push({ date: p.date, days: [] })
+      currentWeek = key
+    }
+    weeks[weeks.length - 1].days.push(p)
+  }
+  const avg = (days: Point[], field: "assets" | "liabilities" | "netWorth") =>
+    Math.round((days.reduce((s, p) => s + p[field], 0) / days.length) * 100) / 100
+  return weeks.map(w => ({
+    date: w.date,
+    assets: avg(w.days, "assets"),
+    liabilities: avg(w.days, "liabilities"),
+    netWorth: avg(w.days, "netWorth"),
+    estimated: w.days.some(p => p.estimated),
+  }))
+}
+
 async function fetchNetWorth(): Promise<NetWorthData> {
   const accountsRes = await fetch("/api/account-balances", { cache: "no-store" })
   const accounts = accountsRes.ok ? await accountsRes.json() : []
@@ -73,12 +111,15 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
   const fetcher = useCallback(fetchNetWorth, [])
   const { data, loading } = useCachedData(`${CACHE_KEYS.netWorth}chart-v2`, fetcher)
 
-  const points = useMemo(() => {
+  const dailyPoints = useMemo(() => {
     if (!data) return []
     const cutoff = new Date()
     cutoff.setMonth(cutoff.getMonth() - months)
     return data.points.filter(p => parseDate(p.date) >= cutoff)
   }, [data, months])
+
+  // Plot weekly averages: daily closes jump on every payday and bill
+  const points = useMemo(() => weeklyAverages(dailyPoints), [dailyPoints])
 
   // One x-axis label per month, at its first data point
   const monthTicks = useMemo(
@@ -86,7 +127,10 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
     [points]
   )
 
-  const latest = points[points.length - 1]
+  const yTicks = useMemo(() => zeroBasedTicks(points.map(p => p.netWorth)), [points])
+
+  // Headline is today's actual balance; change is measured from the first week's average
+  const latest = dailyPoints[dailyPoints.length - 1]
   const first = points[0]
   const change = latest && first && points.length > 1 ? latest.netWorth - first.netWorth : null
   const changePct = change !== null && first.netWorth !== 0 ? (change / Math.abs(first.netWorth)) * 100 : null
@@ -199,7 +243,9 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
                 tickLine={false}
                 axisLine={false}
                 width={privacyMode ? 36 : 52}
-                domain={["auto", "auto"]}
+                // Start at $0 (or below, if net worth was ever negative) so swings aren't exaggerated
+                domain={[yTicks[0], yTicks[yTicks.length - 1]]}
+                ticks={yTicks}
                 tickFormatter={(v) => (privacyMode ? "••" : compactCurrency.format(Number(v)))}
                 className="text-[10px] md:text-xs"
               />
@@ -209,7 +255,7 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
                     labelFormatter={(_, payload) => {
                       const p = payload?.[0]?.payload as Point | undefined
                       return p
-                        ? `${parseDate(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${p.estimated ? " (estimated)" : ""}`
+                        ? `Week of ${parseDate(p.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}${p.estimated ? " (estimated)" : ""}`
                         : ""
                     }}
                     formatter={(_, __, item) => {
@@ -222,9 +268,9 @@ function NetWorthChartInner({ variant = "full" }: { variant?: "card" | "full" })
                       )
                       return (
                         <div className="space-y-0.5">
-                          {row("Net worth", p.netWorth)}
-                          {row("Assets", p.assets)}
-                          {row("Liabilities", p.liabilities)}
+                          {row("Avg net worth", p.netWorth)}
+                          {row("Avg assets", p.assets)}
+                          {row("Avg liabilities", p.liabilities)}
                         </div>
                       )
                     }}
