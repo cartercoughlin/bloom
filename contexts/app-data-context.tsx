@@ -20,6 +20,7 @@ export const CACHE_KEYS = {
   transactions: "transactions-page",
   netWorth: "net-worth-",
   tags: "tags-",
+  subscriptions: "subscriptions-",
 } as const
 
 interface AppDataContextType {

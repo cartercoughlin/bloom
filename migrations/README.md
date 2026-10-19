@@ -16,6 +16,13 @@ supabase db execute --file migrations/fix-account-balances-constraint.sql
 
 ## Available Migrations
 
+### add-subscriptions.sql
+**Purpose:** Subscription manager: track, cancel or dismiss recurring charges detected from transactions
+
+**Notes:**
+- Creates `subscriptions` with row-level security; it stores decisions only, detection runs on read
+- The Subscriptions page shows detected charges without it, with a prompt to run it before tracking
+
 ### add-tags.sql
 **Purpose:** Tags for tracking trips, projects or savings goals separately from budget categories
 

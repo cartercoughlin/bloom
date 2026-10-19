@@ -9,6 +9,7 @@ import { PullToRefresh } from "@/components/pull-to-refresh"
 import { SafeToSpend } from "@/components/dashboard/safe-to-spend"
 import { CategoriesAtRisk } from "@/components/dashboard/categories-at-risk"
 import { NeedsCategorization } from "@/components/dashboard/needs-categorization"
+import { SubscriptionsCard } from "@/components/dashboard/subscriptions-card"
 import { useMonth } from "@/contexts/month-context"
 import { CACHE_KEYS } from "@/contexts/app-data-context"
 import { useCachedData } from "@/hooks/use-cached-data"
@@ -264,6 +265,7 @@ export default function DashboardPage() {
               count={data.uncategorizedCount}
               amountThisMonth={derived.uncategorizedThisMonth}
             />
+            <SubscriptionsCard />
           </div>
         </div>
 
