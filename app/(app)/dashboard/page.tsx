@@ -53,12 +53,11 @@ interface DashboardData {
   budgets: any[]
   rolloverByCategory: Record<string, number>
   historicalRecurring: HistoricalRecurringData
-  uncategorizedCount: number
   pacingHistory: PacingHistory | null
 }
 
 const EMPTY_HISTORICAL: HistoricalRecurringData = { byCategory: {}, total: 0, monthsUsed: 0 }
-const DASHBOARD_CACHE_VERSION = "v5"
+const DASHBOARD_CACHE_VERSION = "v6"
 
 const monthKey = (month: number, year: number) => `${year}-${String(month).padStart(2, "0")}`
 const firstOfMonth = (month: number, year: number) => `${monthKey(month, year)}-01`
@@ -87,7 +86,7 @@ export default function DashboardPage() {
     const today = new Date()
     const isViewingCurrentMonth = selectedMonth === today.getMonth() + 1 && selectedYear === today.getFullYear()
 
-    const [historyTransactions, historyBudgetsResult, budgetsResult, uncategorizedResult, rolloverResponse, pacingHistoryResponse] = await Promise.all([
+    const [historyTransactions, historyBudgetsResult, budgetsResult, rolloverResponse, pacingHistoryResponse] = await Promise.all([
       fetchAllRows<HistoryTransaction>((from, to) =>
         supabase
           .from("transactions")
@@ -127,14 +126,6 @@ export default function DashboardPage() {
         .eq("user_id", user.id)
         .eq("month", selectedMonth)
         .eq("year", selectedYear),
-
-      supabase
-        .from("transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id)
-        .is("category_id", null)
-        .not("hidden", "is", true)
-        .not("deleted", "is", true),
 
       fetch(`/api/rollover?month=${selectedMonth}&year=${selectedYear}`, { cache: "no-store" }),
 
@@ -176,7 +167,6 @@ export default function DashboardPage() {
       budgets: regularBudgets,
       rolloverByCategory: rollover,
       historicalRecurring: historicalRecurringData,
-      uncategorizedCount: uncategorizedResult.count || 0,
       pacingHistory,
     }
   }, [router, selectedMonth, selectedYear])
@@ -201,15 +191,18 @@ export default function DashboardPage() {
       pacingMode === "history" ? data.pacingHistory : null
     )
 
-    // Spending that isn't counted toward any budget yet
-    const uncategorizedThisMonth = currentMonthTransactions
-      .filter(tx => !tx.category_id && !tx.hidden && tx.transaction_type !== "credit")
+    // This month's transactions that aren't counted toward any budget yet
+    const uncategorized = currentMonthTransactions.filter(tx => !tx.category_id && !tx.hidden)
+    const uncategorizedCount = uncategorized.length
+    const uncategorizedThisMonth = uncategorized
+      .filter(tx => tx.transaction_type !== "credit")
       .reduce((sum, tx) => sum + Number(tx.amount), 0)
 
     return {
       summary,
       currentMonthTransactions,
       previousMonthTransactions,
+      uncategorizedCount,
       uncategorizedThisMonth,
       history: buildMonthlyHistory(data.historyTransactions, data.historyBudgets, selectedMonth, selectedYear, HISTORY_MONTHS),
     }
@@ -262,8 +255,9 @@ export default function DashboardPage() {
           <div className="space-y-4 md:space-y-6">
             <CategoriesAtRisk summary={summary} />
             <NeedsCategorization
-              count={data.uncategorizedCount}
+              count={derived.uncategorizedCount}
               amountThisMonth={derived.uncategorizedThisMonth}
+              monthLabel={isCurrentMonth() ? "this month" : `in ${monthLabel}`}
             />
             <SubscriptionsCard />
           </div>

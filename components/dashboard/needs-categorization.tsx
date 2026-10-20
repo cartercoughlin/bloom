@@ -5,8 +5,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { PrivateAmount } from "@/components/private-amount"
 import { ChevronRight, Tags } from "lucide-react"
 
-// Uncategorized spending isn't counted in any budget, so nudge the user to sort it
-export function NeedsCategorization({ count, amountThisMonth }: { count: number; amountThisMonth: number }) {
+// The month's uncategorized transactions aren't counted in any budget, so nudge the user to sort them
+export function NeedsCategorization({ count, amountThisMonth, monthLabel }: { count: number; amountThisMonth: number; monthLabel: string }) {
   if (count === 0) return null
 
   return (
@@ -18,11 +18,11 @@ export function NeedsCategorization({ count, amountThisMonth }: { count: number;
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium">
-              {count} transaction{count === 1 ? "" : "s"} need{count === 1 ? "s" : ""} a category
+              {count} transaction{count === 1 ? "" : "s"} {monthLabel} need{count === 1 ? "s" : ""} a category
             </p>
             {amountThisMonth > 0 && (
               <p className="text-xs text-muted-foreground">
-                <PrivateAmount amount={amountThisMonth} decimals={0} /> this month isn't counted in your budgets yet
+                <PrivateAmount amount={amountThisMonth} decimals={0} /> isn't counted in your budgets yet
               </p>
             )}
           </div>
