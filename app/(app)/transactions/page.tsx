@@ -2,7 +2,7 @@
 
 import { useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Loader2, Tags } from "lucide-react"
+import { Loader2, Repeat, Tags } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -146,9 +146,9 @@ export default function TransactionsPage() {
     [appData.markStale]
   )
 
-  // Budgets and dashboard refetch the next time they're shown
+  // Budgets, dashboard and subscriptions refetch the next time they're shown
   const handleBudgetDataChanged = useCallback(
-    () => appData.markStale([CACHE_KEYS.budgets, CACHE_KEYS.dashboard]),
+    () => appData.markStale([CACHE_KEYS.budgets, CACHE_KEYS.dashboard, CACHE_KEYS.subscriptions]),
     [appData.markStale]
   )
 
@@ -181,6 +181,12 @@ export default function TransactionsPage() {
             <Button variant="outline" className="text-xs md:text-sm h-8 md:h-10 px-3">
               <Tags className="mr-1 h-3.5 w-3.5" />
               Tags
+            </Button>
+          </Link>
+          <Link href="/subscriptions" aria-label="Subscriptions">
+            <Button variant="outline" className="text-xs md:text-sm h-8 md:h-10 px-3">
+              <Repeat className="h-3.5 w-3.5 sm:mr-1" />
+              <span className="hidden sm:inline">Subscriptions</span>
             </Button>
           </Link>
           <SyncButton />
